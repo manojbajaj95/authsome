@@ -47,7 +47,7 @@ from authsome.crypto.base import CryptoBackend
 from authsome.crypto.keyring_crypto import KeyringCryptoBackend
 from authsome.crypto.local_file_crypto import LocalFileCryptoBackend
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = [
     # Core
