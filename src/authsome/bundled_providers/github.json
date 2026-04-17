@@ -9,7 +9,10 @@
     "token_url": "https://github.com/login/oauth/access_token",
     "revocation_url": null,
     "device_authorization_url": "https://github.com/login/device/code",
-    "scopes": ["repo", "read:user"],
+    "scopes": [
+      "repo",
+      "read:user"
+    ],
     "pkce": true,
     "supports_device_flow": true,
     "supports_dcr": false

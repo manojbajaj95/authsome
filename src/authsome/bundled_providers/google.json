@@ -1,0 +1,30 @@
+{
+    "schema_version": 1,
+    "name": "google",
+    "display_name": "Google",
+    "auth_type": "oauth2",
+    "flow": "pkce",
+    "oauth": {
+        "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_url": "https://oauth2.googleapis.com/token",
+        "revocation_url": "https://oauth2.googleapis.com/revoke",
+        "device_authorization_url": "https://oauth2.googleapis.com/device/code",
+        "scopes": [
+            "openid",
+            "profile"
+        ],
+        "pkce": true,
+        "supports_device_flow": true,
+        "supports_dcr": false
+    },
+    "client": {
+        "client_id": "env:GOOGLE_CLIENT_ID",
+        "client_secret": "env:GOOGLE_CLIENT_SECRET"
+    },
+    "export": {
+        "env": {
+            "access_token": "GOOGLE_ACCESS_TOKEN",
+            "refresh_token": "GOOGLE_REFRESH_TOKEN"
+        }
+    }
+}
