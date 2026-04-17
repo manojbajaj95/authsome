@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "name": "x",
+  "display_name": "X (Twitter)",
+  "auth_type": "oauth2",
+  "flow": "pkce",
+  "oauth": {
+    "authorization_url": "https://twitter.com/i/oauth2/authorize",
+    "token_url": "https://api.twitter.com/2/oauth2/token",
+    "revocation_url": "https://api.twitter.com/2/oauth2/revoke",
+    "device_authorization_url": null,
+    "scopes": [
+      "tweet.read",
+      "tweet.write",
+      "users.read",
+      "offline.access"
+    ],
+    "pkce": true,
+    "supports_device_flow": false,
+    "supports_dcr": false
+  },
+  "client": {
+    "client_id": "env:X_CLIENT_ID",
+    "client_secret": null
+  },
+  "export": {
+    "env": {
+      "access_token": "X_ACCESS_TOKEN",
+      "refresh_token": "X_REFRESH_TOKEN"
+    }
+  }
+}

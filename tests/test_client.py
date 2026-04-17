@@ -1,18 +1,19 @@
 """Tests for the AuthClient core."""
 
 import json
-import pytest
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from authsome.client import AuthClient
-from authsome.models.enums import AuthType, ConnectionStatus, ExportFormat, FlowType
-from authsome.models.provider import ApiKeyConfig, ProviderDefinition
 from authsome.errors import (
     ConnectionNotFoundError,
-    ProviderNotFoundError,
     ProfileNotFoundError,
+    ProviderNotFoundError,
 )
+from authsome.models.enums import AuthType, ConnectionStatus, ExportFormat, FlowType
+from authsome.models.provider import ApiKeyConfig, ProviderDefinition
 
 
 class TestAuthClientInit:

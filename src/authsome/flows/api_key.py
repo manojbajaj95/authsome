@@ -9,7 +9,6 @@ from __future__ import annotations
 import getpass
 import logging
 import os
-from typing import Optional
 
 from authsome.crypto.base import CryptoBackend
 from authsome.errors import AuthenticationFailedError, CredentialMissingError
@@ -39,7 +38,7 @@ class ApiKeyPromptFlow(AuthFlow):
         crypto: CryptoBackend,
         profile: str,
         connection_name: str,
-        scopes: Optional[list[str]] = None,
+        scopes: list[str] | None = None,
     ) -> ConnectionRecord:
         """Prompt the user for an API key and create a connection record."""
         if provider.api_key is None:
@@ -101,7 +100,7 @@ class ApiKeyEnvFlow(AuthFlow):
         crypto: CryptoBackend,
         profile: str,
         connection_name: str,
-        scopes: Optional[list[str]] = None,
+        scopes: list[str] | None = None,
     ) -> ConnectionRecord:
         """Read an API key from environment and create a connection record."""
         if provider.api_key is None:

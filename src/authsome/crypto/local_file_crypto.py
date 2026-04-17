@@ -12,7 +12,6 @@ import logging
 import os
 import secrets
 from pathlib import Path
-from typing import Optional
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -40,8 +39,8 @@ class LocalFileCryptoBackend(CryptoBackend):
     def __init__(self, authsome_home: Path) -> None:
         self._authsome_home = authsome_home
         self._key_file = authsome_home / "master.key"
-        self._master_key: Optional[bytes] = None
-        self._aesgcm: Optional[AESGCM] = None
+        self._master_key: bytes | None = None
+        self._aesgcm: AESGCM | None = None
         self._load_or_create_key()
 
     def _load_or_create_key(self) -> None:
@@ -54,9 +53,7 @@ class LocalFileCryptoBackend(CryptoBackend):
                 logger.debug("Master key loaded from local file")
                 return
             except (json.JSONDecodeError, KeyError, ValueError) as exc:
-                raise EncryptionUnavailableError(
-                    f"Failed to read local key file {self._key_file}: {exc}"
-                ) from exc
+                raise EncryptionUnavailableError(f"Failed to read local key file {self._key_file}: {exc}") from exc
 
         # Generate new key
         self._master_key = secrets.token_bytes(_KEY_SIZE_BYTES)

@@ -1,16 +1,16 @@
 """Enumerations for auth types, flow types, connection statuses, and export formats."""
 
-from enum import Enum
+from enum import StrEnum
 
 
-class AuthType(str, Enum):
+class AuthType(StrEnum):
     """Authentication mechanism used by a provider."""
 
     OAUTH2 = "oauth2"
     API_KEY = "api_key"
 
 
-class FlowType(str, Enum):
+class FlowType(StrEnum):
     """Specific authentication flow for a provider."""
 
     PKCE = "pkce"
@@ -20,7 +20,7 @@ class FlowType(str, Enum):
     API_KEY_ENV = "api_key_env"
 
 
-class ConnectionStatus(str, Enum):
+class ConnectionStatus(StrEnum):
     """Status of a credential connection."""
 
     NOT_CONNECTED = "not_connected"
@@ -30,7 +30,7 @@ class ConnectionStatus(str, Enum):
     INVALID = "invalid"
 
 
-class ExportFormat(str, Enum):
+class ExportFormat(StrEnum):
     """Supported credential export formats."""
 
     ENV = "env"

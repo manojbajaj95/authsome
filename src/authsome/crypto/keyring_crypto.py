@@ -9,7 +9,6 @@ from __future__ import annotations
 import base64
 import logging
 import secrets
-from typing import Optional
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -36,8 +35,8 @@ class KeyringCryptoBackend(CryptoBackend):
     """
 
     def __init__(self) -> None:
-        self._master_key: Optional[bytes] = None
-        self._aesgcm: Optional[AESGCM] = None
+        self._master_key: bytes | None = None
+        self._aesgcm: AESGCM | None = None
         self._load_or_create_key()
 
     def _load_or_create_key(self) -> None:
@@ -46,8 +45,7 @@ class KeyringCryptoBackend(CryptoBackend):
             import keyring as kr
         except ImportError as exc:
             raise EncryptionUnavailableError(
-                "The 'keyring' package is required for keyring encryption mode. "
-                "Install it with: pip install keyring"
+                "The 'keyring' package is required for keyring encryption mode. Install it with: pip install keyring"
             ) from exc
 
         # Try loading existing key

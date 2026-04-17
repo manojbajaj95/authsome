@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 def utc_now() -> datetime:
     """Return the current UTC datetime."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def to_rfc3339(dt: datetime) -> str:
     """Format a datetime as RFC 3339 / ISO 8601 in UTC."""
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt.isoformat().replace("+00:00", "Z")
 
 

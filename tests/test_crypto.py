@@ -1,11 +1,11 @@
 """Tests for the crypto layer."""
 
-import pytest
 from pathlib import Path
 
-from authsome.crypto.local_file_crypto import LocalFileCryptoBackend
+import pytest
+
 from authsome.crypto.keyring_crypto import KeyringCryptoBackend
-from authsome.crypto.base import CryptoBackend
+from authsome.crypto.local_file_crypto import LocalFileCryptoBackend
 from authsome.models.connection import EncryptedField
 
 

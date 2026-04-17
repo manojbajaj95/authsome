@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -31,7 +31,7 @@ class GlobalConfig(BaseModel):
 
     spec_version: int = 1
     default_profile: str = "default"
-    encryption: Optional[EncryptionConfig] = Field(default_factory=EncryptionConfig)
+    encryption: EncryptionConfig | None = Field(default_factory=EncryptionConfig)
 
     # Forward-compatible: preserve unknown fields
     extra_fields: dict[str, Any] = Field(default_factory=dict, exclude=True)

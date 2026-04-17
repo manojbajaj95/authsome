@@ -14,7 +14,6 @@ import importlib.resources
 import json
 import logging
 from pathlib import Path
-from typing import Optional
 from urllib.parse import urlparse
 
 from authsome.errors import (
@@ -72,6 +71,17 @@ class ProviderRegistry:
             providers[name] = definition
 
         return sorted(providers.values(), key=lambda p: p.name)
+
+    def list_providers_by_source(self) -> dict[str, list[ProviderDefinition]]:
+        """Return providers split into 'bundled' and 'custom' lists."""
+        bundled = self._load_bundled_providers()
+        local = self._load_local_providers()
+        bundled_list = sorted(
+            [v for k, v in bundled.items() if k not in local],
+            key=lambda p: p.name,
+        )
+        custom_list = sorted(local.values(), key=lambda p: p.name)
+        return {"bundled": bundled_list, "custom": custom_list}
 
     def get_provider(self, name: str) -> ProviderDefinition:
         """
@@ -203,9 +213,7 @@ class ProviderRegistry:
             data = json.loads(path.read_text(encoding="utf-8"))
             return ProviderDefinition.model_validate(data)
         except (json.JSONDecodeError, ValueError) as exc:
-            raise InvalidProviderSchemaError(
-                f"Failed to parse provider file {path}: {exc}"
-            ) from exc
+            raise InvalidProviderSchemaError(f"Failed to parse provider file {path}: {exc}") from exc
 
     def _load_local_providers(self) -> dict[str, ProviderDefinition]:
         """Load all provider definitions from the local providers/ directory."""

@@ -18,9 +18,9 @@ import json
 import logging
 import os
 import subprocess
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import requests as http_client
 
@@ -28,13 +28,10 @@ from authsome.crypto.base import CryptoBackend
 from authsome.crypto.keyring_crypto import KeyringCryptoBackend
 from authsome.crypto.local_file_crypto import LocalFileCryptoBackend
 from authsome.errors import (
-    AuthenticationFailedError,
     ConnectionNotFoundError,
     CredentialMissingError,
     ProfileNotFoundError,
-    ProviderNotFoundError,
     RefreshFailedError,
-    StoreUnavailableError,
     TokenExpiredError,
     UnsupportedFlowError,
 )
@@ -86,8 +83,8 @@ class AuthClient:
 
     def __init__(
         self,
-        home: Optional[Path] = None,
-        profile: Optional[str] = None,
+        home: Path | None = None,
+        profile: str | None = None,
     ) -> None:
         """
         Initialize the AuthClient.
@@ -106,9 +103,9 @@ class AuthClient:
             self._home = Path.home() / ".authsome"
 
         self._profile_override = profile
-        self._config: Optional[GlobalConfig] = None
-        self._crypto: Optional[CryptoBackend] = None
-        self._registry: Optional[ProviderRegistry] = None
+        self._config: GlobalConfig | None = None
+        self._crypto: CryptoBackend | None = None
+        self._registry: ProviderRegistry | None = None
         self._stores: dict[str, CredentialStore] = {}
 
     @property
@@ -191,6 +188,10 @@ class AuthClient:
         """List all available providers (local + bundled)."""
         return self.registry.list_providers()
 
+    def list_providers_by_source(self) -> dict[str, list[ProviderDefinition]]:
+        """Return providers split into 'bundled' and 'custom' lists."""
+        return self.registry.list_providers_by_source()
+
     def get_provider(self, name: str) -> ProviderDefinition:
         """Get a provider definition by name."""
         return self.registry.get_provider(name)
@@ -208,7 +209,7 @@ class AuthClient:
 
     def list_connections(
         self,
-        profile: Optional[str] = None,
+        profile: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         List all connections across all providers for a profile.
@@ -235,27 +236,31 @@ class AuthClient:
                     record = ConnectionRecord.model_validate_json(record_json)
                     if provider_name not in providers:
                         providers[provider_name] = []
-                    providers[provider_name].append({
-                        "connection_name": connection_name,
-                        "auth_type": record.auth_type.value,
-                        "status": record.status.value,
-                        "scopes": record.scopes,
-                        "expires_at": record.expires_at.isoformat() if record.expires_at else None,
-                    })
+                    providers[provider_name].append(
+                        {
+                            "connection_name": connection_name,
+                            "auth_type": record.auth_type.value,
+                            "status": record.status.value,
+                            "scopes": record.scopes,
+                            "expires_at": record.expires_at.isoformat() if record.expires_at else None,
+                        }
+                    )
 
         result = []
         for pname, connections in sorted(providers.items()):
-            result.append({
-                "name": pname,
-                "connections": connections,
-            })
+            result.append(
+                {
+                    "name": pname,
+                    "connections": connections,
+                }
+            )
         return result
 
     def get_connection(
         self,
         provider: str,
         connection: str = "default",
-        profile: Optional[str] = None,
+        profile: str | None = None,
     ) -> ConnectionRecord:
         """
         Get a specific connection record.
@@ -288,9 +293,9 @@ class AuthClient:
         self,
         provider: str,
         connection_name: str = "default",
-        scopes: Optional[list[str]] = None,
-        flow_override: Optional[FlowType] = None,
-        profile: Optional[str] = None,
+        scopes: list[str] | None = None,
+        flow_override: FlowType | None = None,
+        profile: str | None = None,
     ) -> ConnectionRecord:
         """
         Authenticate with a provider using its configured flow.
@@ -351,7 +356,7 @@ class AuthClient:
         self,
         provider: str,
         connection: str = "default",
-        profile: Optional[str] = None,
+        profile: str | None = None,
     ) -> str:
         """
         Get a usable access token, refreshing if needed.
@@ -383,7 +388,7 @@ class AuthClient:
         self,
         provider: str,
         connection: str = "default",
-        profile: Optional[str] = None,
+        profile: str | None = None,
     ) -> dict[str, str]:
         """
         Build authenticated request headers.
@@ -421,7 +426,7 @@ class AuthClient:
         self,
         provider: str,
         connection: str = "default",
-        profile: Optional[str] = None,
+        profile: str | None = None,
     ) -> None:
         """
         Revoke credentials remotely (if supported) and remove locally.
@@ -466,7 +471,7 @@ class AuthClient:
         self,
         provider: str,
         connection: str = "default",
-        profile: Optional[str] = None,
+        profile: str | None = None,
     ) -> None:
         """
         Remove local credential state without remote revocation.
@@ -502,7 +507,7 @@ class AuthClient:
         self,
         provider: str,
         connection: str = "default",
-        profile: Optional[str] = None,
+        profile: str | None = None,
         format: ExportFormat = ExportFormat.ENV,
     ) -> str:
         """
@@ -549,8 +554,8 @@ class AuthClient:
     def run(
         self,
         command: list[str],
-        providers: Optional[list[str]] = None,
-        profile: Optional[str] = None,
+        providers: list[str] | None = None,
+        profile: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         """
         Run a subprocess with injected exported credentials.
@@ -560,7 +565,7 @@ class AuthClient:
         profile_name = profile or self.active_profile
         env = os.environ.copy()
 
-        for pname in (providers or []):
+        for pname in providers or []:
             export_str = self.export(pname, profile=profile_name, format=ExportFormat.ENV)
             for line in export_str.strip().split("\n"):
                 if "=" in line:
@@ -580,7 +585,7 @@ class AuthClient:
     def create_profile(
         self,
         name: str,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> ProfileMetadata:
         """Create a new profile directory and metadata."""
         profile_dir = self._home / "profiles" / name
@@ -601,9 +606,7 @@ class AuthClient:
             )
             return metadata
 
-        return ProfileMetadata.model_validate_json(
-            metadata_path.read_text(encoding="utf-8")
-        )
+        return ProfileMetadata.model_validate_json(metadata_path.read_text(encoding="utf-8"))
 
     def list_profiles(self) -> list[ProfileMetadata]:
         """List all local profiles."""
@@ -617,9 +620,7 @@ class AuthClient:
                 metadata_path = profile_dir / "metadata.json"
                 if metadata_path.exists():
                     try:
-                        metadata = ProfileMetadata.model_validate_json(
-                            metadata_path.read_text(encoding="utf-8")
-                        )
+                        metadata = ProfileMetadata.model_validate_json(metadata_path.read_text(encoding="utf-8"))
                         result.append(metadata)
                     except Exception:
                         logger.warning("Skipping invalid profile: %s", profile_dir.name)
@@ -703,9 +704,7 @@ class AuthClient:
         config_path = self._home / "config.json"
         if config_path.exists():
             try:
-                return GlobalConfig.model_validate_json(
-                    config_path.read_text(encoding="utf-8")
-                )
+                return GlobalConfig.model_validate_json(config_path.read_text(encoding="utf-8"))
             except Exception:
                 logger.warning("Failed to parse config.json, using defaults")
         return GlobalConfig()
@@ -778,9 +777,7 @@ class AuthClient:
             if connection_name in metadata.connection_names:
                 metadata.connection_names.remove(connection_name)
             if metadata.last_used_connection == connection_name:
-                metadata.last_used_connection = (
-                    metadata.connection_names[0] if metadata.connection_names else None
-                )
+                metadata.last_used_connection = metadata.connection_names[0] if metadata.connection_names else None
             store.set(meta_key, metadata.model_dump_json())
 
     def _get_api_key(self, record: ConnectionRecord) -> str:

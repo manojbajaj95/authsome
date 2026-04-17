@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 
 class CredentialStore(ABC):
@@ -15,7 +14,7 @@ class CredentialStore(ABC):
     """
 
     @abstractmethod
-    def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> str | None:
         """
         Retrieve a value by key.
 

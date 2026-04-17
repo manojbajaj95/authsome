@@ -1,19 +1,17 @@
 """Tests for authsome data models."""
 
 import pytest
-from datetime import datetime, timezone
 
-from authsome.models.enums import AuthType, ConnectionStatus, FlowType, ExportFormat
-from authsome.models.config import GlobalConfig, EncryptionConfig
-from authsome.models.profile import ProfileMetadata
-from authsome.models.provider import ProviderDefinition, OAuthConfig, ApiKeyConfig, ClientConfig, ExportConfig
+from authsome.models.config import GlobalConfig
 from authsome.models.connection import (
     ConnectionRecord,
     EncryptedField,
-    AccountInfo,
     ProviderMetadataRecord,
     ProviderStateRecord,
 )
+from authsome.models.enums import AuthType, ConnectionStatus, ExportFormat, FlowType
+from authsome.models.profile import ProfileMetadata
+from authsome.models.provider import ApiKeyConfig, ClientConfig, OAuthConfig, ProviderDefinition
 
 
 class TestEnums:

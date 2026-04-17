@@ -10,7 +10,7 @@ import fcntl
 import logging
 import sqlite3
 from pathlib import Path
-from typing import IO, Optional
+from typing import IO
 
 from authsome.errors import StoreUnavailableError
 from authsome.store.base import CredentialStore
@@ -43,8 +43,8 @@ class SQLiteStore(CredentialStore):
         self._profile_dir = profile_dir
         self._db_path = profile_dir / "store.db"
         self._lock_path = profile_dir / "lock"
-        self._conn: Optional[sqlite3.Connection] = None
-        self._lock_fd: Optional[IO[str]] = None
+        self._conn: sqlite3.Connection | None = None
+        self._lock_fd: IO[str] | None = None
 
         self._ensure_dir()
         self._connect()
@@ -93,7 +93,7 @@ class SQLiteStore(CredentialStore):
             raise StoreUnavailableError("Store connection is closed")
         return self._conn
 
-    def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> str | None:
         """Retrieve a value by key."""
         conn = self._ensure_connection()
         cursor = conn.execute("SELECT value FROM kv WHERE key = ?", (key,))

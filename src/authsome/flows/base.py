@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from authsome.crypto.base import CryptoBackend
 from authsome.models.connection import ConnectionRecord
@@ -25,7 +24,7 @@ class AuthFlow(ABC):
         crypto: CryptoBackend,
         profile: str,
         connection_name: str,
-        scopes: Optional[list[str]] = None,
+        scopes: list[str] | None = None,
     ) -> ConnectionRecord:
         """
         Execute the authentication flow and return a connection record.

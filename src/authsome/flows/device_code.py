@@ -13,7 +13,7 @@ import json
 import logging
 import time
 from datetime import timedelta
-from typing import Any, Optional
+from typing import Any
 
 import requests
 
@@ -54,7 +54,7 @@ class DeviceCodeFlow(AuthFlow):
         crypto: CryptoBackend,
         profile: str,
         connection_name: str,
-        scopes: Optional[list[str]] = None,
+        scopes: list[str] | None = None,
     ) -> ConnectionRecord:
         """Execute the device code authorization flow."""
         if provider.oauth is None:
@@ -71,8 +71,8 @@ class DeviceCodeFlow(AuthFlow):
             )
 
         # Resolve client credentials
-        client_id: Optional[str] = None
-        client_secret: Optional[str] = None
+        client_id: str | None = None
+        client_secret: str | None = None
 
         if provider.client:
             client_id = provider.client.resolve_client_id()
@@ -102,24 +102,23 @@ class DeviceCodeFlow(AuthFlow):
 
         if not device_code or not user_code or not verification_uri:
             raise AuthenticationFailedError(
-                "Device authorization response missing required fields "
-                "(device_code, user_code, verification_uri)",
+                "Device authorization response missing required fields (device_code, user_code, verification_uri)",
                 provider=provider.name,
             )
 
         # --- Phase 2: Display Instructions ---
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"  {provider.display_name} — Device Authorization")
-        print(f"{'='*60}")
-        print(f"\n  1. Open this URL in your browser:\n")
+        print(f"{'=' * 60}")
+        print("\n  1. Open this URL in your browser:\n")
         if verification_uri_complete:
             print(f"     {verification_uri_complete}")
         else:
             print(f"     {verification_uri}")
-        print(f"\n  2. Enter this code when prompted:\n")
+        print("\n  2. Enter this code when prompted:\n")
         print(f"     {user_code}")
         print(f"\n  Waiting for authorization (expires in {expires_in}s)...")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         # --- Phase 3: Poll Token Endpoint ---
         token_data = self._poll_for_token(
@@ -206,7 +205,7 @@ class DeviceCodeFlow(AuthFlow):
         self,
         provider: ProviderDefinition,
         client_id: str,
-        client_secret: Optional[str],
+        client_secret: str | None,
         device_code: str,
         interval: int,
         expires_in: int,

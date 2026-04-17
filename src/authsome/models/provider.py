@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -19,13 +19,13 @@ class OAuthConfig(BaseModel):
 
     authorization_url: str
     token_url: str
-    revocation_url: Optional[str] = None
-    device_authorization_url: Optional[str] = None
+    revocation_url: str | None = None
+    device_authorization_url: str | None = None
     scopes: list[str] = Field(default_factory=list)
     pkce: bool = True
     supports_device_flow: bool = False
     supports_dcr: bool = False
-    registration_endpoint: Optional[str] = None
+    registration_endpoint: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -37,21 +37,21 @@ class ClientConfig(BaseModel):
     Values may use the `env:VAR_NAME` syntax to read from environment.
     """
 
-    client_id: Optional[str] = None
-    client_secret: Optional[str] = None
+    client_id: str | None = None
+    client_secret: str | None = None
 
     model_config = {"extra": "allow"}
 
-    def resolve_client_id(self) -> Optional[str]:
+    def resolve_client_id(self) -> str | None:
         """Resolve client_id, supporting env: prefix."""
         return self._resolve(self.client_id)
 
-    def resolve_client_secret(self) -> Optional[str]:
+    def resolve_client_secret(self) -> str | None:
         """Resolve client_secret, supporting env: prefix."""
         return self._resolve(self.client_secret)
 
     @staticmethod
-    def _resolve(value: Optional[str]) -> Optional[str]:
+    def _resolve(value: str | None) -> str | None:
         if value is None:
             return None
         if value.startswith("env:"):
@@ -70,7 +70,7 @@ class ApiKeyConfig(BaseModel):
     input_mode: str = "prompt"
     header_name: str = "Authorization"
     header_prefix: str = "Bearer"
-    env_var: Optional[str] = None
+    env_var: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -98,12 +98,12 @@ class ProviderDefinition(BaseModel):
     flow: FlowType
 
     # Auth-type-specific sections
-    oauth: Optional[OAuthConfig] = None
-    client: Optional[ClientConfig] = None
-    api_key: Optional[ApiKeyConfig] = None
+    oauth: OAuthConfig | None = None
+    client: ClientConfig | None = None
+    api_key: ApiKeyConfig | None = None
 
     # Export configuration
-    export: Optional[ExportConfig] = None
+    export: ExportConfig | None = None
 
     # Forward-compatible
     metadata: dict[str, Any] = Field(default_factory=dict)

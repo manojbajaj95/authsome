@@ -17,7 +17,7 @@ import urllib.parse
 import webbrowser
 from base64 import urlsafe_b64encode
 from datetime import timedelta
-from typing import Any, Optional
+from typing import Any
 
 import requests as http_client
 
@@ -37,9 +37,9 @@ _CALLBACK_TIMEOUT_SECONDS = 300  # 5 minute timeout for user to authorize
 class _CallbackHandler(http.server.BaseHTTPRequestHandler):
     """HTTP handler that captures the OAuth callback authorization code."""
 
-    auth_code: Optional[str] = None
-    error: Optional[str] = None
-    state: Optional[str] = None
+    auth_code: str | None = None
+    error: str | None = None
+    state: str | None = None
 
     def do_GET(self) -> None:
         """Handle the OAuth callback GET request."""
@@ -58,8 +58,7 @@ class _CallbackHandler(http.server.BaseHTTPRequestHandler):
             _CallbackHandler.state = params.get("state", [None])[0]
             self._send_response(
                 200,
-                "<h1>Authentication Successful</h1>"
-                "<p>You can close this window and return to the terminal.</p>",
+                "<h1>Authentication Successful</h1><p>You can close this window and return to the terminal.</p>",
             )
         else:
             self._send_response(400, "<h1>Invalid Callback</h1><p>Missing authorization code.</p>")
@@ -116,7 +115,7 @@ class DcrPkceFlow(AuthFlow):
         crypto: CryptoBackend,
         profile: str,
         connection_name: str,
-        scopes: Optional[list[str]] = None,
+        scopes: list[str] | None = None,
     ) -> ConnectionRecord:
         """Execute the full DCR + PKCE flow."""
         if provider.oauth is None:
@@ -281,7 +280,7 @@ class DcrPkceFlow(AuthFlow):
         self,
         provider: ProviderDefinition,
         scopes: list[str],
-    ) -> tuple[str, Optional[str]]:
+    ) -> tuple[str, str | None]:
         """
         Perform Dynamic Client Registration.
 
@@ -354,7 +353,7 @@ class DcrPkceFlow(AuthFlow):
         auth_code: str,
         redirect_uri: str,
         client_id: str,
-        client_secret: Optional[str],
+        client_secret: str | None,
         code_verifier: str,
     ) -> dict[str, Any]:
         """Exchange an authorization code for tokens via direct POST."""

@@ -24,6 +24,9 @@ Usage:
 """
 
 from authsome.client import AuthClient
+from authsome.crypto.base import CryptoBackend
+from authsome.crypto.keyring_crypto import KeyringCryptoBackend
+from authsome.crypto.local_file_crypto import LocalFileCryptoBackend
 from authsome.errors import (
     AuthenticationFailedError,
     AuthsomeError,
@@ -40,12 +43,9 @@ from authsome.errors import (
     UnsupportedAuthTypeError,
     UnsupportedFlowError,
 )
+from authsome.models.connection import ConnectionRecord, EncryptedField
 from authsome.models.enums import AuthType, ConnectionStatus, ExportFormat, FlowType
 from authsome.models.provider import ProviderDefinition
-from authsome.models.connection import ConnectionRecord, EncryptedField
-from authsome.crypto.base import CryptoBackend
-from authsome.crypto.keyring_crypto import KeyringCryptoBackend
-from authsome.crypto.local_file_crypto import LocalFileCryptoBackend
 
 __version__ = "0.1.1"
 

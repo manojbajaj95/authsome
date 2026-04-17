@@ -1,7 +1,14 @@
 """Authsome data models."""
 
-from authsome.models.enums import AuthType, ConnectionStatus, ExportFormat, FlowType
 from authsome.models.config import EncryptionConfig, GlobalConfig
+from authsome.models.connection import (
+    AccountInfo,
+    ConnectionRecord,
+    EncryptedField,
+    ProviderMetadataRecord,
+    ProviderStateRecord,
+)
+from authsome.models.enums import AuthType, ConnectionStatus, ExportFormat, FlowType
 from authsome.models.profile import ProfileMetadata
 from authsome.models.provider import (
     ApiKeyConfig,
@@ -9,13 +16,6 @@ from authsome.models.provider import (
     ExportConfig,
     OAuthConfig,
     ProviderDefinition,
-)
-from authsome.models.connection import (
-    AccountInfo,
-    ConnectionRecord,
-    EncryptedField,
-    ProviderMetadataRecord,
-    ProviderStateRecord,
 )
 
 __all__ = [
