@@ -1,6 +1,7 @@
 ---
 name: authsome
-description: Manage third-party credentials (API keys, OAuth2 tokens) locally using the authsome CLI. Use this skill when the user wants to login to a service (GitHub, OpenAI, Google, etc.), retrieve authentication headers, export credentials to the shell, or run commands with injected authentication environment variables. Trigger this for any request involving authenticating AI agents, managing tool tokens, or securely storing/retrieving API keys.
+version: 0.1.2
+description: This skill should be used when the user wants to "login to GitHub", "store an API key", "get authentication headers", "export credentials to the shell", "run a command with API keys injected", "register a custom OAuth provider", "manage tool tokens", or "authenticate to a third-party application". Also triggers for requests involving authenticating AI agents or securely storing/retrieving credentials using the authsome CLI.
 ---
 
 # Authsome CLI Skill
@@ -84,52 +85,15 @@ The `authsome` CLI provides the following commands for managing credentials. All
 ### Custom Providers
 - `authsome register <path/to/provider.json>`: Registers a custom provider definition from a local JSON file. Use `--force` to overwrite existing configurations.
 
-#### Custom Provider JSON Format
-When creating a new custom provider JSON file, ensure it adheres to the strict authsome JSON schema.
-
-A provider definition JSON file must contain the following core fields:
-- `"schema_version"`: `1`
-- `"name"`: The internal identifier (e.g., `"github"`)
-- `"display_name"`: The human-readable name (e.g., `"GitHub"`)
-- `"auth_type"`: Either `"oauth2"` or `"api_key"`
-- `"flow"`: The authentication flow to use (e.g., `"pkce"`, `"device_code"`, `"dcr_pkce"`, `"api_key_prompt"`, `"api_key_env"`)
-
-**Configuration Nuances:**
-- **Environment Variables**: For `"client_id"` and `"client_secret"` within the `"client"` block, you can use the `"env:VAR_NAME"` syntax to dynamically resolve credentials from the environment instead of hardcoding them.
-- **Export Mapping**: The `"export"` block with the `"env"` object dictates how credentials map to environment variables when using `authsome export --format shell` or `authsome run` (e.g., `"access_token": "GITHUB_TOKEN"`).
-- **OAuth2**: Requires the `"oauth"` block (defining `authorization_url`, `token_url`, `scopes`, `pkce`, etc.).
-- **API Key**: Requires the `"api_key"` block (defining `header_name`, `header_prefix`, `env_var`, etc.).
-
-**Example: OAuth2 Provider (PKCE)**
-```json
-{
-  "schema_version": 1,
-  "name": "x",
-  "display_name": "X (Twitter)",
-  "auth_type": "oauth2",
-  "flow": "pkce",
-  "oauth": {
-    "authorization_url": "https://twitter.com/i/oauth2/authorize",
-    "token_url": "https://api.twitter.com/2/oauth2/token",
-    "scopes": ["tweet.read", "tweet.write", "users.read", "offline.access"],
-    "pkce": true,
-    "supports_device_flow": false,
-    "supports_dcr": false
-  },
-  "client": {
-    "client_id": "env:X_CLIENT_ID",
-    "client_secret": null
-  },
-  "export": {
-    "env": {
-      "access_token": "X_ACCESS_TOKEN",
-      "refresh_token": "X_REFRESH_TOKEN"
-    }
-  }
-}
-```
+See `references/custom-providers.md` for the full JSON schema, configuration nuances, and examples.
 
 ## Best Practices
-- **Prefer `authsome run`** over manually exporting secrets into the environment if possible, as it is more secure and ephemeral.
+- **Prefer `authsome run`** over manually exporting secrets into the environment — it is more secure and ephemeral.
 - **Use JSON output** (`--json` flag) when parsing results in scripts for more reliable automation.
-- **Redact secrets** in your own output unless the user specifically asks to see them.
+- **Redact secrets** in output unless the user specifically asks to see them.
+
+## Additional Resources
+
+### Reference Files
+
+- **`references/custom-providers.md`** — Full custom provider JSON schema, `env:VAR_NAME` syntax, OAuth2/API key block details, and working examples.

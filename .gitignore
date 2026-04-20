@@ -217,3 +217,24 @@ __marimo__/
 
 # Local agent skills
 .agents/
+.codebuddy/
+.commandcode/
+.continue/
+.crush/
+.factory/
+.goose/
+.junie/
+.kilocode/
+.kiro/
+.kode/
+.mux/
+.neovate/
+.openhands/
+.pi/
+.pochi/
+.qoder/
+.qwen/
+.roo/
+.trae/
+.windsurf/
+.zencoder/
