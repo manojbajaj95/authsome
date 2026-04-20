@@ -571,13 +571,22 @@ class AuthClient:
                 if "=" in line:
                     key, value = line.split("=", 1)
                     env[key] = value
+                    
+        def _dquote(s: str) -> str:
+            """Double-quote a token so $VAR references are expanded by the shell."""
+            s = s.replace("\\", "\\\\")
+            s = s.replace('"', '\\"')
+            s = s.replace("`", "\\`")
+            return f'"{s}"'
 
+        shell_cmd = " ".join(_dquote(c) for c in command)
         return subprocess.run(
-            command,
+            shell_cmd,
             env=env,
             capture_output=False,
             text=True,
             check=False,
+            shell=True,
         )
 
     # ─── Profile Operations ───────────────────────────────────────────────
