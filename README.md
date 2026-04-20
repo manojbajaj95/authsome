@@ -84,17 +84,6 @@ authsome export github --format shell
 authsome run --provider openai -- python script.py
 ```
 
-### Profiles
-Switching profiles allows you to manage multiple sets of credentials safely.
-```bash
-authsome profile list
-authsome profile create work
-authsome profile use work
-
-# Alternatively, override the profile per command:
-authsome --profile work list
-```
-
 ## How It Works
 
 ```
@@ -126,8 +115,7 @@ authsome --profile work list
 | Concept | Description |
 |---------|-------------|
 | **Provider** | A third-party service definition (e.g., `github`, `openai`) |
-| **Profile** | A credential namespace (e.g., `default`, `work`, `personal`) |
-| **Connection** | A named credential instance within a profile (e.g., `personal`, `work`) |
+| **Connection** | A named credential instance (e.g., `personal`, `work`) |
 
 ## Supported Flows
 
@@ -154,16 +142,6 @@ client.login("openai", connection_name="work")
 
 # Retrieve specific connection
 headers = client.get_auth_headers("openai", connection="work")
-```
-
-## Profiles
-
-```python
-client.create_profile("work", description="Work credentials")
-client.set_default_profile("work")
-
-# Or use per-call
-client.login("github", profile="work")
 ```
 
 ## Custom Providers

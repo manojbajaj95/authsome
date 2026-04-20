@@ -53,11 +53,11 @@ Always ensure `authsome` is initialized before performing other operations.
 
 ## Comprehensive Command Reference
 
-The `authsome` CLI provides the following commands for managing credentials and profiles. All commands support the `--json` flag for machine-readable output, the `--profile <name>` flag to override the active profile, and `--quiet` to suppress non-essential output.
+The `authsome` CLI provides the following commands for managing credentials. All commands support the `--json` flag for machine-readable output and `--quiet` to suppress non-essential output.
 
 ### Setup and Health
 - `authsome init`: Initializes the authsome root directory (`~/.authsome`) and default profile.
-- `authsome whoami`: Shows the active profile, home directory, and encryption mode.
+- `authsome whoami`: Shows the home directory and encryption mode.
 - `authsome doctor`: Runs health checks on the directory layout and encryption status.
 
 ### Authentication Lifecycle
@@ -128,12 +128,6 @@ A provider definition JSON file must contain the following core fields:
   }
 }
 ```
-
-### Profile Management
-Profiles allow namespace isolation for credentials (e.g., `work` vs `personal`).
-- `authsome profile list`: Lists all local profiles and indicates the active one.
-- `authsome profile create <name>`: Creates a new profile namespace.
-- `authsome profile use <name>`: Sets the global default profile to the specified name.
 
 ## Best Practices
 - **Prefer `authsome run`** over manually exporting secrets into the environment if possible, as it is more secure and ephemeral.

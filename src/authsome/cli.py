@@ -19,8 +19,7 @@ from authsome.models.enums import ExportFormat, FlowType
 class ContextObj:
     """Context object passed to all commands."""
 
-    def __init__(self, profile: str | None, json_output: bool, quiet: bool, no_color: bool):
-        self.profile = profile
+    def __init__(self, json_output: bool, quiet: bool, no_color: bool):
         self.json_output = json_output
         self.quiet = quiet
         self.no_color = no_color
@@ -28,7 +27,7 @@ class ContextObj:
 
     def initialize_client(self) -> AuthClient:
         if self.client is None:
-            self.client = AuthClient(profile=self.profile)
+            self.client = AuthClient()
         return self.client
 
     def print_json(self, data: Any) -> None:
@@ -87,15 +86,14 @@ def handle_errors(func):
 
 
 @click.group()
-@click.option("--profile", help="Override the active profile.")
 @click.option("--json", "json_output", is_flag=True, help="Output in machine-readable JSON format.")
 @click.option("--quiet", is_flag=True, help="Suppress non-essential output.")
 @click.option("--no-color", is_flag=True, help="Disable ANSI colors.")
 @click.pass_context
-def cli(ctx: click.Context, profile: str | None, json_output: bool, quiet: bool, no_color: bool) -> None:
+def cli(ctx: click.Context, json_output: bool, quiet: bool, no_color: bool) -> None:
     """Authsome: Portable local authentication library for AI agents and tools."""
     logging.getLogger("authsome").setLevel(logging.WARNING if quiet else logging.INFO)
-    ctx.obj = ContextObj(profile, json_output, quiet, no_color)
+    ctx.obj = ContextObj(json_output, quiet, no_color)
 
 
 @cli.command()
@@ -155,7 +153,6 @@ def list_cmd(ctx_obj: ContextObj) -> None:
     if ctx_obj.json_output:
         ctx_obj.print_json(
             {
-                "profile": client.active_profile,
                 "bundled": bundled_out,
                 "custom": custom_out,
             }
@@ -179,7 +176,6 @@ def list_cmd(ctx_obj: ContextObj) -> None:
             else:
                 ctx_obj.echo("    (no connections)", color="yellow")
 
-    ctx_obj.echo(f"Profile: {client.active_profile}")
     print_provider_section("Bundled Providers", bundled_out)
     print_provider_section("Custom Providers", custom_out)
 
@@ -377,10 +373,9 @@ def register(ctx_obj: ContextObj, path: str, force: bool) -> None:
 @pass_ctx
 @handle_errors
 def whoami(ctx_obj: ContextObj) -> None:
-    """Show the active profile and basic local context."""
+    """Show basic local context."""
     client = ctx_obj.initialize_client()
     data = {
-        "active_profile": client.active_profile,
         "home_directory": str(client.home),
         "encryption_mode": client.config.encryption.mode if client.config.encryption else "local_key",
     }
@@ -388,7 +383,6 @@ def whoami(ctx_obj: ContextObj) -> None:
     if ctx_obj.json_output:
         ctx_obj.print_json(data)
     else:
-        ctx_obj.echo(f"Active Profile: {data['active_profile']}")
         ctx_obj.echo(f"Home Directory: {data['home_directory']}")
         ctx_obj.echo(f"Encryption Mode: {data['encryption_mode']}")
 
@@ -406,7 +400,7 @@ def doctor(ctx_obj: ContextObj) -> None:
     else:
         all_ok = True
         for key, val in results.items():
-            if key in ["issues", "providers_count", "profiles_count"]:
+            if key in ["issues", "providers_count"]:
                 continue
             status = "OK" if val else "FAIL"
             color = "green" if val else "red"
@@ -416,7 +410,6 @@ def doctor(ctx_obj: ContextObj) -> None:
             ctx_obj.echo(status, color=color)
 
         ctx_obj.echo(f"Providers Configured: {results.get('providers_count', 0)}")
-        ctx_obj.echo(f"Profiles: {results.get('profiles_count', 0)}")
 
         issues = results.get("issues", [])
         if issues:
@@ -427,59 +420,6 @@ def doctor(ctx_obj: ContextObj) -> None:
         if not all_ok:
             sys.exit(1)
 
-
-@cli.group(name="profile")
-def profile_group() -> None:
-    """Manage local profiles."""
-    pass
-
-
-@profile_group.command(name="list")
-@pass_ctx
-@handle_errors
-def profile_list(ctx_obj: ContextObj) -> None:
-    """List local profiles."""
-    client = ctx_obj.initialize_client()
-    profiles = client.list_profiles()
-    active = client.active_profile
-
-    if ctx_obj.json_output:
-        ctx_obj.print_json({"active": active, "profiles": [p.model_dump(mode="json") for p in profiles]})
-    else:
-        ctx_obj.echo("Profiles:")
-        for p in profiles:
-            mark = "*" if p.name == active else " "
-            ctx_obj.echo(f" {mark} {p.name} ({p.description or 'No description'})")
-
-
-@profile_group.command(name="create")
-@click.argument("name")
-@pass_ctx
-@handle_errors
-def profile_create(ctx_obj: ContextObj, name: str) -> None:
-    """Create a profile."""
-    client = ctx_obj.initialize_client()
-    metadata = client.create_profile(name)
-
-    if ctx_obj.json_output:
-        ctx_obj.print_json({"status": "created", "profile": metadata.model_dump(mode="json")})
-    else:
-        ctx_obj.echo(f"Profile '{name}' created.", color="green")
-
-
-@profile_group.command(name="use")
-@click.argument("name")
-@pass_ctx
-@handle_errors
-def profile_use(ctx_obj: ContextObj, name: str) -> None:
-    """Set the global default profile."""
-    client = ctx_obj.initialize_client()
-    client.set_default_profile(name)
-
-    if ctx_obj.json_output:
-        ctx_obj.print_json({"status": "default_changed", "profile": name})
-    else:
-        ctx_obj.echo(f"Default profile set to '{name}'.", color="green")
 
 
 if __name__ == "__main__":
