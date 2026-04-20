@@ -6,94 +6,153 @@ description: This skill should be used when the user wants to "login to GitHub",
 
 # Authsome CLI Skill
 
-This skill enables the autonomous management of the credential lifecycle for tools and applications using the `authsome` CLI.
+Manage the credential lifecycle for tools and applications using the `authsome` CLI.
 
-## Installation & Invocation
+> **Agent Flow:** Every credential request follows three phases in order:
+> **SEARCH** → **LOGIN** → **USE**
 
-Before running any `authsome` command, determine how to invoke it using this priority order:
+---
 
-1. **`uvx` (preferred)** — if `uvx` is available, invoke as `uvx authsome <cmd>`. No install needed; uvx runs it in an isolated environment.
-   ```bash
-   uvx authsome whoami
-   ```
+## Prerequisites
 
-2. **`pipx`** — if `uvx` is not found but `pipx` is available, invoke as `pipx run authsome <cmd>`.
-   ```bash
-   pipx run authsome whoami
-   ```
+Before running any `authsome` command, determine how to invoke it:
 
-3. **Installed in PATH** — if `authsome` is already installed and available directly (e.g., via `pip install authsome` in the active venv or globally), invoke it as `authsome <cmd>`.
+1. **`uvx` (preferred)** — `uvx authsome <cmd>`. No install needed.
+2. **`pipx`** — `pipx run authsome <cmd>`.
+3. **Installed in PATH** — `authsome <cmd>`.
+4. **Not found** — inform the user. Recommend `pip install uv` then `uvx authsome`.
 
-4. **Not found — ask the user** — if none of the above work, do not guess. Inform the user and suggest one of these options:
-   - **Recommended (isolated):** `pip install uv` then use `uvx authsome`
-   - **Global install:** `pipx install authsome` (requires pipx)
-   - **Local venv:** `pip install authsome` inside the project's virtual environment, then activate it
-
-> **Detection snippet** (run once per session to set `AUTHSOME_CMD`):
+> **Detection snippet** (run once per session):
 > ```bash
 > if command -v uvx &>/dev/null; then
->   AUTHSOME_CMD="uvx authsome"
+>   AUTHSOME="uvx authsome"
 > elif command -v pipx &>/dev/null; then
->   AUTHSOME_CMD="pipx run authsome"
+>   AUTHSOME="pipx run authsome"
 > elif command -v authsome &>/dev/null; then
->   AUTHSOME_CMD="authsome"
+>   AUTHSOME="authsome"
 > else
->   echo "authsome not found — please install it (see skill instructions)"
+>   echo "authsome not found — please install it"
 > fi
 > ```
-> Use `$AUTHSOME_CMD` in place of `authsome` in all commands below.
 
-## Core Workflow
+Ensure authsome is initialized before any operation:
+```bash
+$AUTHSOME init
+```
 
-Always ensure `authsome` is initialized before performing other operations.
+---
 
-1. **Initialize**: If it's a first-time setup, run `authsome init`.
-2. **Login**: To connect a new account, use `authsome login <provider>`.
-3. **Retrieve/Export**: To use credentials, use `authsome get` or `authsome export`.
-4. **Execute**: To run a task with credentials, use `authsome run`.
+## Phase 1 — SEARCH
 
-## Comprehensive Command Reference
+**Goal:** Find the provider and check for existing connections.
 
-The `authsome` CLI provides the following commands for managing credentials. All commands support the `--json` flag for machine-readable output and `--quiet` to suppress non-essential output.
+```bash
+$AUTHSOME list --json
+```
 
-### Setup and Health
-- `authsome init`: Initializes the authsome root directory (`~/.authsome`) and default profile.
-- `authsome whoami`: Shows the home directory and encryption mode.
-- `authsome doctor`: Runs health checks on the directory layout and encryption status.
+This returns `bundled` and `custom` provider arrays, each with `name`, `auth_type`, and `connections`.
 
-### Authentication Lifecycle
-- `authsome login <provider>`: Starts the authentication flow for a provider. 
-  - Supports `--connection <name>` to manage multiple accounts for the same provider.
-  - Supports `--flow <flow_type>` to override the default flow.
-  - Supports `--scopes <scope1,scope2>` to request specific permissions.
-- `authsome revoke <provider>`: Revokes credentials remotely (if supported by the provider) and removes them locally.
-- `authsome remove <provider>`: Removes the local credential state without attempting remote revocation.
+**Decision:**
 
-### Inspecting State
-- `authsome list`: Lists all configured providers (bundled and custom) and their connection states.
-- `authsome get <provider>`: Returns provider connection metadata.
-  - Secrets are redacted by default. Use `--show-secret` to reveal encrypted secrets.
-  - Use `--field <field_name>` to return only a specific field.
-- `authsome inspect <provider>`: Returns the provider definition schema and local connection summary.
+- **Provider found with a connected connection** → Ask the user which connection to use (or if they want a new one). If using an existing connection, skip to **Phase 3 — USE**.
+- **Provider found, no connections** → Proceed to **Phase 2 — LOGIN**.
+- **Provider NOT found** → You must create and register a custom provider. Read [REGISTER_PROVIDER.md](./REGISTER_PROVIDER.md) for the full guide, then return here for Phase 2.
 
-### Using Credentials
-- `authsome export <provider>`: Exports credential material. 
-  - Use `--format shell` to output environment variable exports (e.g., `export KEY=VAL`).
-  - Use `--format json` or `--format env` for other output styles.
-- `authsome run --provider <p1> [--provider <p2>] -- <command>`: Runs a subprocess with exported credentials injected into its environment. This is the most secure way to pass credentials to a script.
+---
 
-### Custom Providers
-- `authsome register <path/to/provider.json>`: Registers a custom provider definition from a local JSON file. Use `--force` to overwrite existing configurations.
+## Phase 2 — LOGIN
 
-See `references/custom-providers.md` for the full JSON schema, configuration nuances, and examples.
+**Goal:** Authenticate and store credentials.
 
-## Best Practices
-- **Prefer `authsome run`** over manually exporting secrets into the environment — it is more secure and ephemeral.
-- **Use JSON output** (`--json` flag) when parsing results in scripts for more reliable automation.
-- **Redact secrets** in output unless the user specifically asks to see them.
+### Step 2.1: Determine the auth flow
+
+If the provider supports multiple OAuth2 flows, choose one:
+
+1. **`supports_dcr: true`** → **Use `dcr_pkce`**. This is the path of least resistance — no pre-registered `client_id` needed.
+2. **Multiple flows available (no DCR)** → Ask the user: PKCE (browser) vs Device Code (headless).
+3. **Only one flow** → Use the provider's default.
+4. **API key provider** → Flow is already determined (`api_key_prompt` or `api_key_env`).
+
+Use `$AUTHSOME inspect <provider> --json` to check `oauth.supports_dcr`, `oauth.supports_device_flow`, and the default `flow`.
+
+### Step 2.2: Choose a connection name
+
+If the user already has a `"default"` connection for this provider, ask for a name (e.g., `work`, `personal`). Otherwise use `"default"`.
+
+### Step 2.3: Run login
+
+```bash
+$AUTHSOME login <provider> [--connection <name>] [--flow <flow_type>] [--scopes <scope1,scope2>]
+```
+
+**Examples:**
+```bash
+# Default flow
+$AUTHSOME login github
+
+# Override flow to device code
+$AUTHSOME login github --flow device_code
+
+# Named connection with custom scopes
+$AUTHSOME login github --connection work --scopes repo,read:org
+
+# API key provider (will interactively prompt)
+$AUTHSOME login openai
+```
+
+### Step 2.4: Verify
+
+```bash
+$AUTHSOME get <provider> --json
+```
+
+Confirm `status` is `"connected"`.
+
+---
+
+## Phase 3 — USE
+
+**Goal:** Export credentials so the agent can make authenticated tool calls.
+
+### Option A: Export to current shell (recommended)
+
+```bash
+eval "$($AUTHSOME export <provider> --format shell)"
+```
+
+Credentials become environment variables (e.g., `GITHUB_ACCESS_TOKEN`, `OPENAI_API_KEY`) as defined in the provider's `export.env` mapping.
+
+### Option B: Run a command with injected credentials
+
+```bash
+$AUTHSOME run --provider github -- curl -H "Authorization: Bearer $GITHUB_ACCESS_TOKEN" https://api.github.com/user
+```
+
+Multiple providers:
+```bash
+$AUTHSOME run --provider github --provider openai -- python my_script.py
+```
+
+### Option C: Get a single field
+
+```bash
+TOKEN=$($AUTHSOME get <provider> --field access_token --show-secret)
+```
+
+---
 
 ## Additional Resources
 
-### Reference Files
+| Topic | File |
+|-------|------|
+| Creating & registering custom providers | [REGISTER_PROVIDER.md](./REGISTER_PROVIDER.md) |
+| Full CLI command & flag reference | [CLI_REFERENCE.md](./CLI_REFERENCE.md) |
 
-- **`references/custom-providers.md`** — Full custom provider JSON schema, `env:VAR_NAME` syntax, OAuth2/API key block details, and working examples.
+---
+
+## Best Practices
+
+- **Always use `--json`** when parsing CLI output programmatically.
+- **Prefer `authsome run`** over exporting secrets — it is more secure and ephemeral.
+- **Never log or echo secrets** unless the user explicitly asks.
+- **Re-use existing connections** — always check before starting a new login.
