@@ -411,29 +411,7 @@ Use `--force` to overwrite an existing configuration. You can also register prov
 
 ### How It Works
 
-```
-┌─────────────┐     ┌──────────────┐     ┌───────────────────┐
-│  Your App /  │────▶│  AuthClient  │────▶│  Provider Registry │
-│    Agent     │     │              │     │  (bundled + local) │
-└─────────────┘     └──────┬───────┘     └───────────────────┘
-                           │
-                    ┌──────┴───────┐
-                    │  Auth Flows  │
-                    ├──────────────┤
-                    │ • PKCE       │  ← browser-based OAuth
-                    │ • Device Code│  ← headless OAuth
-                    │ • DCR + PKCE │  ← dynamic client reg
-                    │ • API Key    │  ← prompt or env import
-                    └──────┬───────┘
-                           │
-                    ┌──────┴───────┐
-                    │   Storage    │
-                    ├──────────────┤
-                    │ SQLite KV    │  ← per-profile store
-                    │ AES-256-GCM  │  ← field-level encryption
-                    │ OS Keyring   │  ← master key storage
-                    └──────────────┘
-```
+---
 
 `AuthClient` is the single entry point. It resolves the right flow per provider, manages token refresh transparently, and delegates persistence to a per-profile SQLite store. Profiles let you isolate credential sets (e.g., personal, work, a specific agent).
 
@@ -441,14 +419,12 @@ Use `--force` to overwrite an existing configuration. You can also register prov
 
 ```
 ~/.authsome/
-  version              # store format version
-  config.json          # global settings (incl. encryption.mode)
-  master.key           # encryption key (only in local_key mode)
-  providers/           # user-registered provider definitions
+  config.json          # global settings (encryption mode, active profile)
+  master.key           # encryption key (chmod 0600)
+  providers/           # user-defined provider definitions
   profiles/
     default/
-      store.db         # encrypted credential store (SQLite)
-      metadata.json    # profile metadata
+      store.db         # credential store (SQLite, values AES-256-GCM encrypted)
       lock             # advisory write lock
 ```
 
@@ -483,6 +459,8 @@ Default is `local_key` for maximum compatibility.
 | Variable | Purpose |
 |----------|---------|
 | `AUTHSOME_HOME` | Override the default `~/.authsome` directory |
+
+---
 
 ## License
 
