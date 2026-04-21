@@ -35,7 +35,7 @@ from authsome.errors import (
     TokenExpiredError,
     UnsupportedFlowError,
 )
-from authsome.flows.api_key import ApiKeyEnvFlow, ApiKeyPromptFlow
+from authsome.flows.api_key import ApiKeyFlow
 from authsome.flows.base import AuthFlow
 from authsome.flows.dcr_pkce import DcrPkceFlow
 from authsome.flows.device_code import DeviceCodeFlow
@@ -70,8 +70,7 @@ _FLOW_HANDLERS: dict[FlowType, type[AuthFlow]] = {
     FlowType.PKCE: PkceFlow,
     FlowType.DEVICE_CODE: DeviceCodeFlow,
     FlowType.DCR_PKCE: DcrPkceFlow,
-    FlowType.API_KEY_PROMPT: ApiKeyPromptFlow,
-    FlowType.API_KEY_ENV: ApiKeyEnvFlow,
+    FlowType.API_KEY: ApiKeyFlow,
 }
 
 

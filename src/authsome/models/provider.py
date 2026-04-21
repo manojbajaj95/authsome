@@ -30,36 +30,6 @@ class OAuthConfig(BaseModel):
     model_config = {"extra": "allow"}
 
 
-class ClientConfig(BaseModel):
-    """
-    Client credentials for a provider.
-
-    Values may use the `env:VAR_NAME` syntax to read from environment.
-    """
-
-    client_id: str | None = None
-    client_secret: str | None = None
-
-    model_config = {"extra": "allow"}
-
-    def resolve_client_id(self) -> str | None:
-        """Resolve client_id, supporting env: prefix."""
-        return self._resolve(self.client_id)
-
-    def resolve_client_secret(self) -> str | None:
-        """Resolve client_secret, supporting env: prefix."""
-        return self._resolve(self.client_secret)
-
-    @staticmethod
-    def _resolve(value: str | None) -> str | None:
-        if value is None:
-            return None
-        if value.startswith("env:"):
-            env_var = value[4:]
-            return os.environ.get(env_var)
-        return value
-
-
 class ApiKeyConfig(BaseModel):
     """
     API key provider configuration.
@@ -67,10 +37,8 @@ class ApiKeyConfig(BaseModel):
     Spec §9.4: Required section for auth_type=api_key.
     """
 
-    input_mode: str = "prompt"
     header_name: str = "Authorization"
     header_prefix: str = "Bearer"
-    env_var: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -99,7 +67,6 @@ class ProviderDefinition(BaseModel):
 
     # Auth-type-specific sections
     oauth: OAuthConfig | None = None
-    client: ClientConfig | None = None
     api_key: ApiKeyConfig | None = None
 
     # Export configuration

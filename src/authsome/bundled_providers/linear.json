@@ -17,10 +17,6 @@
         "supports_device_flow": false,
         "supports_dcr": true
     },
-    "client": {
-        "client_id": "env:LINEAR_CLIENT_ID",
-        "client_secret": "env:LINEAR_CLIENT_SECRET"
-    },
     "export": {
         "env": {
             "access_token": "LINEAR_ACCESS_TOKEN",

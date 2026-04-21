@@ -71,7 +71,7 @@ If the provider supports multiple OAuth2 flows, choose one:
 1. **`supports_dcr: true`** → **Use `dcr_pkce`**. This is the path of least resistance — no pre-registered `client_id` needed.
 2. **Multiple flows available (no DCR)** → Ask the user: PKCE (browser) vs Device Code (headless).
 3. **Only one flow** → Use the provider's default.
-4. **API key provider** → Flow is already determined (`api_key_prompt` or `api_key_env`).
+4. **API key provider** → Flow is already determined (`api_key`).
 
 Use `$AUTHSOME inspect <provider> --json` to check `oauth.supports_dcr`, `oauth.supports_device_flow`, and the default `flow`.
 
@@ -86,6 +86,8 @@ $AUTHSOME login <provider> [--connection <name>] [--flow <flow_type>] [--scopes 
 ```
 
 **Note on Credentials:** `authsome` stores client IDs and secrets securely in the profile store. If this is the first time logging in with a specific provider that doesn't use Dynamic Client Registration (DCR), you MUST pass the credentials via flags (`--client-id` and `--client-secret`). They will be securely saved and reused for subsequent logins for that provider.
+
+**Note on Redirect URIs:** If the provider requires you to register an OAuth App manually (e.g., standard PKCE flow without DCR), make sure to configure the callback/redirect URI in the provider's developer console to exactly `http://127.0.0.1:7999/callback`.
 
 **Examples:**
 ```bash
