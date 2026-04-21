@@ -57,7 +57,6 @@ authsome get <provider> [OPTIONS]
 |--------|-------------|
 | `--connection <name>` | Connection name (default: `default`). |
 | `--field <field>` | Return only a specific field. |
-| `--show-secret` | Reveal encrypted secrets. |
 
 ### `export`
 

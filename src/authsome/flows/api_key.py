@@ -6,12 +6,11 @@ Spec §13.5: API Key Environment Import — read from environment variable, stor
 
 from __future__ import annotations
 
-import getpass
+
 import logging
-import os
 
 from authsome.crypto.base import CryptoBackend
-from authsome.errors import AuthenticationFailedError, CredentialMissingError
+from authsome.errors import AuthenticationFailedError
 from authsome.flows.base import AuthFlow
 from authsome.models.connection import AccountInfo, ConnectionRecord
 from authsome.models.enums import AuthType, ConnectionStatus
@@ -53,15 +52,10 @@ class ApiKeyFlow(AuthFlow):
         api_key_value = api_key
 
         if not api_key_value:
-            # Prompt securely
-            prompt_text = f"Enter API key for {provider.display_name}: "
-            try:
-                api_key_value = getpass.getpass(prompt_text)
-            except (EOFError, KeyboardInterrupt) as exc:
-                raise AuthenticationFailedError(
-                    "API key input cancelled",
-                    provider=provider.name,
-                ) from exc
+            raise AuthenticationFailedError(
+                "API key was not provided. Please pass it or ensure interactive prompting is enabled.",
+                provider=provider.name,
+            )
 
         # Validate non-empty
         if not api_key_value or not api_key_value.strip():

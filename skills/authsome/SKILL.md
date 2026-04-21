@@ -82,10 +82,10 @@ If the user already has a `"default"` connection for this provider, ask for a na
 ### Step 2.3: Run login
 
 ```bash
-$AUTHSOME login <provider> [--connection <name>] [--flow <flow_type>] [--scopes <scope1,scope2>] [--client-id <id>] [--client-secret <secret>] [--api-key <key>]
+$AUTHSOME login <provider> [--connection <name>] [--flow <flow_type>] [--scopes <scope1,scope2>] [--reset]
 ```
 
-**Note on Credentials:** `authsome` stores client IDs and secrets securely in the profile store. If this is the first time logging in with a specific provider that doesn't use Dynamic Client Registration (DCR), you MUST pass the credentials via flags (`--client-id` and `--client-secret`). They will be securely saved and reused for subsequent logins for that provider.
+**Note on Credentials:** `authsome` stores client IDs and secrets securely in the profile store. If this is the first time logging in with a specific provider that doesn't use Dynamic Client Registration (DCR), `authsome` will securely prompt the user for these credentials via a local browser bridge. Agents MUST NEVER ask for or pass these secrets directly. They will be securely saved and reused for subsequent logins. Use the `--reset` flag to ignore existing client credentials and prompt for new ones.
 
 **Note on Redirect URIs:** If the provider requires you to register an OAuth App manually (e.g., standard PKCE flow without DCR), make sure to configure the callback/redirect URI in the provider's developer console to exactly `http://127.0.0.1:7999/callback`.
 
@@ -94,14 +94,14 @@ $AUTHSOME login <provider> [--connection <name>] [--flow <flow_type>] [--scopes 
 # Default flow (if credentials are saved or provider supports DCR)
 $AUTHSOME login github
 
-# First-time login for provider requiring client credentials
-$AUTHSOME login github --client-id "my_client_id" --client-secret "my_client_secret"
+# First-time login for provider requiring client credentials (prompts user via secure browser bridge)
+$AUTHSOME login github
 
 # Override flow to device code
-$AUTHSOME login github --flow device_code --client-id "my_client_id"
+$AUTHSOME login github --flow device_code
 
-# API key provider (bypass interactive prompt by passing key)
-$AUTHSOME login openai --api-key "sk-..."
+# API key provider (prompts user via secure browser bridge)
+$AUTHSOME login openai
 ```
 
 ### Step 2.4: Verify
@@ -140,7 +140,7 @@ $AUTHSOME run --provider github --provider openai -- python my_script.py
 ### Option C: Get a single field
 
 ```bash
-TOKEN=$($AUTHSOME get <provider> --field access_token --show-secret)
+TOKEN=$($AUTHSOME get <provider> --field access_token)
 ```
 
 ---

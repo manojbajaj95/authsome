@@ -214,10 +214,7 @@ def list_cmd(ctx_obj: ContextObj) -> None:
 @click.option("--connection", default="default", help="Connection name.")
 @click.option("--flow", help="Authentication flow override.")
 @click.option("--scopes", help="Comma-separated scopes to request.")
-@click.option("--client-id", help="Provider Client ID")
-@click.option("--client-secret", help="Provider Client Secret")
-@click.option("--api-key", help="Provider API Key")
-@click.option("--force", is_flag=True, help="Force override existing client credentials.")
+@click.option("--reset", is_flag=True, help="Ignore existing client credentials and prompt for new ones.")
 @common_options
 @pass_ctx
 @handle_errors
@@ -227,15 +224,15 @@ def login(
     connection: str,
     flow: str | None,
     scopes: str | None,
-    client_id: str | None,
-    client_secret: str | None,
-    api_key: str | None,
-    force: bool,
+    reset: bool,
 ) -> None:
     """Authenticate with a provider using its configured flow."""
     client = ctx_obj.initialize_client()
     flow_enum = FlowType(flow) if flow else None
     scope_list = [s.strip() for s in scopes.split(",")] if scopes else None
+
+    if reset and not ctx_obj.quiet:
+        ctx_obj.echo("Warning: Resetting client credentials may break existing connections for this provider.", color="yellow")
 
     if not ctx_obj.json_output:
         ctx_obj.echo(f"Starting login for {provider}...", color="cyan")
@@ -245,10 +242,7 @@ def login(
         connection_name=connection,
         scopes=scope_list,
         flow_override=flow_enum,
-        client_id=client_id,
-        client_secret=client_secret,
-        api_key=api_key,
-        force=force,
+        reset=reset,
     )
 
     if ctx_obj.json_output:
