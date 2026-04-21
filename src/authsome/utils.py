@@ -56,6 +56,7 @@ def build_store_key(
       profile:<profile_name>:<provider_name>:metadata
       profile:<profile_name>:<provider_name>:state
       profile:<profile_name>:<provider_name>:connection:<connection_name>
+      profile:<profile_name>:<provider_name>:client
     """
     if record_type == "definition" and provider:
         return f"provider:{provider}:definition"
