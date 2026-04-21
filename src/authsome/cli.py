@@ -311,7 +311,7 @@ def get(ctx_obj: ContextObj, provider: str, connection: str, field: str | None, 
     client = ctx_obj.initialize_client()
     record = client.get_connection(provider, connection)
 
-    data = record.model_dump()
+    data = record.model_dump(mode="json")
 
     # Redact secrets unless requested
     if not show_secret:
@@ -352,7 +352,7 @@ def inspect(ctx_obj: ContextObj, provider: str) -> None:
     client = ctx_obj.initialize_client()
     definition = client.get_provider(provider)
 
-    data = definition.model_dump()
+    data = definition.model_dump(mode="json")
     if ctx_obj.json_output:
         ctx_obj.print_json(data)
     else:
