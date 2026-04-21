@@ -237,6 +237,15 @@ def login(
     flow_enum = FlowType(flow) if flow else None
     scope_list = [s.strip() for s in scopes.split(",")] if scopes else None
 
+    if client_id and not client_secret and not ctx_obj.json_output:
+        raw = click.prompt(
+            "Client Secret (press Enter to skip for public clients)",
+            hide_input=True,
+            default="",
+            show_default=False,
+        )
+        client_secret = raw.strip() or None
+
     if not ctx_obj.json_output:
         ctx_obj.echo(f"Starting login for {provider}...", color="cyan")
 

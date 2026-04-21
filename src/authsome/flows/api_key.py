@@ -8,10 +8,9 @@ from __future__ import annotations
 
 import getpass
 import logging
-import os
 
 from authsome.crypto.base import CryptoBackend
-from authsome.errors import AuthenticationFailedError, CredentialMissingError
+from authsome.errors import AuthenticationFailedError
 from authsome.flows.base import AuthFlow
 from authsome.models.connection import AccountInfo, ConnectionRecord
 from authsome.models.enums import AuthType, ConnectionStatus
@@ -88,5 +87,3 @@ class ApiKeyFlow(AuthFlow):
             account=AccountInfo(),
             metadata={},
         )
-
-
