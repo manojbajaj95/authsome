@@ -67,6 +67,8 @@ def build_store_key(
             return f"profile:{profile}:{provider}:state"
         elif record_type == "connection" and connection:
             return f"profile:{profile}:{provider}:connection:{connection}"
+        elif record_type == "client":
+            return f"profile:{profile}:{provider}:client"
 
     raise ValueError(
         f"Cannot build store key with profile={profile}, provider={provider}, "
