@@ -219,8 +219,12 @@ headers = client.get_auth_headers("openai", connection="work")
   config.json          # global settings (encryption mode, active profile)
   master.key           # encryption key (chmod 0600)
   providers/           # user-defined provider definitions
+  config.json          # global settings (encryption mode, active profile)
+  master.key           # encryption key (chmod 0600)
+  providers/           # user-defined provider definitions
   profiles/
     default/
+      store.db         # credential store (SQLite, values AES-256-GCM encrypted)
       store.db         # credential store (SQLite, values AES-256-GCM encrypted)
       lock             # advisory write lock
 ```
@@ -230,6 +234,8 @@ headers = client.get_auth_headers("openai", connection="work")
 | Variable | Purpose |
 |----------|---------|
 | `AUTHSOME_HOME` | Override the default `~/.authsome` directory |
+
+---
 
 ---
 
