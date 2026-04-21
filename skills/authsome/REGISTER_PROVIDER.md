@@ -52,6 +52,8 @@ Create a `.json` file using one of the templates below.
 
 > **Note:** When DCR is available, set `"flow": "dcr_pkce"` and `"supports_dcr": true` with a `"registration_endpoint"`. For standard OAuth2 (`pkce` or `device_code`), you must provide the `client_id` (and `client_secret` if needed) during the login process using CLI flags: `--client-id` and `--client-secret`. These will be securely saved to your profile and reused for future logins. Do NOT include them in the provider JSON.
 
+> OAuth PKCE with a manually registered app: redirect URI must be `http://127.0.0.1:7999/callback`.
+
 ### Template B — API Key Provider
 
 ```json
