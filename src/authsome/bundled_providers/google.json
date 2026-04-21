@@ -17,10 +17,6 @@
         "supports_device_flow": true,
         "supports_dcr": false
     },
-    "client": {
-        "client_id": "env:GOOGLE_CLIENT_ID",
-        "client_secret": "env:GOOGLE_CLIENT_SECRET"
-    },
     "export": {
         "env": {
             "access_token": "GOOGLE_ACCESS_TOKEN",

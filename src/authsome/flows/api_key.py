@@ -21,7 +21,7 @@ from authsome.utils import utc_now
 logger = logging.getLogger(__name__)
 
 
-class ApiKeyPromptFlow(AuthFlow):
+class ApiKeyFlow(AuthFlow):
     """
     Interactive API key prompt flow.
 
@@ -90,64 +90,3 @@ class ApiKeyPromptFlow(AuthFlow):
         )
 
 
-class ApiKeyEnvFlow(AuthFlow):
-    """
-    Environment variable API key import flow.
-
-    Spec §13.5:
-    1. Read expected environment variable from provider definition.
-    2. If present, import into local store.
-    3. Preserve normalized connection shape.
-    """
-
-    def authenticate(
-        self,
-        provider: ProviderDefinition,
-        crypto: CryptoBackend,
-        profile: str,
-        connection_name: str,
-        scopes: list[str] | None = None,
-        client_id: str | None = None,
-        client_secret: str | None = None,
-        api_key: str | None = None,
-    ) -> ConnectionRecord:
-        """Read an API key from environment and create a connection record."""
-        if provider.api_key is None:
-            raise AuthenticationFailedError(
-                "Provider missing 'api_key' configuration",
-                provider=provider.name,
-            )
-
-        api_key_value = api_key
-
-        if not api_key_value:
-            env_var = provider.api_key.env_var
-            if not env_var:
-                raise AuthenticationFailedError(
-                    "Provider does not define an env_var for API key import",
-                    provider=provider.name,
-                )
-
-            api_key_value = os.environ.get(env_var)
-            if not api_key_value:
-                raise CredentialMissingError(
-                    f"Environment variable '{env_var}' is not set or empty",
-                    provider=provider.name,
-                )
-
-        # Encrypt the key
-        encrypted_key = crypto.encrypt(api_key_value)
-
-        now = utc_now()
-        return ConnectionRecord(
-            schema_version=1,
-            provider=provider.name,
-            profile=profile,
-            connection_name=connection_name,
-            auth_type=AuthType.API_KEY,
-            status=ConnectionStatus.CONNECTED,
-            api_key=encrypted_key,
-            obtained_at=now,
-            account=AccountInfo(),
-            metadata={},
-        )

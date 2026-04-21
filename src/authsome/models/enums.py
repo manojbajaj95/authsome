@@ -16,8 +16,7 @@ class FlowType(StrEnum):
     PKCE = "pkce"
     DEVICE_CODE = "device_code"
     DCR_PKCE = "dcr_pkce"
-    API_KEY_PROMPT = "api_key_prompt"
-    API_KEY_ENV = "api_key_env"
+    API_KEY = "api_key"
 
 
 class ConnectionStatus(StrEnum):

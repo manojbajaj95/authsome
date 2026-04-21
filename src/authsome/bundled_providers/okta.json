@@ -13,10 +13,6 @@
         ],
         "pkce": true
     },
-    "client": {
-        "client_id": "env:OKTA_CLIENT_ID",
-        "client_secret": "env:OKTA_CLIENT_SECRET"
-    },
     "export": {
         "env": {
             "access_token": "OKTA_ACCESS_TOKEN",

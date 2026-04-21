@@ -80,4 +80,4 @@ profile:<profile>:<provider>:state
 
 `ClientConfig` supports `env:VAR_NAME` syntax so client credentials can come from environment variables without hardcoding them in the provider JSON.
 
-**CLI (`src/authsome/cli.py`)** is Click-based. All commands support `--json` for machine-readable output and `--profile` to override the active profile.
+**CLI (`src/authsome/cli.py`)** is Click-based. All commands support `--profile` to override the active profile.

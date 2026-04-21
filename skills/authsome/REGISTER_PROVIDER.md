@@ -9,7 +9,7 @@ This guide covers creating and registering a new provider definition when the ta
 Perform a **web search** to determine what authentication methods the target service supports:
 
 - **OAuth2?** Find the `authorization_url`, `token_url`, supported `scopes`, and whether it supports PKCE, device flow, or DCR (Dynamic Client Registration).
-- **API keys / personal access tokens?** Find the header format and relevant environment variable conventions.
+- **API keys / personal access tokens?** Find the header format.
 - **Both?** Ask the user which method they prefer:
   - *OAuth2* — scoped, time-limited access with auto-refresh.
   - *API key* — simpler, paste a token and go.
@@ -40,9 +40,6 @@ Create a `.json` file using one of the templates below.
     "supports_dcr": true,
     "registration_endpoint": "https://example.com/oauth/register"
   },
-  "client": {
-    "client_id": "env:SERVICE_CLIENT_ID",
-    "client_secret": null
   },
   "export": {
     "env": {
@@ -53,7 +50,7 @@ Create a `.json` file using one of the templates below.
 }
 ```
 
-> **Note:** When DCR is available, set `"flow": "dcr_pkce"` and `"supports_dcr": true` with a `"registration_endpoint"`. The `client.client_id` is not needed — DCR handles it automatically. If DCR is not available, set `"flow": "pkce"` and provide the `client_id` (use `"env:VAR_NAME"` to read from environment).
+> **Note:** When DCR is available, set `"flow": "dcr_pkce"` and `"supports_dcr": true` with a `"registration_endpoint"`. For standard OAuth2 (`pkce` or `device_code`), you must provide the `client_id` (and `client_secret` if needed) during the login process using CLI flags: `--client-id` and `--client-secret`. These will be securely saved to your profile and reused for future logins. Do NOT include them in the provider JSON.
 
 ### Template B — API Key Provider
 
@@ -63,12 +60,10 @@ Create a `.json` file using one of the templates below.
   "name": "<service_name_lowercase>",
   "display_name": "<Service Display Name>",
   "auth_type": "api_key",
-  "flow": "api_key_prompt",
+  "flow": "api_key",
   "api_key": {
-    "input_mode": "prompt",
     "header_name": "Authorization",
-    "header_prefix": "Bearer",
-    "env_var": "SERVICE_API_KEY"
+    "header_prefix": "Bearer"
   },
   "export": {
     "env": {
@@ -106,21 +101,21 @@ Create a `.json` file using one of the templates below.
 | `supports_dcr` | No | Set `true` if Dynamic Client Registration is available. |
 | `registration_endpoint` | No | Required if `supports_dcr` is `true`. |
 
-### Client fields (`client` block)
+### Credential Storage
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `client_id` | Depends | OAuth client ID. Use `"env:VAR_NAME"` to read from environment. Required for `pkce` and `device_code`. Not needed for `dcr_pkce`. |
-| `client_secret` | No | OAuth client secret. Use `"env:VAR_NAME"` syntax. |
+Authsome stores all client credentials (`client_id`, `client_secret`, `api_key`) securely at the **profile level** in its internal database. 
+
+1. **OAuth2:** Pass credentials once using `--client-id` and `--client-secret` during `authsome login`.
+2. **API Keys:** Pass the key once using `--api-key` during `authsome login`, or enter it interactively during the prompt.
+
+Once saved, these credentials are never read from environment variables or plain-text JSON files. This ensures portability and security across different environments.
 
 ### API Key fields (`api_key` block)
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `input_mode` | No | `"prompt"` (interactive) or `"env"` (from environment variable). Defaults to `"prompt"`. |
 | `header_name` | No | HTTP header name. Defaults to `"Authorization"`. |
 | `header_prefix` | No | Prefix before the key value. Defaults to `"Bearer"`. |
-| `env_var` | No | Environment variable to read the key from (used with `api_key_env` flow). |
 
 ### Export fields (`export` block)
 
@@ -137,8 +132,7 @@ The `export.env` object maps credential fields to environment variable names use
 | `dcr_pkce` | `oauth2` | **Preferred.** Dynamic Client Registration, then PKCE. No `client_id` needed. |
 | `pkce` | `oauth2` | Standard OAuth2 with PKCE. Opens a browser. Needs `client_id`. |
 | `device_code` | `oauth2` | Headless OAuth2. User enters a code on a separate device. Needs `client_id`. |
-| `api_key_prompt` | `api_key` | Interactively prompts the user to paste an API key. |
-| `api_key_env` | `api_key` | Reads the API key from an environment variable (`api_key.env_var`). |
+| `api_key` | `api_key` | Prompts the user to paste an API key or accepts it via the `--api-key` flag. |
 
 ---
 

@@ -218,8 +218,12 @@ authsome run --provider openai --connection work -- python my_agent.py
   config.json          # global settings (encryption mode, active profile)
   master.key           # encryption key (chmod 0600)
   providers/           # user-defined provider definitions
+  config.json          # global settings (encryption mode, active profile)
+  master.key           # encryption key (chmod 0600)
+  providers/           # user-defined provider definitions
   profiles/
     default/
+      store.db         # credential store (SQLite, values AES-256-GCM encrypted)
       store.db         # credential store (SQLite, values AES-256-GCM encrypted)
       lock             # advisory write lock
 ```
@@ -229,6 +233,8 @@ authsome run --provider openai --connection work -- python my_agent.py
 | Variable | Purpose |
 |----------|---------|
 | `AUTHSOME_HOME` | Override the default `~/.authsome` directory |
+
+---
 
 ---
 
