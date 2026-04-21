@@ -77,7 +77,7 @@ pip install authsome
 authsome init
 authsome login github                  # opens browser, completes PKCE flow
 authsome login github --flow device    # headless: Device Code, works over SSH and CI
-authsome login openai                  # prompts for API key
+authsome login openai                  # securely prompts for API key via browser bridge
 authsome list                          # all connections + token status
 ```
 
@@ -93,7 +93,8 @@ authsome doctor                        # verify installation health
 # Authentication
 authsome login github                  # OAuth2 browser flow (PKCE)
 authsome login github --flow device    # headless Device Code flow
-authsome login openai                  # API key prompt
+authsome login github --reset          # ignore existing credentials and re-prompt via browser bridge
+authsome login openai                  # secure API key prompt via browser bridge
 authsome logout github                 # revoke token remotely + remove locally
 authsome remove github                 # remove local state only
 
@@ -171,8 +172,7 @@ The CLI resolves the right flow per provider, manages token refresh transparentl
 | `pkce` | Browser-capable environments with a pre-registered OAuth client |
 | `device_code` | Headless servers, CI, SSH sessions — no browser required |
 | `dcr_pkce` | Services supporting Dynamic Client Registration — no pre-registration needed |
-| `api_key_prompt` | Interactive terminal, prompts securely |
-| `api_key_env` | Import a key already present in an environment variable |
+| `api_key` | Prompts user securely via local browser bridge |
 
 ### Custom Providers
 
@@ -183,7 +183,7 @@ Drop a JSON file at `~/.authsome/providers/my-service.json`:
   "name": "my-service",
   "display_name": "My Service",
   "auth_type": "api_key",
-  "flow": "api_key_prompt",
+  "flow": "api_key",
   "api_key": {
     "header_name": "X-API-Key",
     "header_prefix": "",

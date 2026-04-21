@@ -297,10 +297,7 @@ class AuthClient:
         scopes: list[str] | None = None,
         flow_override: FlowType | None = None,
         profile: str | None = None,
-        client_id: str | None = None,
-        client_secret: str | None = None,
-        api_key: str | None = None,
-        force: bool = False,
+        reset: bool = False,
     ) -> ConnectionRecord:
         """
         Authenticate with a provider using its configured flow.
@@ -311,9 +308,7 @@ class AuthClient:
             scopes: Optional scope override.
             flow_override: Optional flow type override.
             profile: Optional profile override.
-            client_id: Optional client ID override.
-            client_secret: Optional client secret override.
-            api_key: Optional API key override.
+            reset: If True, ignore existing client credentials and prompt for new ones.
 
         Returns:
             The created ConnectionRecord.
@@ -333,32 +328,46 @@ class AuthClient:
 
         handler = handler_cls()
 
-        # Fetch or update client credentials
+        # Fetch client credentials
         client_record = self.get_provider_client_credentials(provider, profile_name)
         
-        if client_id or client_secret:
-            if client_record is not None and (client_record.client_id or client_record.client_secret):
-                if not force:
-                    raise AuthenticationFailedError(
-                        "Client credentials already exist for this provider. Overriding them "
-                        "may break existing connections. Use --force to proceed.",
-                        provider=provider,
-                    )
-            
-            if client_record is None:
-                client_record = ProviderClientRecord(
-                    profile=profile_name,
-                    provider=provider,
-                )
-            if client_id is not None:
-                client_record.client_id = client_id
-            if client_secret is not None:
-                client_record.client_secret = self.crypto.encrypt(client_secret)
-            self._save_provider_client_credentials(client_record)
+        if reset:
+            # Setting to None will trigger the secure bridge prompt again
+            client_record = None
 
         flow_client_id = client_record.client_id if client_record else None
         flow_client_secret = self.crypto.decrypt(client_record.client_secret) if client_record and client_record.client_secret else None
-        flow_api_key = api_key
+        flow_api_key = None
+
+        # Secure Bridge Prompts for missing interactive inputs
+        missing_fields = []
+        if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE) and not flow_client_id:
+            missing_fields.append({"name": "client_id", "label": "Client ID", "type": "text"})
+            missing_fields.append({"name": "client_secret", "label": "Client Secret (Optional)", "type": "password", "required": False})
+        elif flow_type == FlowType.API_KEY and not flow_api_key:
+            missing_fields.append({"name": "api_key", "label": "API Key", "type": "password"})
+
+        if missing_fields:
+            from authsome.flows.bridge import secure_input_bridge
+            title = f"{definition.display_name} Credentials"
+            inputs = secure_input_bridge(title, missing_fields)
+            
+            if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE):
+                flow_client_id = inputs.get("client_id")
+                secret_input = inputs.get("client_secret")
+                
+                if client_record is None:
+                    client_record = ProviderClientRecord(
+                        profile=profile_name,
+                        provider=provider,
+                    )
+                client_record.client_id = flow_client_id
+                if secret_input:
+                    flow_client_secret = secret_input
+                    client_record.client_secret = self.crypto.encrypt(secret_input)
+                self._save_provider_client_credentials(client_record)
+            elif flow_type == FlowType.API_KEY:
+                flow_api_key = inputs.get("api_key")
 
         record = handler.authenticate(
             provider=definition,
