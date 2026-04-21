@@ -47,7 +47,7 @@ $AUTHSOME init
 **Goal:** Find the provider and check for existing connections.
 
 ```bash
-$AUTHSOME list --json
+$AUTHSOME list
 ```
 
 This returns `bundled` and `custom` provider arrays, each with `name`, `auth_type`, and `connections`.
@@ -73,7 +73,7 @@ If the provider supports multiple OAuth2 flows, choose one:
 3. **Only one flow** → Use the provider's default.
 4. **API key provider** → Flow is already determined (`api_key_prompt` or `api_key_env`).
 
-Use `$AUTHSOME inspect <provider> --json` to check `oauth.supports_dcr`, `oauth.supports_device_flow`, and the default `flow`.
+Use `$AUTHSOME inspect <provider>` to check `oauth.supports_dcr`, `oauth.supports_device_flow`, and the default `flow`.
 
 ### Step 2.2: Choose a connection name
 
@@ -105,7 +105,7 @@ $AUTHSOME login openai --api-key "sk-..."
 ### Step 2.4: Verify
 
 ```bash
-$AUTHSOME get <provider> --json
+$AUTHSOME get <provider>
 ```
 
 Confirm `status` is `"connected"`.
@@ -154,7 +154,6 @@ TOKEN=$($AUTHSOME get <provider> --field access_token --show-secret)
 
 ## Best Practices
 
-- **Always use `--json`** when parsing CLI output programmatically.
 - **Prefer `authsome run`** over exporting secrets — it is more secure and ephemeral.
 - **Never log or echo secrets** unless the user explicitly asks.
 - **Re-use existing connections** — always check before starting a new login.
