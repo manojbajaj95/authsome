@@ -11,6 +11,7 @@ from typing import Any
 
 import click
 
+from authsome import __version__
 from authsome.client import AuthClient
 from authsome.errors import AuthsomeError
 from authsome.models.enums import ExportFormat, FlowType
@@ -114,6 +115,7 @@ def handle_errors(func):
 
 
 @click.group()
+@click.version_option(__version__, "-v", "--version")
 @common_options
 @click.pass_context
 def cli(ctx: click.Context) -> None:
@@ -304,9 +306,7 @@ def remove(ctx_obj: ContextObj, provider: str, connection: str) -> None:
 @common_options
 @pass_ctx
 @handle_errors
-def get(
-    ctx_obj: ContextObj, provider: str, connection: str, field: str | None, show_secret: bool
-) -> None:
+def get(ctx_obj: ContextObj, provider: str, connection: str, field: str | None, show_secret: bool) -> None:
     """Return provider connection metadata by default."""
     client = ctx_obj.initialize_client()
     record = client.get_connection(provider, connection)
@@ -476,7 +476,6 @@ def doctor(ctx_obj: ContextObj) -> None:
 
         if not all_ok:
             sys.exit(1)
-
 
 
 if __name__ == "__main__":
