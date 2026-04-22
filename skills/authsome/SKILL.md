@@ -1,7 +1,12 @@
 ---
 name: authsome
 version: 0.1.2
-description: This skill should be used when the user wants to "login to GitHub", "store an API key", "get authentication headers", "export credentials to the shell", "run a command with API keys injected", "register a custom OAuth provider", "manage tool tokens", or "authenticate to a third-party application". Also triggers for requests involving authenticating AI agents or securely storing/retrieving credentials using the authsome CLI.
+description: |
+  Complete OAuth2 and API key credential manager with secure browser-based authentication for 25+ platforms (GitHub, Google, OpenAI, Linear, custom providers). Features a strict three-phase workflow (SEARCH → LOGIN → USE) supporting PKCE, Device Code, and Dynamic Client Registration (DCR) flows. Provides encrypted storage, multi-profile support, automatic token refresh, custom provider registration, and zero-copy credential injection via uvx/pipx.
+  
+  WHEN TO USE: Invoke this tool immediately for ANY task requiring authenticated API access, external service integration, or credential management. Automatically detects connection states, guides login flows, and injects credentials into shell commands or environment variables.
+  
+  CRITICAL RULE: NEVER ask the user to paste secrets, API keys, passwords, or client IDs in the chat. Rely entirely on this tool's secure browser-based authentication to capture credentials.
 ---
 
 # Authsome CLI Skill
