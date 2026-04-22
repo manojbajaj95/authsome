@@ -1,11 +1,15 @@
 """Tests for the crypto layer."""
 
+import sys
+import types
+import json
 from pathlib import Path
 
 import pytest
 
 from authsome.crypto.keyring_crypto import KeyringCryptoBackend
 from authsome.crypto.local_file_crypto import LocalFileCryptoBackend
+from authsome.errors import EncryptionUnavailableError
 from authsome.models.connection import EncryptedField
 
 
@@ -72,6 +76,20 @@ class TestLocalFileCryptoBackend:
         decrypted = crypto.decrypt(encrypted)
         assert decrypted == original
 
+    def test_decrypt_rejects_wrong_algorithm(self, crypto: LocalFileCryptoBackend) -> None:
+        field = crypto.encrypt("secret")
+        field.alg = "XChaCha20-Poly1305"
+
+        with pytest.raises(EncryptionUnavailableError, match="Unsupported algorithm"):
+            crypto.decrypt(field)
+
+    def test_invalid_key_file_raises(self, tmp_path: Path) -> None:
+        key_file = tmp_path / "master.key"
+        key_file.write_text(json.dumps({"version": 1, "key": "not-base64"}), encoding="utf-8")
+
+        with pytest.raises(EncryptionUnavailableError, match="Failed to read local key file"):
+            LocalFileCryptoBackend(tmp_path)
+
 
 class TestKeyringCryptoBackend:
     """OS Keyring crypto backend tests.
@@ -116,3 +134,59 @@ class TestCrossBackendCompatibility:
         assert hasattr(field, "ciphertext")
         assert hasattr(field, "tag")
         assert field.alg == "AES-256-GCM"
+
+
+class TestKeyringBackendIsolation:
+    """Isolated keyring module behavior without relying on a system backend."""
+
+    def test_load_existing_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        key_b64 = "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE="
+        fake_keyring = types.ModuleType("keyring")
+        fake_keyring.get_password = lambda service, username: key_b64  # type: ignore[attr-defined]
+        fake_keyring.set_password = lambda *args, **kwargs: None  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "keyring", fake_keyring)
+
+        crypto = KeyringCryptoBackend()
+        encrypted = crypto.encrypt("roundtrip")
+        assert crypto.decrypt(encrypted) == "roundtrip"
+
+    def test_generate_new_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls: list[tuple] = []
+        fake_keyring = types.ModuleType("keyring")
+        fake_keyring.get_password = lambda service, username: None  # type: ignore[attr-defined]
+
+        def set_password(service, username, value):
+            calls.append((service, username, value))
+
+        fake_keyring.set_password = set_password  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "keyring", fake_keyring)
+
+        crypto = KeyringCryptoBackend()
+        assert calls and calls[0][0] == "authsome"
+        assert crypto.decrypt(crypto.encrypt("generated")) == "generated"
+
+    def test_get_password_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        fake_keyring = types.ModuleType("keyring")
+
+        def get_password(service, username):
+            raise RuntimeError("boom")
+
+        fake_keyring.get_password = get_password  # type: ignore[attr-defined]
+        fake_keyring.set_password = lambda *args, **kwargs: None  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "keyring", fake_keyring)
+
+        with pytest.raises(EncryptionUnavailableError, match="Failed to access OS keyring"):
+            KeyringCryptoBackend()
+
+    def test_set_password_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        fake_keyring = types.ModuleType("keyring")
+        fake_keyring.get_password = lambda service, username: None  # type: ignore[attr-defined]
+
+        def set_password(service, username, value):
+            raise RuntimeError("boom")
+
+        fake_keyring.set_password = set_password  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "keyring", fake_keyring)
+
+        with pytest.raises(EncryptionUnavailableError, match="Failed to store master key in OS keyring"):
+            KeyringCryptoBackend()

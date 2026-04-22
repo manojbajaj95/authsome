@@ -11,7 +11,7 @@ from authsome.models.connection import (
 )
 from authsome.models.enums import AuthType, ConnectionStatus, ExportFormat, FlowType
 from authsome.models.profile import ProfileMetadata
-from authsome.models.provider import ApiKeyConfig, ClientConfig, OAuthConfig, ProviderDefinition
+from authsome.models.provider import ApiKeyConfig, OAuthConfig, ProviderDefinition
 
 
 class TestEnums:
@@ -23,8 +23,7 @@ class TestEnums:
 
     def test_flow_type_values(self) -> None:
         assert FlowType.DCR_PKCE.value == "dcr_pkce"
-        assert FlowType.API_KEY_PROMPT.value == "api_key_prompt"
-        assert FlowType.API_KEY_ENV.value == "api_key_env"
+        assert FlowType.API_KEY.value == "api_key"
 
     def test_connection_status_values(self) -> None:
         assert ConnectionStatus.CONNECTED.value == "connected"
@@ -104,39 +103,26 @@ class TestProviderDefinition:
             name="openai",
             display_name="OpenAI",
             auth_type=AuthType.API_KEY,
-            flow=FlowType.API_KEY_PROMPT,
+            flow=FlowType.API_KEY,
             api_key=ApiKeyConfig(
                 header_name="Authorization",
                 header_prefix="Bearer",
-                env_var="OPENAI_API_KEY",
             ),
         )
         assert provider.auth_type == AuthType.API_KEY
         assert provider.api_key is not None
-        assert provider.api_key.env_var == "OPENAI_API_KEY"
 
     def test_json_roundtrip(self) -> None:
         provider = ProviderDefinition(
             name="test",
             display_name="Test",
             auth_type=AuthType.API_KEY,
-            flow=FlowType.API_KEY_PROMPT,
+            flow=FlowType.API_KEY,
             api_key=ApiKeyConfig(),
         )
         json_str = provider.model_dump_json()
         restored = ProviderDefinition.model_validate_json(json_str)
         assert restored.name == "test"
-
-    def test_client_env_resolution(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("MY_CLIENT_ID", "resolved-id")
-        client = ClientConfig(client_id="env:MY_CLIENT_ID", client_secret="literal-secret")
-        assert client.resolve_client_id() == "resolved-id"
-        assert client.resolve_client_secret() == "literal-secret"
-
-    def test_client_env_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("NONEXISTENT_VAR", raising=False)
-        client = ClientConfig(client_id="env:NONEXISTENT_VAR")
-        assert client.resolve_client_id() is None
 
 
 class TestEncryptedField:

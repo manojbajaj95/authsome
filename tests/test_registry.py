@@ -1,5 +1,6 @@
 """Tests for the provider registry."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -19,8 +20,8 @@ def _make_api_key_provider(name: str = "testprov") -> ProviderDefinition:
         name=name,
         display_name=f"Test {name}",
         auth_type=AuthType.API_KEY,
-        flow=FlowType.API_KEY_PROMPT,
-        api_key=ApiKeyConfig(env_var=f"{name.upper()}_KEY"),
+        flow=FlowType.API_KEY,
+        api_key=ApiKeyConfig(),
     )
 
 
@@ -101,11 +102,10 @@ class TestProviderRegistry:
             name="openai",
             display_name="Custom OpenAI",
             auth_type=AuthType.API_KEY,
-            flow=FlowType.API_KEY_PROMPT,
+            flow=FlowType.API_KEY,
             api_key=ApiKeyConfig(
                 header_name="X-Custom",
                 header_prefix="Key",
-                env_var="OPENAI_API_KEY",
             ),
         )
         registry.register_provider(custom_openai, force=True)
@@ -114,6 +114,25 @@ class TestProviderRegistry:
         assert loaded.display_name == "Custom OpenAI"
         assert loaded.api_key is not None
         assert loaded.api_key.header_name == "X-Custom"
+
+    def test_list_providers_by_source_separates_custom(self, registry: ProviderRegistry) -> None:
+        provider = _make_api_key_provider("customsrc")
+        registry.register_provider(provider)
+
+        by_source = registry.list_providers_by_source()
+        bundled_names = [p.name for p in by_source["bundled"]]
+        custom_names = [p.name for p in by_source["custom"]]
+
+        assert "customsrc" not in bundled_names
+        assert "customsrc" in custom_names
+
+    def test_invalid_local_provider_file_is_skipped(self, registry: ProviderRegistry) -> None:
+        bad_path = registry._providers_dir / "bad.json"
+        bad_path.write_text(json.dumps({"name": "bad", "display_name": 1}), encoding="utf-8")
+
+        providers = registry.list_providers()
+        names = [p.name for p in providers]
+        assert "bad" not in names
 
     def test_validate_filesystem_unsafe_name(self, registry: ProviderRegistry) -> None:
         provider = _make_api_key_provider("bad/name")
@@ -147,7 +166,7 @@ class TestProviderRegistry:
             name="noapikey",
             display_name="No API Key",
             auth_type=AuthType.API_KEY,
-            flow=FlowType.API_KEY_PROMPT,
+            flow=FlowType.API_KEY,
             # Missing api_key section
         )
         with pytest.raises(InvalidProviderSchemaError, match="requires an 'api_key'"):

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from authsome.errors import StoreUnavailableError
 from authsome.store.sqlite_store import SQLiteStore
 
 
@@ -83,3 +84,10 @@ class TestSQLiteStore:
         key = "profile:default:my-provider:connection:test_conn-1"
         store.set(key, '{"ok": true}')
         assert store.get(key) == '{"ok": true}'
+
+    def test_close_prevents_future_access(self, store: SQLiteStore) -> None:
+        store.set("key", "value")
+        store.close()
+
+        with pytest.raises(StoreUnavailableError, match="closed"):
+            store.get("key")
