@@ -351,6 +351,13 @@ class AuthClient:
         # Secure Bridge Prompts for missing interactive inputs
         missing_fields = []
         if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE) and not flow_client_id:
+            missing_fields.append(
+                {
+                    "type": "static",
+                    "label": "Redirect URL",
+                    "value": "http://127.0.0.1:7999/callback",
+                }
+            )
             missing_fields.append({"name": "client_id", "label": "Client ID", "type": "text"})
             missing_fields.append(
                 {

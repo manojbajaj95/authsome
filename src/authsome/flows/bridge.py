@@ -11,6 +11,7 @@ import socket
 import threading
 import urllib.parse
 import webbrowser
+from html import escape
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -40,9 +41,12 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
             "label { display: block; margin-bottom: 8px; font-weight: bold; }",
             "input { width: 100%; padding: 8px; margin-bottom: 16px; border: 1px solid #ccc; ",
             "border-radius: 4px; box-sizing: border-box; }",
-            "button { width: 100%; padding: 10px; background-color: #0066cc; color: white; ",
-            "border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }",
+            ".static-wrap { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }",
+            ".static-wrap input[readonly] { margin-bottom: 0; flex: 1; background: #f5f5f5; cursor: default; }",
+            "button { width: 100%; padding: 10px; background-color: #0066cc; color: white; border: none; ",
+            "border-radius: 4px; cursor: pointer; font-size: 16px; }",
             "button:hover { background-color: #0052a3; }",
+            "button.copybtn { width: auto; padding: 8px 12px; font-size: 14px; flex-shrink: 0; }",
             "</style>",
             "</head><body>",
             f"<h2>{self.title}</h2>",
@@ -50,8 +54,20 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
         ]
 
         for field in self.fields:
-            name = field["name"]
             label = field["label"]
+            if field.get("type") == "static":
+                val = field.get("value", "")
+                val_esc = escape(val, quote=True)
+                html.append(f"<label>{label}</label>")
+                html.append(
+                    "<div class='static-wrap'>"
+                    f"<input type='text' readonly value='{val_esc}' aria-readonly='true'>"
+                    "<button type='button' class='copybtn' "
+                    'onclick="navigator.clipboard.writeText(this.previousElementSibling.value)">'
+                    "Copy</button></div>"
+                )
+                continue
+            name = field["name"]
             input_type = field.get("type", "text")
             required = "required" if field.get("required", True) else ""
             html.append(f"<label for='{name}'>{label}</label>")
