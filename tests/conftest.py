@@ -1,5 +1,7 @@
 import http.server
+
 import pytest
+
 
 @pytest.fixture(autouse=True)
 def allow_http_server_reuse():
