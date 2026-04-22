@@ -1,0 +1,29 @@
+{
+  "skill_name": "authsome",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Use authsome to log into GitHub. Once connected, use the credentials to run a curl request to fetch my GitHub user profile.",
+      "expected_output": "The agent lists connections, initiates the login flow, and successfully uses authsome run to execute the curl command.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Check if I have an active OpenAI connection. If so, export the credentials to my shell and echo the first 5 characters of the API key.",
+      "expected_output": "The agent identifies the existing connection, uses eval \"$(authsome export openai --format shell)\", and handles the environment variables.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Register a custom provider named 'acme-internal' for our internal company tool that uses an API key. Then initiate a login for it.",
+      "expected_output": "The agent successfully reads REGISTER_PROVIDER.md, generates the correct JSON structure for a custom provider, saves it to the ~/.authsome/providers/ directory, and runs authsome login acme-internal.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Can you list my last 5 starred repositories on GitHub?",
+      "expected_output": "The agent realizes it needs to authenticate with GitHub to perform this action, triggers the authsome skill to check/create connections without being explicitly asked to do so, exports the credential, and runs a curl command to GitHub API to list the starred repos.",
+      "files": []
+    }
+  ]
+}
