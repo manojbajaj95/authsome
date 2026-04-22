@@ -19,7 +19,7 @@ Full command and flag reference for the `authsome` CLI.
 | `run --provider <p> -- <cmd>` | Run a subprocess with injected credentials. |
 | `logout <provider>` | Log out of a connection and remove local state. |
 | `revoke <provider>` | Complete reset of the provider, removing all connections and client secrets. |
-| `remove <provider>` | Completely uninstall a locally registered provider. |
+| `remove <provider>` | Uninstall a local provider or reset a bundled provider. |
 | `register <path>` | Register a custom provider from a JSON file. |
 
 ---
@@ -96,4 +96,4 @@ authsome revoke <provider>
 authsome remove <provider>
 ```
 
-`logout` logs out of a connection and attempts remote revocation. `revoke` performs a complete reset of the provider (removing all connections and client secrets). `remove` completely uninstalls a locally registered provider.
+`logout` logs out of a connection and attempts remote revocation. `revoke` performs a complete reset of the provider (removing all connections and client secrets). `remove` uninstalls a locally registered provider or resets a bundled provider.

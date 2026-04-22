@@ -14,10 +14,11 @@ authsome doctor                        # verify installation health
 ```bash
 authsome login github                  # OAuth2 browser flow (PKCE)
 authsome login github --flow device    # Device Code flow for setup without local browser callback
-authsome login github --reset          # ignore existing credentials and re-prompt
+authsome login github --force          # overwrite existing connection if it exists
 authsome login openai                  # secure API key entry via browser bridge
-authsome logout github                 # revoke token remotely + remove locally
-authsome remove github                 # remove local state only
+authsome logout github                 # log out of connection + revoke remotely
+authsome revoke github                 # remove all connections and client secrets
+authsome remove github                 # uninstall local provider or reset bundled
 ```
 
 Setup can use browser PKCE, device code, or a browser bridge for secure API key entry. After setup, agents can run headlessly in CI, SSH, cron, background workers, or parallel pipelines.

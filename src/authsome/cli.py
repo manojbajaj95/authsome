@@ -297,7 +297,7 @@ def revoke(ctx_obj: ContextObj, provider: str) -> None:
 @pass_ctx
 @handle_errors
 def remove(ctx_obj: ContextObj, provider: str) -> None:
-    """Completely uninstall a locally registered provider."""
+    """Uninstall a local provider or reset a bundled one."""
     client = ctx_obj.initialize_client()
     client.remove(provider)
 

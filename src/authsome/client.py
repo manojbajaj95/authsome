@@ -559,6 +559,9 @@ class AuthClient:
         profile_name = profile or self.active_profile
         store = self._get_store(profile_name)
         
+        # Ensure provider exists
+        self.get_provider(provider)
+        
         # 1. Log out of all connections for this provider to remotely revoke them
         meta_key = build_store_key(
             profile=profile_name,
@@ -591,22 +594,21 @@ class AuthClient:
         profile: str | None = None,
     ) -> None:
         """
-        Completely uninstall a local provider.
-        Removes all local credential state and deletes the provider JSON file.
+        Completely uninstall a local provider or reset a bundled provider.
+        Removes all local credential state and deletes the provider JSON file if it exists locally.
         """
         profile_name = profile or self.active_profile
         
-        # Check if provider is bundled
-        local_path = self._home / "providers" / f"{provider}.json"
-        if not local_path.exists():
-            raise ProviderNotFoundError(f"Cannot remove bundled provider '{provider}'.")
-            
         # Revoke all credentials (cleans up connections and client secrets)
         self.revoke(provider, profile=profile_name)
         
-        # Delete the provider definition JSON
-        local_path.unlink(missing_ok=True)
-        logger.info("Removed provider definition: %s", local_path)
+        # Delete the provider definition JSON if it's a local/custom provider
+        local_path = self._home / "providers" / f"{provider}.json"
+        if local_path.exists():
+            local_path.unlink()
+            logger.info("Removed provider definition: %s", local_path)
+        else:
+            logger.info("Provider '%s' is bundled. Revoked credentials but kept definition.", provider)
 
     # ─── Export Operations ────────────────────────────────────────────────
 
