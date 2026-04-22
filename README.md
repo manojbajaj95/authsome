@@ -5,9 +5,17 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyPI downloads](https://img.shields.io/pypi/dm/authsome.svg)](https://pypi.org/project/authsome/)
 
-**OAuth2 and API key management for agents. Local. Headless. No SaaS.**
+```text
+              __  __
+  ____ ___  _/ /_/ /_  _________  ____ ___  ___
+ / __ `/ / / / __/ __ \/ ___/ __ \/ __ `__ \/ _ \
+/ /_/ / /_/ / /_/ / / (__  ) /_/ / / / / / /  __/
+\__,_/\__,_/\__/_/ /_/____/\____/_/ /_/ /_/\___/
+```
 
-Your agent calls APIs. Authsome keeps the credentials fresh.
+**Local auth for AI agents.**
+
+Log in once via OAuth2/API Key. Authsome keeps the credentials fresh for every AI agent.
 
 ---
 
@@ -16,18 +24,30 @@ Your agent calls APIs. Authsome keeps the credentials fresh.
 Agents need to call APIs. The current answers are all wrong for agents:
 
 - **Hardcode a PAT in `.env`** — works until the token expires, rotates, or leaks
-- **Write OAuth2 yourself** — ~200 lines of flow logic, token storage, and refresh handling per project, using authlib or requests-oauthlib, reinvented every time
-- **Nango** — full OAuth infrastructure, but it's a SaaS service with a server you have to run or pay for
+- **DIY** — flow logic, token storage, refresh handling, expiry checks, and per-provider config, reinvented every time
 
 None of these are designed for agents. They assume a browser, a web server, or a human in the loop at runtime.
 
 Authsome is a local credential layer your agent invokes at runtime. Authenticate once, headlessly. After that, your agent asks for headers and gets them.
+
+- **No credential sprawl.** One encrypted store — every provider, every agent, one place.
+- **No SaaS, no privacy trade-off.** Credentials never leave your machine. No third-party cloud dependency.
+- **Headless by design.** Built for agents that run without you — background workers, parallel agent pipelines, scheduled tasks, CI runs. No browser. No human in the loop at runtime.
 
 ---
 
 ## How It Works
 
 The CLI is the agent's interface — for setup and for runtime use.
+
+```text
+┌──────────┐        authsome         ┌──────────────┐
+│  Agent   │ ──────────────────────▶ │ Local Vault  │
+└──────────┘                         └──────┬───────┘
+     ▲                                      │
+     │       fresh token / API key          │ encrypted
+     └──────────────────────────────────────┘
+```
 
 Authenticate once:
 
@@ -54,19 +74,17 @@ Credentials are stored locally, encrypted at rest (AES-256-GCM), and refreshed b
 
 ## Why Authsome
 
-| | authsome | Hardcoded env tokens | DIY (authlib) | Nango |
-|--|:--------:|:--------------------:|:-------------:|:-----:|
-| OAuth2 flows (PKCE, Device Code, DCR) | ✅ | ❌ | build it | ✅ |
-| Automatic token refresh | ✅ | ❌ | build it | ✅ |
-| Headless (CI, SSH, no browser) | ✅ | ✅ | varies | ⚠️ |
-| Local — no SaaS dependency | ✅ | ✅ | ✅ | ❌ |
-| 35 providers, zero config | ✅ | ❌ | ❌ | ✅ |
-| Multi-account per provider | ✅ | ❌ | build it | ✅ |
-| One call for valid token | ✅ | ❌ | build it | ✅ |
+| | authsome | Hardcoded env tokens | DIY |
+|--|:--------:|:--------------------:|:---:|
+| OAuth2 flows (PKCE, Device Code, DCR) | ✅ | ❌ | build it |
+| Automatic token refresh | ✅ | ❌ | build it |
+| Headless (CI, SSH, no browser) | ✅ | ✅ | varies |
+| Local — no SaaS dependency | ✅ | ✅ | ✅ |
+| 35 providers, zero config | ✅ | ❌ | ❌ |
+| Multi-account per provider | ✅ | ❌ | build it |
+| One call for valid token | ✅ | ❌ | build it |
 
-**vs. DIY (authlib / requests-oauthlib):** authlib handles the HTTP exchange, but you still write the token store, refresh logic, expiry handling, and per-provider config — then repeat it for every project. Authsome eliminates that boilerplate entirely.
-
-**vs. Nango:** Nango is the closest conceptual peer — it manages OAuth for you across many providers. The difference: Nango requires a hosted server (or their SaaS). Authsome runs locally, follows your `~/.authsome` directory, and has no external dependencies. It's the right choice when your agent runs on machines you control and you don't want infrastructure you don't own in the auth path.
+**vs. DIY:** you still write the token store, refresh logic, expiry handling, per-provider config, and runtime injection — then repeat it for every project. Authsome eliminates that boilerplate entirely.
 
 ---
 
