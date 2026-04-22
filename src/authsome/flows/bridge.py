@@ -5,6 +5,7 @@ web browser instead of the terminal. This prevents secrets from being exposed
 in environments where agents or scripts might intercept standard I/O.
 """
 
+from html import escape
 import http.server
 import logging
 import socket
@@ -38,8 +39,11 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
             "body { font-family: system-ui, sans-serif; max-width: 400px; margin: 40px auto; padding: 20px; }",
             "label { display: block; margin-bottom: 8px; font-weight: bold; }",
             "input { width: 100%; padding: 8px; margin-bottom: 16px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }",
+            ".static-wrap { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }",
+            ".static-wrap input[readonly] { margin-bottom: 0; flex: 1; background: #f5f5f5; cursor: default; }",
             "button { width: 100%; padding: 10px; background-color: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }",
             "button:hover { background-color: #0052a3; }",
+            "button.copybtn { width: auto; padding: 8px 12px; font-size: 14px; flex-shrink: 0; }",
             "</style>",
             "</head><body>",
             f"<h2>{self.title}</h2>",
@@ -47,8 +51,20 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
         ]
         
         for field in self.fields:
-            name = field["name"]
             label = field["label"]
+            if field.get("type") == "static":
+                val = field.get("value", "")
+                val_esc = escape(val, quote=True)
+                html.append(f"<label>{label}</label>")
+                html.append(
+                    "<div class='static-wrap'>"
+                    f"<input type='text' readonly value='{val_esc}' aria-readonly='true'>"
+                    "<button type='button' class='copybtn' "
+                    "onclick=\"navigator.clipboard.writeText(this.previousElementSibling.value)\">"
+                    "Copy</button></div>"
+                )
+                continue
+            name = field["name"]
             input_type = field.get("type", "text")
             required = "required" if field.get("required", True) else ""
             html.append(f"<label for='{name}'>{label}</label>")
