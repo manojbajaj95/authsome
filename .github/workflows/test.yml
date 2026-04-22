@@ -34,7 +34,7 @@ jobs:
         run: ty check src/
           
       - name: Run tests with coverage
-        run: pytest --cov=authsome --cov-report=xml --cov-report=term
+        run: pytest --cov=authsome --cov-report=xml --cov-report=term -p no:xdist
         
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4

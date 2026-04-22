@@ -147,6 +147,7 @@ class DcrPkceFlow(AuthFlow):
         _CallbackHandler.error = None
         _CallbackHandler.state = None
 
+        http.server.HTTPServer.allow_reuse_address = True
         server = http.server.HTTPServer(("127.0.0.1", port), _CallbackHandler)
         server_thread = threading.Thread(target=server.handle_request, daemon=True)
         server_thread.start()

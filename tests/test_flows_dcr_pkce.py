@@ -302,7 +302,8 @@ def test_exchange_code_invalid_json(tmp_path):
 
     def mock_open(url):
         parsed = urllib.parse.urlparse(url)
-        state = urllib.parse.parse_qs(parsed.query)["state"][0]
+        params = urllib.parse.parse_qs(parsed.query)
+        state = params["state"][0]
         urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:7999/callback?code=mock_code&state={state}"))
 
     mock_resp = MagicMock()
@@ -321,7 +322,8 @@ def test_exchange_code_missing_access_token(tmp_path):
 
     def mock_open(url):
         parsed = urllib.parse.urlparse(url)
-        state = urllib.parse.parse_qs(parsed.query)["state"][0]
+        params = urllib.parse.parse_qs(parsed.query)
+        state = params["state"][0]
         urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:7999/callback?code=mock_code&state={state}"))
 
     mock_resp = MagicMock()
