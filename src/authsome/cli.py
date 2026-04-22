@@ -214,7 +214,7 @@ def list_cmd(ctx_obj: ContextObj) -> None:
 @click.option("--connection", default="default", help="Connection name.")
 @click.option("--flow", help="Authentication flow override.")
 @click.option("--scopes", help="Comma-separated scopes to request.")
-@click.option("--reset", is_flag=True, help="Ignore existing client credentials and prompt for new ones.")
+@click.option("--force", is_flag=True, help="Overwrite an existing connection if it already exists.")
 @common_options
 @pass_ctx
 @handle_errors
@@ -224,15 +224,15 @@ def login(
     connection: str,
     flow: str | None,
     scopes: str | None,
-    reset: bool,
+    force: bool,
 ) -> None:
     """Authenticate with a provider using its configured flow."""
     client = ctx_obj.initialize_client()
     flow_enum = FlowType(flow) if flow else None
     scope_list = [s.strip() for s in scopes.split(",")] if scopes else None
 
-    if reset and not ctx_obj.quiet:
-        ctx_obj.echo("Warning: Resetting client credentials may break existing connections for this provider.", color="yellow")
+    if force and not ctx_obj.quiet:
+        ctx_obj.echo("Warning: Forcing login will overwrite any existing connection.", color="yellow")
 
     if not ctx_obj.json_output:
         ctx_obj.echo(f"Starting login for {provider}...", color="cyan")
@@ -242,7 +242,7 @@ def login(
         connection_name=connection,
         scopes=scope_list,
         flow_override=flow_enum,
-        reset=reset,
+        force=force,
     )
 
     if ctx_obj.json_output:
@@ -264,32 +264,47 @@ def login(
 @common_options
 @pass_ctx
 @handle_errors
-def revoke(ctx_obj: ContextObj, provider: str, connection: str) -> None:
-    """Revoke credentials remotely (if supported) and remove locally."""
+def logout(ctx_obj: ContextObj, provider: str, connection: str) -> None:
+    """Log out of a connection and remove local state."""
     client = ctx_obj.initialize_client()
-    client.revoke(provider, connection)
+    client.logout(provider, connection)
 
     if ctx_obj.json_output:
-        ctx_obj.print_json({"status": "revoked", "provider": provider, "connection": connection})
+        ctx_obj.print_json({"status": "logged_out", "provider": provider, "connection": connection})
     else:
-        ctx_obj.echo(f"Revoked credentials for {provider} ({connection}).", color="green")
+        ctx_obj.echo(f"Logged out of {provider} ({connection}).", color="green")
 
 
 @cli.command()
 @click.argument("provider")
-@click.option("--connection", default="default", help="Connection name.")
 @common_options
 @pass_ctx
 @handle_errors
-def remove(ctx_obj: ContextObj, provider: str, connection: str) -> None:
-    """Remove local credential state without remote revocation."""
+def revoke(ctx_obj: ContextObj, provider: str) -> None:
+    """Complete reset of the provider, removing all connections and client secrets."""
     client = ctx_obj.initialize_client()
-    client.remove(provider, connection)
+    client.revoke(provider)
 
     if ctx_obj.json_output:
-        ctx_obj.print_json({"status": "removed", "provider": provider, "connection": connection})
+        ctx_obj.print_json({"status": "revoked", "provider": provider})
     else:
-        ctx_obj.echo(f"Removed local credentials for {provider} ({connection}).", color="green")
+        ctx_obj.echo(f"Revoked all credentials for {provider}.", color="green")
+
+
+@cli.command()
+@click.argument("provider")
+@common_options
+@pass_ctx
+@handle_errors
+def remove(ctx_obj: ContextObj, provider: str) -> None:
+    """Completely uninstall a locally registered provider."""
+    client = ctx_obj.initialize_client()
+    client.remove(provider)
+
+    if ctx_obj.json_output:
+        ctx_obj.print_json({"status": "removed", "provider": provider})
+    else:
+        ctx_obj.echo(f"Removed provider {provider}.", color="green")
 
 
 @cli.command()

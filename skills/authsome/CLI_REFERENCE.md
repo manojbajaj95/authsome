@@ -17,8 +17,9 @@ Full command and flag reference for the `authsome` CLI.
 | `get <provider>` | Get connection metadata (secrets redacted by default). |
 | `export <provider>` | Export credentials in `env`, `shell`, or `json` format. |
 | `run --provider <p> -- <cmd>` | Run a subprocess with injected credentials. |
-| `revoke <provider>` | Revoke credentials remotely (if supported) and remove locally. |
-| `remove <provider>` | Remove local credentials without remote revocation. |
+| `logout <provider>` | Log out of a connection and remove local state. |
+| `revoke <provider>` | Complete reset of the provider, removing all connections and client secrets. |
+| `remove <provider>` | Completely uninstall a locally registered provider. |
 | `register <path>` | Register a custom provider from a JSON file. |
 
 ---
@@ -87,11 +88,12 @@ authsome register <path/to/provider.json> [OPTIONS]
 |--------|-------------|
 | `--force` | Overwrite an existing provider with the same name. |
 
-### `revoke` / `remove`
+### `logout` / `revoke` / `remove`
 
 ```
-authsome revoke <provider> [--connection <name>]
-authsome remove <provider> [--connection <name>]
+authsome logout <provider> [--connection <name>]
+authsome revoke <provider>
+authsome remove <provider>
 ```
 
-`revoke` attempts remote revocation first (if supported), then removes locally. `remove` only deletes local state.
+`logout` logs out of a connection and attempts remote revocation. `revoke` performs a complete reset of the provider (removing all connections and client secrets). `remove` completely uninstalls a locally registered provider.

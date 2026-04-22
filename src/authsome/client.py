@@ -28,7 +28,8 @@ from authsome.crypto.base import CryptoBackend
 from authsome.crypto.keyring_crypto import KeyringCryptoBackend
 from authsome.crypto.local_file_crypto import LocalFileCryptoBackend
 from authsome.errors import (
-    AuthenticationFailedError,
+    ProviderNotFoundError,
+    AuthsomeError,
     ConnectionNotFoundError,
     CredentialMissingError,
     ProfileNotFoundError,
@@ -297,7 +298,7 @@ class AuthClient:
         scopes: list[str] | None = None,
         flow_override: FlowType | None = None,
         profile: str | None = None,
-        reset: bool = False,
+        force: bool = False,
     ) -> ConnectionRecord:
         """
         Authenticate with a provider using its configured flow.
@@ -308,7 +309,7 @@ class AuthClient:
             scopes: Optional scope override.
             flow_override: Optional flow type override.
             profile: Optional profile override.
-            reset: If True, ignore existing client credentials and prompt for new ones.
+            force: If True, overwrite an existing connection if it already exists.
 
         Returns:
             The created ConnectionRecord.
@@ -317,9 +318,20 @@ class AuthClient:
             ProviderNotFoundError: If provider is not found.
             UnsupportedFlowError: If the flow is not implemented.
             AuthenticationFailedError: If authentication fails.
+            AuthsomeError: If connection already exists and force is False.
         """
         profile_name = profile or self.active_profile
         definition = self.get_provider(provider)
+
+        try:
+            existing_record = self.get_connection(provider, connection_name, profile_name)
+            if existing_record and not force:
+                raise AuthsomeError(
+                    f"Connection '{connection_name}' for provider '{provider}' already exists. "
+                    "Please logout first, or use the --force flag to overwrite it."
+                )
+        except ConnectionNotFoundError:
+            pass
 
         flow_type = flow_override or definition.flow
         handler_cls = _FLOW_HANDLERS.get(flow_type)
@@ -331,10 +343,6 @@ class AuthClient:
         # Fetch client credentials
         client_record = self.get_provider_client_credentials(provider, profile_name)
         
-        if reset:
-            # Setting to None will trigger the secure bridge prompt again
-            client_record = None
-
         flow_client_id = client_record.client_id if client_record else None
         flow_client_secret = self.crypto.decrypt(client_record.client_secret) if client_record and client_record.client_secret else None
         flow_api_key = None
@@ -488,23 +496,23 @@ class AuthClient:
 
     # ─── Lifecycle Operations ─────────────────────────────────────────────
 
-    def revoke(
+    def logout(
         self,
         provider: str,
         connection: str = "default",
         profile: str | None = None,
     ) -> None:
         """
-        Revoke credentials remotely (if supported) and remove locally.
-
-        Spec §15.1:
-        1. Attempt remote revocation if provider supports it.
-        2. Remove/invalidate local credential material.
-        3. Mark status as revoked or remove the record.
+        Log out of a specific connection, removing the local credential state
+        and attempting remote revocation.
         """
         profile_name = profile or self.active_profile
         definition = self.get_provider(provider)
-        record = self.get_connection(provider, connection, profile_name)
+        try:
+            record = self.get_connection(provider, connection, profile_name)
+        except ConnectionNotFoundError:
+            # Nothing to log out from
+            return
 
         # Attempt remote revocation for OAuth2
         if (
@@ -524,48 +532,81 @@ class AuthClient:
             except Exception as exc:
                 logger.warning("Remote revocation failed (continuing): %s", exc)
 
-        # Update record status to revoked
-        record.status = ConnectionStatus.REVOKED
-        record.access_token = None
-        record.refresh_token = None
-        record.api_key = None
-        self._save_connection(record)
-
-        logger.info("Revoked connection: provider=%s connection=%s", provider, connection)
-
-    def remove(
-        self,
-        provider: str,
-        connection: str = "default",
-        profile: str | None = None,
-    ) -> None:
-        """
-        Remove local credential state without remote revocation.
-
-        Spec §15.2: Delete local material only, no remote contact.
-        """
-        profile_name = profile or self.active_profile
+        # Delete the connection record from store
         store = self._get_store(profile_name)
-
         key = build_store_key(
             profile=profile_name,
             provider=provider,
             record_type="connection",
             connection=connection,
         )
-
-        deleted = store.delete(key)
-        if not deleted:
-            raise ConnectionNotFoundError(
-                provider=provider,
-                connection=connection,
-                profile=profile_name,
-            )
+        store.delete(key)
 
         # Update provider metadata
         self._remove_from_provider_metadata(profile_name, provider, connection)
 
-        logger.info("Removed connection: provider=%s connection=%s", provider, connection)
+        logger.info("Logged out connection: provider=%s connection=%s", provider, connection)
+
+    def revoke(
+        self,
+        provider: str,
+        profile: str | None = None,
+    ) -> None:
+        """
+        Completely reset the provider credentials for the active profile.
+        Removes all connections (with remote revocation) and client credentials.
+        """
+        profile_name = profile or self.active_profile
+        store = self._get_store(profile_name)
+        
+        # 1. Log out of all connections for this provider to remotely revoke them
+        meta_key = build_store_key(
+            profile=profile_name,
+            provider=provider,
+            record_type="metadata",
+        )
+        existing_json = store.get(meta_key)
+        if existing_json:
+            metadata = ProviderMetadataRecord.model_validate_json(existing_json)
+            # Make a copy of the list as logout will modify it
+            for conn_name in list(metadata.connection_names):
+                self.logout(provider, connection=conn_name, profile=profile_name)
+        
+        # 2. Delete ProviderMetadataRecord
+        store.delete(meta_key)
+        
+        # 3. Delete ProviderClientRecord
+        client_key = build_store_key(
+            profile=profile_name,
+            provider=provider,
+            record_type="client",
+        )
+        store.delete(client_key)
+        
+        logger.info("Revoked all credentials for provider=%s in profile=%s", provider, profile_name)
+
+    def remove(
+        self,
+        provider: str,
+        profile: str | None = None,
+    ) -> None:
+        """
+        Completely uninstall a local provider.
+        Removes all local credential state and deletes the provider JSON file.
+        """
+        profile_name = profile or self.active_profile
+        
+        # Check if provider is bundled
+        local_path = self._home / "providers" / f"{provider}.json"
+        if not local_path.exists():
+            raise ProviderNotFoundError(f"Cannot remove bundled provider '{provider}'.")
+            
+        # Revoke all credentials (cleans up connections and client secrets)
+        self.revoke(provider, profile=profile_name)
+        
+        # Delete the provider definition JSON
+        local_path.unlink(missing_ok=True)
+        logger.info("Removed provider definition: %s", local_path)
 
     # ─── Export Operations ────────────────────────────────────────────────
 
