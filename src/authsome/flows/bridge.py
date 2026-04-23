@@ -70,8 +70,10 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
             name = field["name"]
             input_type = field.get("type", "text")
             required = "required" if field.get("required", True) else ""
+            value = field.get("value", "")
+            val_esc = escape(value, quote=True) if value else ""
             html.append(f"<label for='{name}'>{label}</label>")
-            html.append(f"<input type='{input_type}' id='{name}' name='{name}' {required}>")
+            html.append(f"<input type='{input_type}' id='{name}' name='{name}' value='{val_esc}' {required}>")
 
         html.append("<button type='submit'>Submit Securely</button>")
         html.append("</form></body></html>")

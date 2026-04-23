@@ -112,6 +112,24 @@ def test_login_command(runner, mock_client):
     assert "Successfully logged in to openai" in result.output
 
 
+def test_login_with_scopes_flag(runner, mock_client):
+    mock_record = MagicMock()
+    mock_record.status.value = "connected"
+    mock_client.login.return_value = mock_record
+
+    result = runner.invoke(cli, ["login", "github", "--scopes", "repo,user"])
+    assert result.exit_code == 0
+    
+    # Assert scopes were split and passed to login
+    mock_client.login.assert_called_with(
+        provider="github",
+        connection_name="default",
+        scopes=["repo", "user"],
+        flow_override=None,
+        force=False,
+    )
+
+
 def test_login_json(runner, mock_client):
     mock_record = MagicMock()
     mock_record.status.value = "connected"

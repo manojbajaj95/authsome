@@ -348,6 +348,9 @@ class AuthClient:
         )
         flow_api_key = None
 
+        # Resolve scopes
+        persisted_scopes = client_record.scopes if client_record else None
+
         # Secure Bridge Prompts for missing interactive inputs
         missing_fields = []
         if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE) and not flow_client_id:
@@ -367,7 +370,21 @@ class AuthClient:
                     "required": False,
                 }
             )
-        elif flow_type == FlowType.API_KEY and not flow_api_key:
+
+        if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE, FlowType.DCR_PKCE):
+            if scopes is None and persisted_scopes is None:
+                default_scopes = ",".join(definition.oauth.scopes) if definition.oauth and definition.oauth.scopes else ""
+                missing_fields.append(
+                    {
+                        "name": "scopes",
+                        "label": f"Scopes (comma-separated) [default: {default_scopes}]",
+                        "type": "text",
+                        "value": default_scopes,
+                        "required": False,
+                    }
+                )
+
+        if flow_type == FlowType.API_KEY and not flow_api_key:
             missing_fields.append({"name": "api_key", "label": "API Key", "type": "password"})
 
         if missing_fields:
@@ -376,29 +393,43 @@ class AuthClient:
             title = f"{definition.display_name} Credentials"
             inputs = secure_input_bridge(title, missing_fields)
 
-            if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE):
-                flow_client_id = inputs.get("client_id")
-                secret_input = inputs.get("client_secret")
-
+            if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE, FlowType.DCR_PKCE):
                 if client_record is None:
                     client_record = ProviderClientRecord(
                         profile=profile_name,
                         provider=provider,
                     )
-                client_record.client_id = flow_client_id
-                if secret_input:
-                    flow_client_secret = secret_input
-                    client_record.client_secret = self.crypto.encrypt(secret_input)
+                if "client_id" in inputs:
+                    flow_client_id = inputs.get("client_id")
+                    client_record.client_id = flow_client_id
+                if "client_secret" in inputs:
+                    secret_input = inputs.get("client_secret")
+                    if secret_input:
+                        flow_client_secret = secret_input
+                        client_record.client_secret = self.crypto.encrypt(secret_input)
+                if "scopes" in inputs:
+                    scopes_input = inputs.get("scopes", "").strip()
+                    if scopes_input:
+                        client_record.scopes = [s.strip() for s in scopes_input.split(",") if s.strip()]
+                    else:
+                        client_record.scopes = []
                 self._save_provider_client_credentials(client_record)
             elif flow_type == FlowType.API_KEY:
                 flow_api_key = inputs.get("api_key")
+
+        if scopes is not None:
+            final_scopes = scopes
+        elif client_record and client_record.scopes is not None:
+            final_scopes = client_record.scopes
+        else:
+            final_scopes = None
 
         record = handler.authenticate(
             provider=definition,
             crypto=self.crypto,
             profile=profile_name,
             connection_name=connection_name,
-            scopes=scopes,
+            scopes=final_scopes,
             client_id=flow_client_id,
             client_secret=flow_client_secret,
             api_key=flow_api_key,

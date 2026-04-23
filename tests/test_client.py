@@ -330,6 +330,94 @@ class TestAuthClientLogin:
             assert creds.client_id == "cid"
             assert creds.client_secret is None
 
+    def test_login_oauth_scopes_prompt(self, client: AuthClient):
+        provider = ProviderDefinition(
+            name="testoauth_scopes",
+            display_name="Test OAuth Scopes",
+            auth_type=AuthType.OAUTH2,
+            flow=FlowType.PKCE,
+            oauth=OAuthConfig(authorization_url="http://auth", token_url="http://token", scopes=["read", "write"]),
+        )
+        client.register_provider(provider)
+
+        mock_record = ConnectionRecord(
+            schema_version=1,
+            provider="testoauth_scopes",
+            profile="default",
+            connection_name="default",
+            auth_type=AuthType.OAUTH2,
+            status=ConnectionStatus.CONNECTED,
+            access_token=client.crypto.encrypt("access"),
+        )
+
+        with patch("authsome.client._FLOW_HANDLERS") as handlers:
+            mock_handler = MagicMock()
+            mock_handler.authenticate.return_value = mock_record
+            handlers.get.return_value = lambda: mock_handler
+
+            with patch(
+                "authsome.flows.bridge.secure_input_bridge",
+                return_value={"client_id": "cid", "scopes": "read,write,admin"},
+            ) as mock_bridge:
+                client.login("testoauth_scopes")
+                mock_bridge.assert_called_once()
+                fields = mock_bridge.call_args[0][1]
+                scopes_field = next(f for f in fields if f.get("name") == "scopes")
+                assert scopes_field["value"] == "read,write"
+
+                creds = client.get_provider_client_credentials("testoauth_scopes", "default")
+                assert creds.scopes == ["read", "write", "admin"]
+                
+                # Check authenticate call
+                mock_handler.authenticate.assert_called_once()
+                call_args = mock_handler.authenticate.call_args[1]
+                assert call_args["scopes"] == ["read", "write", "admin"]
+
+    def test_login_oauth_scopes_override(self, client: AuthClient):
+        provider = ProviderDefinition(
+            name="testoauth_scopes_over",
+            display_name="Test OAuth Scopes Over",
+            auth_type=AuthType.OAUTH2,
+            flow=FlowType.PKCE,
+            oauth=OAuthConfig(authorization_url="http://auth", token_url="http://token", scopes=["read", "write"]),
+        )
+        client.register_provider(provider)
+
+        client._save_provider_client_credentials(
+            ProviderClientRecord(
+                profile="default",
+                provider="testoauth_scopes_over",
+                client_id="cid",
+                scopes=["read"]
+            )
+        )
+
+        mock_record = ConnectionRecord(
+            schema_version=1,
+            provider="testoauth_scopes_over",
+            profile="default",
+            connection_name="default",
+            auth_type=AuthType.OAUTH2,
+            status=ConnectionStatus.CONNECTED,
+            access_token=client.crypto.encrypt("access"),
+        )
+
+        with patch("authsome.client._FLOW_HANDLERS") as handlers:
+            mock_handler = MagicMock()
+            mock_handler.authenticate.return_value = mock_record
+            handlers.get.return_value = lambda: mock_handler
+
+            client.login("testoauth_scopes_over", scopes=["custom"])
+            
+            # Should NOT prompt because scopes are overridden and client_id exists
+            mock_handler.authenticate.assert_called_once()
+            call_args = mock_handler.authenticate.call_args[1]
+            assert call_args["scopes"] == ["custom"]
+            
+            # Verify persisted scopes were NOT changed
+            creds = client.get_provider_client_credentials("testoauth_scopes_over", "default")
+            assert creds.scopes == ["read"]
+
 
 class TestAuthClientCredentials:
     """Credential retrieval tests."""
