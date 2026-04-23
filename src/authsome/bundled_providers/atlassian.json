@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "name": "atlassian",
+  "display_name": "Atlassian",
+  "auth_type": "oauth2",
+  "flow": "pkce",
+  "oauth": {
+    "authorization_url": "https://auth.atlassian.com/authorize",
+    "token_url": "https://auth.atlassian.com/oauth/token",
+    "revocation_url": null,
+    "device_authorization_url": null,
+    "scopes": [
+      "read:jira-work",
+      "read:confluence-content.summary"
+    ],
+    "pkce": true,
+    "supports_device_flow": false,
+    "supports_dcr": false
+  },
+  "export": {
+    "env": {
+      "access_token": "ATLASSIAN_ACCESS_TOKEN",
+      "refresh_token": "ATLASSIAN_REFRESH_TOKEN"
+    }
+  }
+}

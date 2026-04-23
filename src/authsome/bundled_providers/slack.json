@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "name": "slack",
+  "display_name": "Slack",
+  "auth_type": "oauth2",
+  "flow": "pkce",
+  "oauth": {
+    "authorization_url": "https://slack.com/oauth/v2/authorize",
+    "token_url": "https://slack.com/api/oauth.v2.access",
+    "revocation_url": "https://slack.com/api/auth.revoke",
+    "device_authorization_url": null,
+    "scopes": [
+      "channels:read",
+      "chat:write"
+    ],
+    "pkce": false,
+    "supports_device_flow": false,
+    "supports_dcr": false
+  },
+  "export": {
+    "env": {
+      "access_token": "SLACK_ACCESS_TOKEN",
+      "refresh_token": "SLACK_REFRESH_TOKEN"
+    }
+  }
+}

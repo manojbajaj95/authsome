@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "name": "notion",
+  "display_name": "Notion",
+  "auth_type": "oauth2",
+  "flow": "pkce",
+  "oauth": {
+    "authorization_url": "https://api.notion.com/v1/oauth/authorize",
+    "token_url": "https://api.notion.com/v1/oauth/token",
+    "revocation_url": null,
+    "device_authorization_url": null,
+    "scopes": [],
+    "pkce": false,
+    "supports_device_flow": false,
+    "supports_dcr": false
+  },
+  "export": {
+    "env": {
+      "access_token": "NOTION_ACCESS_TOKEN",
+      "refresh_token": "NOTION_REFRESH_TOKEN"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "name": "discord",
+  "display_name": "Discord",
+  "auth_type": "oauth2",
+  "flow": "pkce",
+  "oauth": {
+    "authorization_url": "https://discord.com/oauth2/authorize",
+    "token_url": "https://discord.com/api/oauth2/token",
+    "revocation_url": "https://discord.com/api/oauth2/token/revoke",
+    "device_authorization_url": null,
+    "scopes": [
+      "identify",
+      "email"
+    ],
+    "pkce": false,
+    "supports_device_flow": false,
+    "supports_dcr": false
+  },
+  "export": {
+    "env": {
+      "access_token": "DISCORD_ACCESS_TOKEN",
+      "refresh_token": "DISCORD_REFRESH_TOKEN"
+    }
+  }
+}

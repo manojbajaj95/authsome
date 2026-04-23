@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "name": "microsoft",
+  "display_name": "Microsoft",
+  "auth_type": "oauth2",
+  "flow": "pkce",
+  "oauth": {
+    "authorization_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+    "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+    "revocation_url": null,
+    "device_authorization_url": "https://login.microsoftonline.com/common/oauth2/v2.0/devicecode",
+    "scopes": [
+      "User.Read",
+      "offline_access"
+    ],
+    "pkce": true,
+    "supports_device_flow": true,
+    "supports_dcr": false
+  },
+  "export": {
+    "env": {
+      "access_token": "MICROSOFT_ACCESS_TOKEN",
+      "refresh_token": "MICROSOFT_REFRESH_TOKEN"
+    }
+  }
+}

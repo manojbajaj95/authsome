@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "name": "gitlab",
+  "display_name": "GitLab",
+  "auth_type": "oauth2",
+  "flow": "pkce",
+  "oauth": {
+    "authorization_url": "https://gitlab.com/oauth/authorize",
+    "token_url": "https://gitlab.com/oauth/token",
+    "revocation_url": "https://gitlab.com/oauth/revoke",
+    "device_authorization_url": null,
+    "scopes": [
+      "api",
+      "read_api",
+      "read_user"
+    ],
+    "pkce": true,
+    "supports_device_flow": false,
+    "supports_dcr": false
+  },
+  "export": {
+    "env": {
+      "access_token": "GITLAB_ACCESS_TOKEN",
+      "refresh_token": "GITLAB_REFRESH_TOKEN"
+    }
+  }
+}

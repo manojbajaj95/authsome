@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "name": "hubspot",
+  "display_name": "HubSpot",
+  "auth_type": "oauth2",
+  "flow": "pkce",
+  "oauth": {
+    "authorization_url": "https://app.hubspot.com/oauth/authorize",
+    "token_url": "https://api.hubapi.com/oauth/v1/token",
+    "revocation_url": "https://api.hubapi.com/oauth/v1/refresh-tokens/tokens",
+    "device_authorization_url": null,
+    "scopes": [
+      "crm.objects.contacts.read",
+      "crm.objects.companies.read"
+    ],
+    "pkce": false,
+    "supports_device_flow": false,
+    "supports_dcr": false
+  },
+  "export": {
+    "env": {
+      "access_token": "HUBSPOT_ACCESS_TOKEN",
+      "refresh_token": "HUBSPOT_REFRESH_TOKEN"
+    }
+  }
+}
