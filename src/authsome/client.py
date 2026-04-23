@@ -373,7 +373,11 @@ class AuthClient:
 
         if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE, FlowType.DCR_PKCE):
             if scopes is None and persisted_scopes is None:
-                default_scopes = ",".join(definition.oauth.scopes) if definition.oauth and definition.oauth.scopes else ""
+                default_scopes = (
+                    ",".join(definition.oauth.scopes)
+                    if definition.oauth and definition.oauth.scopes
+                    else ""
+                )
                 missing_fields.append(
                     {
                         "name": "scopes",
