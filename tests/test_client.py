@@ -292,7 +292,7 @@ class TestAuthClientLogin:
             mock_handler.authenticate.return_value = mock_record
             handlers.get.return_value = lambda: mock_handler
 
-            client.login("testdcr")
+            client.login("testdcr", scopes=["test_scope"])
 
             creds = client.get_provider_client_credentials("testdcr", "default")
             assert creds.client_id == "cid"
@@ -324,7 +324,7 @@ class TestAuthClientLogin:
             mock_handler.authenticate.return_value = mock_record
             handlers.get.return_value = lambda: mock_handler
 
-            client.login("testdcr2")
+            client.login("testdcr2", scopes=["test_scope"])
 
             creds = client.get_provider_client_credentials("testdcr2", "default")
             assert creds.client_id == "cid"
