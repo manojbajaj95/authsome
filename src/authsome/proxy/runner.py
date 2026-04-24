@@ -37,6 +37,7 @@ class ProxyRunner:
         env["HTTP_PROXY"] = proxy_url
         env["HTTPS_PROXY"] = proxy_url
         env["NO_PROXY"] = self._merge_no_proxy(env.get("NO_PROXY", ""))
+        env["AUTHSOME_PROXY_MODE"] = "true"
 
         # Set dummy env vars for connected providers so SDKs that require
         # e.g. OPENAI_API_KEY to be set will initialise and route through the proxy
