@@ -282,13 +282,14 @@ def test_export(runner, mock_client):
 
 
 def test_run(runner, mock_client):
-    mock_run_result = MagicMock()
-    mock_run_result.returncode = 0
-    mock_client.run.return_value = mock_run_result
+    with patch("authsome.proxy.runner.ProxyRunner") as mock_runner_cls:
+        mock_runner = MagicMock()
+        mock_runner_cls.return_value = mock_runner
+        mock_runner.run.return_value.returncode = 0
 
-    result = runner.invoke(cli, ["run", "--provider", "openai", "echo", "hello"])
-    assert result.exit_code == 0
-    mock_client.run.assert_called_with(["echo", "hello"], providers=["openai"])
+        result = runner.invoke(cli, ["run", "--", "echo", "hello"])
+        assert result.exit_code == 0
+        mock_runner.run.assert_called_with(["echo", "hello"])
 
 
 def test_register_file_not_found(runner):

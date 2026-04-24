@@ -4,6 +4,7 @@
   "display_name": "Brevo",
   "auth_type": "api_key",
   "flow": "api_key",
+  "host_url": "api.brevo.com",
   "api_key": {
     "header_name": "api-key",
     "header_prefix": ""

@@ -16,8 +16,7 @@ All commands support `--json` for machine-readable output and `--profile` to swi
 | `login <provider>` | Authenticate with a provider using its configured flow. |
 | `get <provider>` | Get connection metadata (secrets redacted by default). |
 | `export <provider>` | Export credentials in `env`, `shell`, or `json` format. |
-| `run --provider <p> -- <cmd>` | Run a subprocess with injected credentials. |
-| `proxy run -- <cmd>` | Run a subprocess behind the local auth injection proxy. |
+| `run -- <cmd>` | Run a subprocess behind the local auth injection proxy. |
 | `logout <provider>` | Log out of a connection and remove local state. |
 | `revoke <provider>` | Complete reset of the provider, removing all connections and client secrets. |
 | `remove <provider>` | Uninstall a local provider or reset a bundled provider. |
@@ -109,40 +108,26 @@ authsome export github --format shell   # export GITHUB_TOKEN=...
 ### `run`
 
 ```bash
-authsome run --provider <p1> [--provider <p2>] -- <command>
+authsome run -- <command> [args...]
 ```
 
-Short flag: `-p` is an alias for `--provider`.
+Runs `<command>` behind a local auth proxy that injects provider auth headers into matched HTTP(S) requests at request time. This is the most secure way to run agents as it avoids exporting raw secrets into the child process environment.
 
-Runs `<command>` as a subprocess with credentials injected into its environment. Multiple `--provider` flags can be combined. Note: `run` does not support `--connection`; it always uses the default connection for each provider.
-
-```bash
-authsome run --provider openai -- python my_agent.py
-authsome run -p github -p openai -- python my_script.py
-```
-
-### `proxy run`
+The proxy automatically matches outbound requests to known provider hosts (e.g. `api.openai.com`, `api.github.com`) using the `host_url` field in provider definitions and injects the appropriate auth headers (OAuth Bearer tokens or API keys). Unmatched traffic is forwarded unchanged.
 
 ```bash
-authsome proxy run -- <command> [args...]
-```
-
-Use `authsome proxy run -- <command>` when you want HTTP(S) requests to receive provider auth headers at request time without exporting secrets into the child process environment.
-
-The proxy automatically matches outbound requests to known provider hosts (e.g. `api.openai.com`, `api.github.com`) using provider metadata and injects the appropriate `Authorization` header. Unmatched traffic is forwarded unchanged.
-
-```bash
-authsome proxy run -- python my_agent.py
-authsome proxy run -- curl https://api.openai.com/v1/models
+authsome run -- python my_agent.py
+authsome run -- curl https://api.openai.com/v1/models
 ```
 
 **How it works:**
 
 1. Starts a local proxy on an ephemeral port.
-2. Launches the child command with `HTTP_PROXY` / `HTTPS_PROXY` set.
-3. Intercepts matched requests and injects auth headers.
-4. Stops the proxy when the child exits.
-5. Returns the child's exit code.
+2. Launches the child command with `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` set.
+3. Sets placeholder environment variables (e.g. `OPENAI_API_KEY=authsome-proxy-managed`) so SDKs initialize correctly.
+4. Intercepts matched requests and injects the real auth headers.
+5. Stops the proxy when the child exits.
+6. Returns the child's exit code.
 
 ### `register`
 

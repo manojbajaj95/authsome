@@ -4,6 +4,7 @@
   "display_name": "Klaviyo (OAuth)",
   "auth_type": "oauth2",
   "flow": "pkce",
+  "host_url": "a.klaviyo.com",
   "oauth": {
     "authorization_url": "https://www.klaviyo.com/oauth/authorize",
     "token_url": "https://a.klaviyo.com/oauth/token",

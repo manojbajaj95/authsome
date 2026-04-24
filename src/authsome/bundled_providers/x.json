@@ -4,6 +4,7 @@
   "display_name": "X (Twitter)",
   "auth_type": "oauth2",
   "flow": "pkce",
+  "host_url": "api.twitter.com",
   "oauth": {
     "authorization_url": "https://twitter.com/i/oauth2/authorize",
     "token_url": "https://api.twitter.com/2/oauth2/token",

@@ -5,19 +5,19 @@ Authsome is a local credential layer for AI agents. The CLI resolves the right f
 ```text
 ┌─────────────────┐     ┌──────────────┐     ┌────────────────────┐
 │   Agent / Tool  │────▶│     CLI      │────▶│  Provider Registry  │
-│                 │     │              │     │  (bundled + local)  │
+│ (Proxy Enabled) │     │              │     │  (bundled + local)  │
 └─────────────────┘     └──────┬───────┘     └────────────────────┘
-                               │
-                        ┌──────┴───────┐
-                        │  Auth Flows  │
-                        ├──────────────┤
-                        │ • PKCE       │  ← browser OAuth2 setup
-                        │ • Device Code│  ← setup without callback
-                        │ • DCR + PKCE │  ← dynamic client reg
-                        │ • API Key    │  ← browser bridge or env import
-                        └──────┬───────┘
-                               │
-                        ┌──────┴───────┐
+       │                       │
+       ▼                ┌──────┴───────┐
+┌──────────────┐        │  Auth Flows  │
+│  MITM Proxy  │◀───────┤──────────────┤
+│  Injection   │        │ • PKCE       │  ← browser OAuth2 setup
+└──────────────┘        │ • Device Code│  ← setup without callback
+       │                │ • DCR + PKCE │  ← dynamic client reg
+       ▼                │ • API Key    │  ← browser bridge or env import
+┌──────────────┐        └──────┬───────┘
+│ External API │               │
+└──────────────┘        ┌──────┴───────┐
                         │   Storage    │
                         ├──────────────┤
                         │ SQLite KV    │  ← per-profile credential store
@@ -34,7 +34,11 @@ Authsome is a local credential layer for AI agents. The CLI resolves the right f
 | `dcr_pkce` | Services supporting Dynamic Client Registration |
 | `api_key` | API key providers, using browser bridge, masked prompt, or environment import |
 
-After setup, agents can run without a browser or human in the loop. They ask Authsome for credentials at runtime and receive a fresh token or API key.
+After setup, agents can run without a browser or human in the loop. They can either export environment variables (`authsome export`) or, more securely, run behind the Authsome proxy (`authsome run`).
+
+## Proxy Injection Layer
+
+When using `authsome run`, the CLI starts a local MITM proxy and configures the child process to use it via `HTTP_PROXY`. The proxy automatically intercepts requests to matched `host_url` destinations and injects the appropriate authentication headers using credentials retrieved from the local store.
 
 ## Storage Layout
 

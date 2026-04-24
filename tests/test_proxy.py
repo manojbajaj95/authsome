@@ -257,17 +257,17 @@ class TestProviderProxyMetadata:
 class TestProxyCLI:
     """CLI integration for ``authsome proxy run``."""
 
-    def test_proxy_run_requires_command(self) -> None:
+    def test_run_requires_command(self) -> None:
         from click.testing import CliRunner
 
         from authsome.cli import cli
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["proxy", "run"])
+        result = runner.invoke(cli, ["run"])
 
         assert result.exit_code != 0
 
-    def test_proxy_run_invokes_runner(self, tmp_path: Path) -> None:
+    def test_run_invokes_runner(self, tmp_path: Path) -> None:
         """Verify the CLI path reaches ProxyRunner.run()."""
         from click.testing import CliRunner
 
@@ -277,7 +277,7 @@ class TestProxyCLI:
             run_mock.return_value = Mock(returncode=0)
             with patch("authsome.proxy.runner.ProxyRunner.__init__", return_value=None):
                 runner = CliRunner()
-                _result = runner.invoke(cli, ["proxy", "run", "--", "echo", "hello"])
+                _result = runner.invoke(cli, ["run", "--", "echo", "hello"])
 
         # Should attempt to run
         run_mock.assert_called_once()
@@ -289,10 +289,10 @@ class TestProxyCLI:
 class TestDocumentation:
     """Verify that docs mention the proxy run command."""
 
-    def test_readme_mentions_proxy_run_command(self) -> None:
+    def test_readme_mentions_run_command(self) -> None:
         readme = Path("README.md").read_text(encoding="utf-8")
-        assert "authsome proxy run --" in readme
+        assert "authsome run --" in readme
 
-    def test_cli_docs_mentions_proxy_run_command(self) -> None:
+    def test_cli_docs_mentions_run_command(self) -> None:
         cli_docs = Path("docs/cli.md").read_text(encoding="utf-8")
-        assert "authsome proxy run --" in cli_docs
+        assert "authsome run --" in cli_docs

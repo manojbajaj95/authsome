@@ -31,6 +31,7 @@ Create a `.json` file using one of the templates below.
   "display_name": "<Service Display Name>",
   "auth_type": "oauth2",
   "flow": "dcr_pkce",
+  "host_url": "https://example.com",
   "oauth": {
     "authorization_url": "https://example.com/oauth/authorize",
     "token_url": "https://example.com/oauth/token",
@@ -64,6 +65,7 @@ Create a `.json` file using one of the templates below.
   "display_name": "<Service Display Name>",
   "auth_type": "api_key",
   "flow": "api_key",
+  "host_url": "api.example.com",
   "api_key": {
     "header_name": "Authorization",
     "header_prefix": "Bearer"
@@ -89,6 +91,7 @@ Create a `.json` file using one of the templates below.
 | `display_name` | Human-readable name (e.g., `"GitHub"`). |
 | `auth_type` | `"oauth2"` or `"api_key"`. |
 | `flow` | Default flow. See flow selection guide below. |
+| `host_url` | **Recommended.** The API host for proxy routing (e.g., `"api.openai.com"`). Can be a bare host or a full URL. |
 
 ### OAuth2 fields (`oauth` block)
 

@@ -4,6 +4,7 @@
     "display_name": "Linear",
     "auth_type": "oauth2",
     "flow": "dcr_pkce",
+    "host_url": "api.linear.app",
     "oauth": {
         "authorization_url": "https://mcp.linear.app/authorize",
         "token_url": "https://mcp.linear.app/token",

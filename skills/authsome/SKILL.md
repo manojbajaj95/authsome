@@ -77,24 +77,25 @@ For additional login options, run `$AUTHSOME login --help` or see [cli.md](https
 
 ## Step 3 — Run with credentials
 
-Use `authsome run` to execute a command with credentials injected as environment variables. Credentials are injected ephemerally into the subprocess only — they are never written to disk, logged, or echoed:
+Use `authsome run` to execute a command with credentials injected automatically via a local proxy. Credentials are never placed in the environment, written to disk, or logged. The proxy automatically matches outbound requests to known providers (e.g. `api.openai.com`) using the `host_url` in their definitions:
 
 ```bash
-$AUTHSOME run --provider <provider> -- <your command>
+$AUTHSOME run -- <your command>
 ```
 
-**Security:** only pass commands you control or have reviewed. Credentials are injected into the subprocess environment, so a command that calls an external URL or logs its environment could expose them.
+**Security:** This is the most secure way to run agents. Secrets are only decrypted inside the Authsome proxy process and only for the duration of a matched request.
 
 **Examples:**
 ```bash
-# Call the GitHub API
-$AUTHSOME run --provider github -- curl https://api.github.com/user
+# Call the GitHub API (proxy matches api.github.com)
+$AUTHSOME run -- curl https://api.github.com/user
 
-# Run a Python script that needs OpenAI
-$AUTHSOME run --provider openai -- python my_agent.py
+# Run a Python script that needs OpenAI and GitHub
+# Proxy handles both automatically if connections exist
+$AUTHSOME run -- python my_agent.py
 
-# Multiple providers at once
-$AUTHSOME run --provider github --provider openai -- python my_script.py
+# Legacy/Explicit export (if proxy is not supported by your tool)
+$AUTHSOME export github --format shell
 ```
 
 ---

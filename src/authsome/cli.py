@@ -387,16 +387,21 @@ def export(ctx_obj: ContextObj, provider: str, connection: str, export_format: s
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
-@click.option("--provider", "-p", multiple=True, help="Provider(s) to inject credentials for.")
 @click.argument("command", nargs=-1, required=True)
 @common_options
 @pass_ctx
 @handle_errors
-def run(ctx_obj: ContextObj, provider: list[str], command: tuple[str]) -> None:
-    """Run a subprocess with injected exported credentials."""
+def run(ctx_obj: ContextObj, command: tuple[str]) -> None:
+    """Run a subprocess behind the local auth proxy.
+
+    The proxy injects provider auth headers into matched HTTP(S)
+    requests without exporting secrets into the child environment.
+    """
+    from authsome.proxy.runner import ProxyRunner
+
     client = ctx_obj.initialize_client()
-    # spec states "Repeated flags for provider", so `provider` is a tuple of strings due to multiple=True
-    result = client.run(list(command), providers=list(provider))
+    runner = ProxyRunner(client)
+    result = runner.run(list(command))
     sys.exit(result.returncode)
 
 
@@ -485,31 +490,6 @@ def doctor(ctx_obj: ContextObj) -> None:
 
         if not all_ok:
             sys.exit(1)
-
-
-@cli.group()
-@common_options
-def proxy() -> None:
-    """Run commands behind the local auth injection proxy."""
-
-
-@proxy.command(name="run", context_settings=dict(ignore_unknown_options=True))
-@click.argument("command", nargs=-1, required=True)
-@common_options
-@pass_ctx
-@handle_errors
-def proxy_run(ctx_obj: ContextObj, command: tuple[str]) -> None:
-    """Run a subprocess behind the local proxy.
-
-    The proxy injects provider auth headers into matched HTTP(S)
-    requests without exporting secrets into the child environment.
-    """
-    from authsome.proxy.runner import ProxyRunner
-
-    client = ctx_obj.initialize_client()
-    runner = ProxyRunner(client)
-    result = runner.run(list(command))
-    sys.exit(result.returncode)
 
 
 if __name__ == "__main__":
