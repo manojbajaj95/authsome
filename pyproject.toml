@@ -29,6 +29,7 @@ dependencies = [
     "cryptography>=41.0",
     "keyring>=24.0",
     "click>=8.0",
+    "mitmproxy>=11.0",
 ]
 
 [project.optional-dependencies]

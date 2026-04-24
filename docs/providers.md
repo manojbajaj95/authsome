@@ -29,6 +29,7 @@ Drop a JSON file at `~/.authsome/providers/my-service.json`:
   "display_name": "My Service",
   "auth_type": "api_key",
   "flow": "api_key",
+  "host_url": "api.my-service.com",
   "api_key": {
     "header_name": "X-API-Key",
     "header_prefix": "",

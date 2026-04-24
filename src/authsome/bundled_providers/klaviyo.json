@@ -4,6 +4,7 @@
   "display_name": "Klaviyo",
   "auth_type": "api_key",
   "flow": "api_key",
+  "host_url": "a.klaviyo.com",
   "api_key": {
     "header_name": "Authorization",
     "header_prefix": "Klaviyo-API-Key"

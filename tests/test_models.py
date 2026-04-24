@@ -211,3 +211,36 @@ class TestProviderStateRecord:
         state = ProviderStateRecord(provider="github", profile="default")
         assert state.last_refresh_at is None
         assert state.last_refresh_error is None
+
+
+class TestHostUrl:
+    """ProviderDefinition host_url field tests."""
+
+    def test_provider_definition_parses_host_url(self) -> None:
+        provider = ProviderDefinition.model_validate(
+            {
+                "schema_version": 1,
+                "name": "openai",
+                "display_name": "OpenAI",
+                "auth_type": "api_key",
+                "flow": "api_key",
+                "api_key": {"header_name": "Authorization", "header_prefix": "Bearer"},
+                "host_url": "api.openai.com",
+            }
+        )
+
+        assert provider.host_url == "api.openai.com"
+
+    def test_provider_definition_defaults_host_url_to_none(self) -> None:
+        provider = ProviderDefinition.model_validate(
+            {
+                "schema_version": 1,
+                "name": "example",
+                "display_name": "Example",
+                "auth_type": "api_key",
+                "flow": "api_key",
+                "api_key": {"header_name": "Authorization", "header_prefix": "Bearer"},
+            }
+        )
+
+        assert provider.host_url is None

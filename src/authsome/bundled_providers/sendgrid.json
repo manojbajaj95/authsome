@@ -4,6 +4,7 @@
   "display_name": "SendGrid",
   "auth_type": "api_key",
   "flow": "api_key",
+  "host_url": "api.sendgrid.com",
   "api_key": {
     "header_name": "Authorization",
     "header_prefix": "Bearer"

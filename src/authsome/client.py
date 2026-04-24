@@ -17,7 +17,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import subprocess
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -676,44 +675,6 @@ class AuthClient:
         return ""
 
     # ─── Run Operations ───────────────────────────────────────────────────
-
-    def run(
-        self,
-        command: list[str],
-        providers: list[str] | None = None,
-        profile: str | None = None,
-    ) -> subprocess.CompletedProcess[str]:
-        """
-        Run a subprocess with injected exported credentials.
-
-        Spec §23.2: Inject secrets into subprocess environment without logging.
-        """
-        profile_name = profile or self.active_profile
-        env = os.environ.copy()
-
-        for pname in providers or []:
-            export_str = self.export(pname, profile=profile_name, format=ExportFormat.ENV)
-            for line in export_str.strip().split("\n"):
-                if "=" in line:
-                    key, value = line.split("=", 1)
-                    env[key] = value
-
-        def _dquote(s: str) -> str:
-            """Double-quote a token so $VAR references are expanded by the shell."""
-            s = s.replace("\\", "\\\\")
-            s = s.replace('"', '\\"')
-            s = s.replace("`", "\\`")
-            return f'"{s}"'
-
-        shell_cmd = " ".join(_dquote(c) for c in command)
-        return subprocess.run(
-            shell_cmd,
-            env=env,
-            capture_output=False,
-            text=True,
-            check=False,
-            shell=True,
-        )
 
     # ─── Profile Operations ───────────────────────────────────────────────
 

@@ -4,6 +4,7 @@
   "display_name": "Apollo",
   "auth_type": "api_key",
   "flow": "api_key",
+  "host_url": "api.apollo.io",
   "api_key": {
     "header_name": "Authorization",
     "header_prefix": "Bearer"
