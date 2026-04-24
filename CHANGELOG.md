@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.12](https://github.com/manojbajaj95/authsome/compare/authsome-v0.1.11...authsome-v0.1.12) (2026-04-24)
+
+
+### Features
+
+* merge develop to main ([#74](https://github.com/manojbajaj95/authsome/issues/74)) ([b88d476](https://github.com/manojbajaj95/authsome/commit/b88d476a77d71e872783874ae34c5af286720c70))
+
+
+### Bug Fixes
+
+* add host_url to bundled providers and update docs for current API ([4c756a0](https://github.com/manojbajaj95/authsome/commit/4c756a07b40b5cc20ce338dcf655948027414177))
+
 ## [0.1.11](https://github.com/manojbajaj95/authsome/compare/authsome-v0.1.10...authsome-v0.1.11) (2026-04-24)
 
 
