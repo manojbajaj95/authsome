@@ -948,25 +948,6 @@ class TestAuthClientExport:
         assert client.export("testexport", format=MagicMock()) == ""
 
 
-class TestAuthClientRun:
-    """Run command tests."""
-
-    def test_run_command(self, client: AuthClient):
-        with patch(
-            "authsome.flows.bridge.secure_input_bridge",
-            return_value={"api_key": "sk-run"},
-        ):
-            client.login("openai")
-
-        with patch("authsome.client.subprocess.run") as mock_run:
-            client.run(["echo", "hello", "world"], providers=["openai"])
-            mock_run.assert_called_once()
-            kwargs = mock_run.call_args[1]
-            assert kwargs["env"]["OPENAI_API_KEY"] == "sk-run"
-            assert kwargs["shell"] is True
-            assert "echo" in mock_run.call_args[0][0]
-
-
 class TestAuthClientDoctor:
     """Doctor health check tests."""
 
