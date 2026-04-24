@@ -75,23 +75,40 @@ For additional login options, run `$AUTHSOME login --help` or see [cli.md](https
 
 ---
 
-## Step 3 — Run with credentials
+## Step 3 — Use credentials
 
-Use `authsome run` to execute a command with credentials injected automatically via a local proxy. Credentials are never placed in the environment, written to disk, or logged. The proxy automatically matches outbound requests to known providers (e.g. `api.openai.com`) using the `host_url` in their definitions:
+The Authsome proxy is a local MITM proxy that intercepts outbound HTTP(S) requests and injects auth headers for matched providers automatically. SDKs that require an API key env var to initialise (e.g. `OPENAI_API_KEY`) will see a dummy placeholder value — this is expected; the proxy replaces it with the real credential at request time.
+
+First, check whether you are already running inside an Authsome proxy session:
+
+```bash
+echo $AUTHSOME_PROXY_MODE
+```
+
+### If `AUTHSOME_PROXY_MODE=true` — call APIs directly
+
+Your session was started with `authsome run` (e.g. `authsome run codex`). The proxy is already injecting auth headers into all matched outbound requests. **Do not wrap commands with `authsome run` again.** Just call the APIs:
+
+```bash
+# These just work — no wrapping needed:
+curl https://api.github.com/user
+python my_agent.py   # script calls api.openai.com internally
+```
+
+### If `AUTHSOME_PROXY_MODE` is unset — use `authsome run`
+
+Wrap your command with `authsome run` to launch it behind the local auth proxy. The proxy matches outbound requests to known providers (e.g. `api.openai.com`) using the `host_url` in their definitions and injects auth headers at request time. Credentials are never placed in the child environment:
 
 ```bash
 $AUTHSOME run -- <your command>
 ```
-
-**Security:** This is the most secure way to run agents. Secrets are only decrypted inside the Authsome proxy process and only for the duration of a matched request.
 
 **Examples:**
 ```bash
 # Call the GitHub API (proxy matches api.github.com)
 $AUTHSOME run -- curl https://api.github.com/user
 
-# Run a Python script that needs OpenAI and GitHub
-# Proxy handles both automatically if connections exist
+# Run a script that calls multiple providers — proxy handles all of them
 $AUTHSOME run -- python my_agent.py
 
 # Legacy/Explicit export (if proxy is not supported by your tool)
