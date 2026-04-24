@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "authsome"
-version = "0.1.10"
+version = "0.1.11"
 description = "A portable local authentication library for AI agents and developer tools"
 readme = "README.md"
 license = "MIT"
@@ -29,6 +29,7 @@ dependencies = [
     "cryptography>=41.0",
     "keyring>=24.0",
     "click>=8.0",
+    "mitmproxy>=11.0",
 ]
 
 [project.optional-dependencies]

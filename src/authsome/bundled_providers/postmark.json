@@ -4,6 +4,7 @@
   "display_name": "Postmark",
   "auth_type": "api_key",
   "flow": "api_key",
+  "host_url": "api.postmarkapp.com",
   "api_key": {
     "header_name": "X-Postmark-Server-Token",
     "header_prefix": ""

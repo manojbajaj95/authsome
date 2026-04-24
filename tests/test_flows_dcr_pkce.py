@@ -10,7 +10,12 @@ import requests
 
 from authsome.crypto.local_file_crypto import LocalFileCryptoBackend
 from authsome.errors import AuthenticationFailedError, DiscoveryError
-from authsome.flows.dcr_pkce import DcrPkceFlow, _CallbackHandler, _find_free_port, _generate_pkce
+from authsome.flows.dcr_pkce import (
+    DcrPkceFlow,
+    _CallbackHandler,
+    _find_free_port,
+    _generate_pkce,
+)
 from authsome.models.connection import ConnectionStatus
 from authsome.models.enums import AuthType, FlowType
 from authsome.models.provider import OAuthConfig, ProviderDefinition
@@ -88,7 +93,10 @@ def test_discover_registration_endpoint_failure():
     mock_resp = MagicMock()
     mock_resp.status_code = 404
 
-    with patch("authsome.flows.dcr_pkce.http_client.get", side_effect=[requests.RequestException("boom"), mock_resp]):
+    with patch(
+        "authsome.flows.dcr_pkce.http_client.get",
+        side_effect=[requests.RequestException("boom"), mock_resp],
+    ):
         with pytest.raises(DiscoveryError, match="Could not discover registration_endpoint"):
             flow._discover_registration_endpoint(provider)
 
@@ -120,7 +128,10 @@ def test_register_client_http_error():
     provider = _make_provider()
     provider.oauth.registration_endpoint = "https://auth.example.com/register"
 
-    with patch("authsome.flows.dcr_pkce.http_client.post", side_effect=requests.RequestException("boom")):
+    with patch(
+        "authsome.flows.dcr_pkce.http_client.post",
+        side_effect=requests.RequestException("boom"),
+    ):
         with pytest.raises(AuthenticationFailedError, match="Registration failed"):
             flow._register_client(provider, [])
 
@@ -184,7 +195,10 @@ def test_dcr_pkce_flow_success(tmp_path):
 
     with patch("authsome.flows.dcr_pkce.http_client.post", side_effect=[dcr_resp, token_resp]):
         with patch("authsome.flows.dcr_pkce.webbrowser.open", side_effect=mock_open):
-            with patch("authsome.flows.dcr_pkce.DcrPkceFlow._discover_registration_endpoint", return_value="url"):
+            with patch(
+                "authsome.flows.dcr_pkce.DcrPkceFlow._discover_registration_endpoint",
+                return_value="url",
+            ):
                 record = flow.authenticate(provider, crypto, "default", "default", scopes=["test"])
 
     assert record.status == ConnectionStatus.CONNECTED
@@ -302,7 +316,10 @@ def test_exchange_code_http_error(tmp_path):
         urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/callback?code=mock_code&state={state}"))
 
     with patch("authsome.flows.dcr_pkce.webbrowser.open", side_effect=mock_open):
-        with patch("authsome.flows.dcr_pkce.http_client.post", side_effect=requests.RequestException("boom")):
+        with patch(
+            "authsome.flows.dcr_pkce.http_client.post",
+            side_effect=requests.RequestException("boom"),
+        ):
             with pytest.raises(AuthenticationFailedError, match="Token exchange failed"):
                 flow.authenticate(provider, crypto, "default", "default", client_id="cid")
 
@@ -343,7 +360,10 @@ def test_exchange_code_missing_access_token(tmp_path):
         urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/callback?code=mock_code&state={state}"))
 
     mock_resp = MagicMock()
-    mock_resp.json.return_value = {"error": "invalid_grant", "error_description": "bad code"}
+    mock_resp.json.return_value = {
+        "error": "invalid_grant",
+        "error_description": "bad code",
+    }
 
     with patch("authsome.flows.dcr_pkce.webbrowser.open", side_effect=mock_open):
         with patch("authsome.flows.dcr_pkce.http_client.post", return_value=mock_resp):

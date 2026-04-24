@@ -71,6 +71,9 @@ class ProviderDefinition(BaseModel):
     # Export configuration
     export: ExportConfig | None = None
 
+    # API host for proxy routing (e.g. "api.openai.com")
+    host_url: str | None = None
+
     # Forward-compatible
     metadata: dict[str, Any] = Field(default_factory=dict)
 

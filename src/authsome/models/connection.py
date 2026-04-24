@@ -114,6 +114,7 @@ class ProviderClientRecord(BaseModel):
     provider: str
     client_id: str | None = None
     client_secret: EncryptedField | None = None
+    scopes: list[str] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"extra": "allow"}

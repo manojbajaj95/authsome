@@ -243,7 +243,7 @@ class DcrPkceFlow(AuthFlow):
             account=AccountInfo(),
             metadata={
                 "_dcr_client_id": client_id,
-                "_dcr_client_secret": encrypted_client_secret.model_dump() if encrypted_client_secret else None,
+                "_dcr_client_secret": (encrypted_client_secret.model_dump() if encrypted_client_secret else None),
             },
         )
 

@@ -10,7 +10,12 @@ import requests
 
 from authsome.crypto.local_file_crypto import LocalFileCryptoBackend
 from authsome.errors import AuthenticationFailedError
-from authsome.flows.pkce import PkceFlow, _CallbackHandler, _find_free_port, _generate_pkce
+from authsome.flows.pkce import (
+    PkceFlow,
+    _CallbackHandler,
+    _find_free_port,
+    _generate_pkce,
+)
 from authsome.models.connection import ConnectionStatus
 from authsome.models.enums import AuthType, FlowType
 from authsome.models.provider import OAuthConfig, ProviderDefinition
@@ -94,7 +99,13 @@ def test_pkce_flow_success(tmp_path):
     with patch("authsome.flows.pkce.webbrowser.open", side_effect=mock_open):
         with patch("authsome.flows.pkce.http_client.post", return_value=mock_resp) as mock_post:
             record = flow.authenticate(
-                provider, crypto, "default", "default", scopes=["read", "write"], client_id="cid", client_secret="sec"
+                provider,
+                crypto,
+                "default",
+                "default",
+                scopes=["read", "write"],
+                client_id="cid",
+                client_secret="sec",
             )
 
     assert record.status == ConnectionStatus.CONNECTED
@@ -179,7 +190,10 @@ def test_pkce_exchange_http_error(tmp_path):
         urllib.request.urlopen(urllib.request.Request(callback_url))
 
     with patch("authsome.flows.pkce.webbrowser.open", side_effect=mock_open):
-        with patch("authsome.flows.pkce.http_client.post", side_effect=requests.RequestException("boom")):
+        with patch(
+            "authsome.flows.pkce.http_client.post",
+            side_effect=requests.RequestException("boom"),
+        ):
             with pytest.raises(AuthenticationFailedError, match="Token exchange failed: boom"):
                 flow.authenticate(provider, crypto, "default", "default", client_id="cid")
 
@@ -218,7 +232,10 @@ def test_pkce_exchange_missing_access_token(tmp_path):
         urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/callback?code=mock_code&state={state}"))
 
     mock_resp = MagicMock()
-    mock_resp.json.return_value = {"error": "invalid_grant", "error_description": "bad code"}
+    mock_resp.json.return_value = {
+        "error": "invalid_grant",
+        "error_description": "bad code",
+    }
 
     with patch("authsome.flows.pkce.webbrowser.open", side_effect=mock_open):
         with patch("authsome.flows.pkce.http_client.post", return_value=mock_resp):

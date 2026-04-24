@@ -17,6 +17,7 @@
     "supports_device_flow": true,
     "supports_dcr": false
   },
+  "host_url": "api.github.com",
   "export": {
     "env": {
       "access_token": "GITHUB_ACCESS_TOKEN",

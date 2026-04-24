@@ -4,7 +4,13 @@ from datetime import UTC, datetime
 
 import pytest
 
-from authsome.utils import build_store_key, is_filesystem_safe, parse_rfc3339, to_rfc3339, utc_now
+from authsome.utils import (
+    build_store_key,
+    is_filesystem_safe,
+    parse_rfc3339,
+    to_rfc3339,
+    utc_now,
+)
 
 
 def test_utc_now():
@@ -55,7 +61,12 @@ def test_build_store_key():
     assert build_store_key(profile="default", provider="github", record_type="state") == "profile:default:github:state"
     # Test connection key
     assert (
-        build_store_key(profile="default", provider="github", record_type="connection", connection="personal")
+        build_store_key(
+            profile="default",
+            provider="github",
+            record_type="connection",
+            connection="personal",
+        )
         == "profile:default:github:connection:personal"
     )
     # Test client key

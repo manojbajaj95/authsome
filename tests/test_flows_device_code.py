@@ -62,7 +62,10 @@ def test_request_device_code_http_error(tmp_path):
     provider = _make_provider()
     flow = DeviceCodeFlow()
 
-    with patch("authsome.flows.device_code.requests.post", side_effect=requests.RequestException("boom")):
+    with patch(
+        "authsome.flows.device_code.requests.post",
+        side_effect=requests.RequestException("boom"),
+    ):
         with pytest.raises(AuthenticationFailedError, match="Device authorization request failed"):
             flow.authenticate(provider, crypto, "default", "default", client_id="cid")
 
@@ -145,7 +148,11 @@ def test_poll_for_token_success_and_errors(tmp_path):
 
     token_success = MagicMock()
     token_success.status_code = 200
-    token_success.json.return_value = {"access_token": "acc", "refresh_token": "ref", "expires_in": 3600}
+    token_success.json.return_value = {
+        "access_token": "acc",
+        "refresh_token": "ref",
+        "expires_in": 3600,
+    }
 
     mock_post_responses = [
         device_resp,  # Phase 1 request
@@ -158,9 +165,18 @@ def test_poll_for_token_success_and_errors(tmp_path):
 
     with patch("authsome.flows.device_code.requests.post", side_effect=mock_post_responses):
         with patch("authsome.flows.device_code.time.sleep") as mock_sleep:
-            with patch("authsome.flows.device_code.time.monotonic", side_effect=[0, 0, 0, 0, 0, 0]):
+            with patch(
+                "authsome.flows.device_code.time.monotonic",
+                side_effect=[0, 0, 0, 0, 0, 0],
+            ):
                 record = flow.authenticate(
-                    provider, crypto, "default", "default", scopes=["test_scope"], client_id="cid", client_secret="sec"
+                    provider,
+                    crypto,
+                    "default",
+                    "default",
+                    scopes=["test_scope"],
+                    client_id="cid",
+                    client_secret="sec",
                 )
 
     assert record.status == ConnectionStatus.CONNECTED
@@ -190,7 +206,10 @@ def test_poll_for_token_access_denied(tmp_path):
     token_denied.status_code = 400
     token_denied.json.return_value = {"error": "access_denied"}
 
-    with patch("authsome.flows.device_code.requests.post", side_effect=[device_resp, token_denied]):
+    with patch(
+        "authsome.flows.device_code.requests.post",
+        side_effect=[device_resp, token_denied],
+    ):
         with patch("authsome.flows.device_code.time.sleep"):
             with patch("authsome.flows.device_code.time.monotonic", side_effect=[0, 0]):
                 with pytest.raises(AuthenticationFailedError, match="User denied"):
@@ -215,7 +234,10 @@ def test_poll_for_token_expired_token(tmp_path):
     token_expired.status_code = 400
     token_expired.json.return_value = {"error": "expired_token"}
 
-    with patch("authsome.flows.device_code.requests.post", side_effect=[device_resp, token_expired]):
+    with patch(
+        "authsome.flows.device_code.requests.post",
+        side_effect=[device_resp, token_expired],
+    ):
         with patch("authsome.flows.device_code.time.sleep"):
             with patch("authsome.flows.device_code.time.monotonic", side_effect=[0, 0]):
                 with pytest.raises(AuthenticationFailedError, match="Device code has expired"):
@@ -238,7 +260,10 @@ def test_poll_for_token_unknown_error(tmp_path):
 
     token_err = MagicMock()
     token_err.status_code = 400
-    token_err.json.return_value = {"error": "unknown_error", "error_description": "weird"}
+    token_err.json.return_value = {
+        "error": "unknown_error",
+        "error_description": "weird",
+    }
 
     with patch("authsome.flows.device_code.requests.post", side_effect=[device_resp, token_err]):
         with patch("authsome.flows.device_code.time.sleep"):
@@ -265,10 +290,20 @@ def test_poll_for_token_success_no_expires_in(tmp_path):
     token_success.status_code = 200
     token_success.json.return_value = {"access_token": "acc", "refresh_token": "ref"}
 
-    with patch("authsome.flows.device_code.requests.post", side_effect=[device_resp, token_success]):
+    with patch(
+        "authsome.flows.device_code.requests.post",
+        side_effect=[device_resp, token_success],
+    ):
         with patch("authsome.flows.device_code.time.sleep"):
             with patch("authsome.flows.device_code.time.monotonic", side_effect=[0, 0]):
-                record = flow.authenticate(provider, crypto, "default", "default", client_id="cid", client_secret="sec")
+                record = flow.authenticate(
+                    provider,
+                    crypto,
+                    "default",
+                    "default",
+                    client_id="cid",
+                    client_secret="sec",
+                )
 
     assert record.status == ConnectionStatus.CONNECTED
     assert record.expires_at is None

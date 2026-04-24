@@ -59,7 +59,10 @@ def test_list_command(runner, mock_client):
     mock_provider.name = "openai"
     mock_provider.display_name = "OpenAI"
     mock_provider.auth_type.value = "api_key"
-    mock_client.list_providers_by_source.return_value = {"bundled": [mock_provider], "custom": []}
+    mock_client.list_providers_by_source.return_value = {
+        "bundled": [mock_provider],
+        "custom": [],
+    }
 
     result = runner.invoke(cli, ["list"])
     assert result.exit_code == 0
@@ -72,7 +75,13 @@ def test_list_command_no_connections_and_missing_scopes(runner, mock_client):
     mock_client.list_connections.return_value = [
         {
             "name": "openai",
-            "connections": [{"connection_name": "default", "status": "connected", "auth_type": "api_key"}],
+            "connections": [
+                {
+                    "connection_name": "default",
+                    "status": "connected",
+                    "auth_type": "api_key",
+                }
+            ],
         }
     ]
 
@@ -86,7 +95,10 @@ def test_list_command_no_connections_and_missing_scopes(runner, mock_client):
     mock_provider_empty.display_name = "GitHub"
     mock_provider_empty.auth_type.value = "oauth2"
 
-    mock_client.list_providers_by_source.return_value = {"bundled": [mock_provider, mock_provider_empty], "custom": []}
+    mock_client.list_providers_by_source.return_value = {
+        "bundled": [mock_provider, mock_provider_empty],
+        "custom": [],
+    }
 
     result = runner.invoke(cli, ["list"])
     assert result.exit_code == 0
@@ -112,6 +124,24 @@ def test_login_command(runner, mock_client):
     assert "Successfully logged in to openai" in result.output
 
 
+def test_login_with_scopes_flag(runner, mock_client):
+    mock_record = MagicMock()
+    mock_record.status.value = "connected"
+    mock_client.login.return_value = mock_record
+
+    result = runner.invoke(cli, ["login", "github", "--scopes", "repo,user"])
+    assert result.exit_code == 0
+
+    # Assert scopes were split and passed to login
+    mock_client.login.assert_called_with(
+        provider="github",
+        connection_name="default",
+        scopes=["repo", "user"],
+        flow_override=None,
+        force=False,
+    )
+
+
 def test_login_json(runner, mock_client):
     mock_record = MagicMock()
     mock_record.status.value = "connected"
@@ -131,7 +161,11 @@ def test_login_error(runner, mock_client):
 
 
 def test_error_mapping(runner, mock_client):
-    from authsome.errors import AuthenticationFailedError, CredentialMissingError, RefreshFailedError
+    from authsome.errors import (
+        AuthenticationFailedError,
+        CredentialMissingError,
+        RefreshFailedError,
+    )
 
     mock_client.login.side_effect = ProviderNotFoundError("test")
     result = runner.invoke(cli, ["login", "test"])
@@ -193,7 +227,10 @@ def test_remove_json(runner, mock_client):
 
 def test_get(runner, mock_client):
     mock_record = MagicMock()
-    mock_record.model_dump.return_value = {"status": "connected", "access_token": "secret"}
+    mock_record.model_dump.return_value = {
+        "status": "connected",
+        "access_token": "secret",
+    }
     mock_client.crypto.decrypt.return_value = "decrypted_secret"
     mock_client.get_connection.return_value = mock_record
 
@@ -204,7 +241,10 @@ def test_get(runner, mock_client):
 
 def test_get_show_secret(runner, mock_client):
     mock_record = MagicMock()
-    mock_record.model_dump.return_value = {"status": "connected", "access_token": "secret"}
+    mock_record.model_dump.return_value = {
+        "status": "connected",
+        "access_token": "secret",
+    }
     mock_record.access_token = "encrypted_secret"
     mock_client.crypto.decrypt.return_value = "decrypted_secret"
     mock_client.get_connection.return_value = mock_record
@@ -282,13 +322,14 @@ def test_export(runner, mock_client):
 
 
 def test_run(runner, mock_client):
-    mock_run_result = MagicMock()
-    mock_run_result.returncode = 0
-    mock_client.run.return_value = mock_run_result
+    with patch("authsome.proxy.runner.ProxyRunner") as mock_runner_cls:
+        mock_runner = MagicMock()
+        mock_runner_cls.return_value = mock_runner
+        mock_runner.run.return_value.returncode = 0
 
-    result = runner.invoke(cli, ["run", "--provider", "openai", "echo", "hello"])
-    assert result.exit_code == 0
-    mock_client.run.assert_called_with(["echo", "hello"], providers=["openai"])
+        result = runner.invoke(cli, ["run", "--", "echo", "hello"])
+        assert result.exit_code == 0
+        mock_runner.run.assert_called_with(["echo", "hello"])
 
 
 def test_register_file_not_found(runner):
@@ -369,7 +410,11 @@ def test_doctor(runner, mock_client):
 
 
 def test_doctor_json(runner, mock_client):
-    mock_client.doctor.return_value = {"home_exists": True, "encryption": True, "issues": []}
+    mock_client.doctor.return_value = {
+        "home_exists": True,
+        "encryption": True,
+        "issues": [],
+    }
     result = runner.invoke(cli, ["doctor", "--json"])
     assert result.exit_code == 0
     data = json.loads(result.output)
@@ -377,7 +422,12 @@ def test_doctor_json(runner, mock_client):
 
 
 def test_doctor_all_ok(runner, mock_client):
-    mock_client.doctor.return_value = {"home_exists": True, "encryption": True, "issues": [], "providers_count": 1}
+    mock_client.doctor.return_value = {
+        "home_exists": True,
+        "encryption": True,
+        "issues": [],
+        "providers_count": 1,
+    }
     result = runner.invoke(cli, ["doctor"])
     assert result.exit_code == 0
     assert "OK" in result.output

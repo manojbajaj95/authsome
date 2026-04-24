@@ -17,7 +17,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import subprocess
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -243,7 +242,7 @@ class AuthClient:
                             "auth_type": record.auth_type.value,
                             "status": record.status.value,
                             "scopes": record.scopes,
-                            "expires_at": record.expires_at.isoformat() if record.expires_at else None,
+                            "expires_at": (record.expires_at.isoformat() if record.expires_at else None),
                         }
                     )
 
@@ -348,6 +347,9 @@ class AuthClient:
         )
         flow_api_key = None
 
+        # Resolve scopes
+        persisted_scopes = client_record.scopes if client_record else None
+
         # Secure Bridge Prompts for missing interactive inputs
         missing_fields = []
         if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE) and not flow_client_id:
@@ -367,7 +369,23 @@ class AuthClient:
                     "required": False,
                 }
             )
-        elif flow_type == FlowType.API_KEY and not flow_api_key:
+
+        if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE, FlowType.DCR_PKCE):
+            if scopes is None and persisted_scopes is None:
+                default_scopes = (
+                    ",".join(definition.oauth.scopes) if definition.oauth and definition.oauth.scopes else ""
+                )
+                missing_fields.append(
+                    {
+                        "name": "scopes",
+                        "label": "Scopes (comma-separated)",
+                        "type": "text",
+                        "value": default_scopes,
+                        "required": False,
+                    }
+                )
+
+        if flow_type == FlowType.API_KEY and not flow_api_key:
             missing_fields.append({"name": "api_key", "label": "API Key", "type": "password"})
 
         if missing_fields:
@@ -376,29 +394,43 @@ class AuthClient:
             title = f"{definition.display_name} Credentials"
             inputs = secure_input_bridge(title, missing_fields)
 
-            if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE):
-                flow_client_id = inputs.get("client_id")
-                secret_input = inputs.get("client_secret")
-
+            if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE, FlowType.DCR_PKCE):
                 if client_record is None:
                     client_record = ProviderClientRecord(
                         profile=profile_name,
                         provider=provider,
                     )
-                client_record.client_id = flow_client_id
-                if secret_input:
-                    flow_client_secret = secret_input
-                    client_record.client_secret = self.crypto.encrypt(secret_input)
+                if "client_id" in inputs:
+                    flow_client_id = inputs.get("client_id")
+                    client_record.client_id = flow_client_id
+                if "client_secret" in inputs:
+                    secret_input = inputs.get("client_secret")
+                    if secret_input:
+                        flow_client_secret = secret_input
+                        client_record.client_secret = self.crypto.encrypt(secret_input)
+                if "scopes" in inputs:
+                    scopes_input = inputs.get("scopes", "").strip()
+                    if scopes_input:
+                        client_record.scopes = [s.strip() for s in scopes_input.split(",") if s.strip()]
+                    else:
+                        client_record.scopes = []
                 self._save_provider_client_credentials(client_record)
             elif flow_type == FlowType.API_KEY:
                 flow_api_key = inputs.get("api_key")
+
+        if scopes is not None:
+            final_scopes = scopes
+        elif client_record and client_record.scopes is not None:
+            final_scopes = client_record.scopes
+        else:
+            final_scopes = None
 
         record = handler.authenticate(
             provider=definition,
             crypto=self.crypto,
             profile=profile_name,
             connection_name=connection_name,
-            scopes=scopes,
+            scopes=final_scopes,
             client_id=flow_client_id,
             client_secret=flow_client_secret,
             api_key=flow_api_key,
@@ -603,7 +635,11 @@ class AuthClient:
         )
         store.delete(client_key)
 
-        logger.info("Revoked all credentials for provider=%s in profile=%s", provider, profile_name)
+        logger.info(
+            "Revoked all credentials for provider=%s in profile=%s",
+            provider,
+            profile_name,
+        )
 
     def remove(
         self,
@@ -625,7 +661,10 @@ class AuthClient:
             local_path.unlink()
             logger.info("Removed provider definition: %s", local_path)
         else:
-            logger.info("Provider '%s' is bundled. Revoked credentials but kept definition.", provider)
+            logger.info(
+                "Provider '%s' is bundled. Revoked credentials but kept definition.",
+                provider,
+            )
 
     # ─── Export Operations ────────────────────────────────────────────────
 
@@ -676,44 +715,6 @@ class AuthClient:
         return ""
 
     # ─── Run Operations ───────────────────────────────────────────────────
-
-    def run(
-        self,
-        command: list[str],
-        providers: list[str] | None = None,
-        profile: str | None = None,
-    ) -> subprocess.CompletedProcess[str]:
-        """
-        Run a subprocess with injected exported credentials.
-
-        Spec §23.2: Inject secrets into subprocess environment without logging.
-        """
-        profile_name = profile or self.active_profile
-        env = os.environ.copy()
-
-        for pname in providers or []:
-            export_str = self.export(pname, profile=profile_name, format=ExportFormat.ENV)
-            for line in export_str.strip().split("\n"):
-                if "=" in line:
-                    key, value = line.split("=", 1)
-                    env[key] = value
-
-        def _dquote(s: str) -> str:
-            """Double-quote a token so $VAR references are expanded by the shell."""
-            s = s.replace("\\", "\\\\")
-            s = s.replace('"', '\\"')
-            s = s.replace("`", "\\`")
-            return f'"{s}"'
-
-        shell_cmd = " ".join(_dquote(c) for c in command)
-        return subprocess.run(
-            shell_cmd,
-            env=env,
-            capture_output=False,
-            text=True,
-            check=False,
-            shell=True,
-        )
 
     # ─── Profile Operations ───────────────────────────────────────────────
 

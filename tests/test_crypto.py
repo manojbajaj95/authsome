@@ -102,26 +102,60 @@ class TestLocalFileCryptoBackend:
 
         crypto._aesgcm = None
         with pytest.raises(EncryptionUnavailableError, match="Master key not initialized"):
-            crypto.decrypt(EncryptedField(enc=1, alg="AES-256-GCM", kid="local", nonce="a", ciphertext="b", tag="c"))
+            crypto.decrypt(
+                EncryptedField(
+                    enc=1,
+                    alg="AES-256-GCM",
+                    kid="local",
+                    nonce="a",
+                    ciphertext="b",
+                    tag="c",
+                )
+            )
 
     def test_decrypt_unsupported_alg(self, crypto: LocalFileCryptoBackend) -> None:
         from authsome.errors import EncryptionUnavailableError
 
         with pytest.raises(EncryptionUnavailableError, match="Unsupported algorithm"):
-            crypto.decrypt(EncryptedField(enc=1, alg="UNSUPPORTED", kid="local", nonce="a", ciphertext="b", tag="c"))
+            crypto.decrypt(
+                EncryptedField(
+                    enc=1,
+                    alg="UNSUPPORTED",
+                    kid="local",
+                    nonce="a",
+                    ciphertext="b",
+                    tag="c",
+                )
+            )
 
     def test_decrypt_base64_decode_error(self, crypto: LocalFileCryptoBackend) -> None:
         from authsome.errors import EncryptionUnavailableError
 
         with pytest.raises(EncryptionUnavailableError, match="Failed to decode envelope"):
-            crypto.decrypt(EncryptedField(enc=1, alg="AES-256-GCM", kid="local", nonce="!@#", ciphertext="b", tag="c"))
+            crypto.decrypt(
+                EncryptedField(
+                    enc=1,
+                    alg="AES-256-GCM",
+                    kid="local",
+                    nonce="!@#",
+                    ciphertext="b",
+                    tag="c",
+                )
+            )
 
     def test_decrypt_aesgcm_error(self, crypto: LocalFileCryptoBackend) -> None:
         from authsome.errors import EncryptionUnavailableError
 
         with pytest.raises(EncryptionUnavailableError, match="Decryption failed"):
             crypto.decrypt(
-                EncryptedField(enc=1, alg="AES-256-GCM", kid="local", nonce="abcd", ciphertext="abcd", tag="abcd")
+                EncryptedField(
+                    enc=1,
+                    alg="AES-256-GCM",
+                    kid="local",
+                    nonce="abcd",
+                    ciphertext="abcd",
+                    tag="abcd",
+                )
             )
 
 
@@ -215,26 +249,60 @@ class TestKeyringCryptoBackend:
 
         crypto._aesgcm = None
         with pytest.raises(EncryptionUnavailableError, match="Master key not initialized"):
-            crypto.decrypt(EncryptedField(enc=1, alg="AES-256-GCM", kid="local", nonce="a", ciphertext="b", tag="c"))
+            crypto.decrypt(
+                EncryptedField(
+                    enc=1,
+                    alg="AES-256-GCM",
+                    kid="local",
+                    nonce="a",
+                    ciphertext="b",
+                    tag="c",
+                )
+            )
 
     def test_decrypt_unsupported_alg(self, crypto: KeyringCryptoBackend) -> None:
         from authsome.errors import EncryptionUnavailableError
 
         with pytest.raises(EncryptionUnavailableError, match="Unsupported algorithm"):
-            crypto.decrypt(EncryptedField(enc=1, alg="UNSUPPORTED", kid="local", nonce="a", ciphertext="b", tag="c"))
+            crypto.decrypt(
+                EncryptedField(
+                    enc=1,
+                    alg="UNSUPPORTED",
+                    kid="local",
+                    nonce="a",
+                    ciphertext="b",
+                    tag="c",
+                )
+            )
 
     def test_decrypt_base64_decode_error(self, crypto: KeyringCryptoBackend) -> None:
         from authsome.errors import EncryptionUnavailableError
 
         with pytest.raises(EncryptionUnavailableError, match="Failed to decode envelope"):
-            crypto.decrypt(EncryptedField(enc=1, alg="AES-256-GCM", kid="local", nonce="!@#", ciphertext="b", tag="c"))
+            crypto.decrypt(
+                EncryptedField(
+                    enc=1,
+                    alg="AES-256-GCM",
+                    kid="local",
+                    nonce="!@#",
+                    ciphertext="b",
+                    tag="c",
+                )
+            )
 
     def test_decrypt_aesgcm_error(self, crypto: KeyringCryptoBackend) -> None:
         from authsome.errors import EncryptionUnavailableError
 
         with pytest.raises(EncryptionUnavailableError, match="Decryption failed"):
             crypto.decrypt(
-                EncryptedField(enc=1, alg="AES-256-GCM", kid="local", nonce="abcd", ciphertext="abcd", tag="abcd")
+                EncryptedField(
+                    enc=1,
+                    alg="AES-256-GCM",
+                    kid="local",
+                    nonce="abcd",
+                    ciphertext="abcd",
+                    tag="abcd",
+                )
             )
 
 
