@@ -1,0 +1,36 @@
+name: Publish RC to PyPI
+
+on:
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [develop]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish-rc:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    environment: pypi
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Compute RC version
+        run: |
+          CURRENT=$(grep '^version = ' pyproject.toml | sed 's/version = "//;s/"//')
+          BASE=$(echo "$CURRENT" | sed 's/rc[0-9]*$//')
+          RC_VERSION="${BASE}rc${{ github.run_number }}"
+          sed -i "s/^version = \".*\"/version = \"${RC_VERSION}\"/" pyproject.toml
+
+      - name: Build
+        run: uv build
+
+      - name: Publish to PyPI
+        run: uv publish
