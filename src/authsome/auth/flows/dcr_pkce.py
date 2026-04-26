@@ -88,6 +88,8 @@ class DcrPkceFlow(AuthFlow):
         if registered_new_client:
             client_id, client_secret = self._register_client(provider, effective_scopes)
 
+        assert client_id is not None  # guaranteed: either passed in or registered above
+
         code_verifier, code_challenge = _generate_pkce()
         port = self.callback_port
         redirect_uri = f"http://127.0.0.1:{port}/callback"

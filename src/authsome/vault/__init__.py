@@ -11,6 +11,7 @@ All key schema decisions belong to the caller (AuthLayer).
 
 from __future__ import annotations
 
+import builtins
 import logging
 from pathlib import Path
 
@@ -69,7 +70,7 @@ class Vault:
         """Delete a key. Returns True if the key existed."""
         return self._storage(profile).delete(key)
 
-    def list(self, prefix: str = "", *, profile: str = _DEFAULT_PROFILE) -> list[str]:
+    def list(self, prefix: str = "", *, profile: str = _DEFAULT_PROFILE) -> builtins.list[str]:
         """List all keys matching a prefix."""
         return self._storage(profile).list_keys(prefix)
 
@@ -97,7 +98,7 @@ class Vault:
     def profile_exists(self, profile: str) -> bool:
         return (self._home / "profiles" / profile).exists()
 
-    def list_profile_dirs(self) -> list[Path]:
+    def list_profile_dirs(self) -> builtins.list[Path]:
         profiles_dir = self._home / "profiles"
         if not profiles_dir.exists():
             return []
