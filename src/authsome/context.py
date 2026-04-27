@@ -10,11 +10,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-<<<<<<< refactor/dirs
-=======
 
 from loguru import logger
->>>>>>> develop
 
 if TYPE_CHECKING:
     from authsome.auth import AuthLayer

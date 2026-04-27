@@ -133,12 +133,8 @@ def setup_logging(verbose: bool, log_file: Path | None) -> None:
 @click.pass_context
 def cli(ctx: click.Context, verbose: bool, log_file: str) -> None:
     """Authsome: Portable local authentication library for AI agents and tools."""
-<<<<<<< refactor/dirs
-    logging.getLogger("authsome").setLevel(logging.WARNING if ctx.obj.quiet else logging.INFO)
-=======
     resolved = Path(log_file) if log_file else None
     setup_logging(verbose=verbose, log_file=resolved)
->>>>>>> develop
 
 
 @cli.command(name="list")
