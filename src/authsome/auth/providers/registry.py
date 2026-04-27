@@ -24,9 +24,12 @@ _VALID_FLOWS: dict[AuthType, set[FlowType]] = {
 class ProviderRegistry:
     """Resolves provider definitions from local files and bundled package data."""
 
-    def __init__(self, authsome_home: Path) -> None:
-        self._authsome_home = authsome_home
-        self._providers_dir = authsome_home / "providers"
+    def __init__(self, providers_dir: Path) -> None:
+        self._providers_dir = providers_dir
+
+    @property
+    def providers_dir(self) -> Path:
+        return self._providers_dir
 
     def list_providers(self) -> list[ProviderDefinition]:
         providers: dict[str, ProviderDefinition] = {}

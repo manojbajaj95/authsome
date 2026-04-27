@@ -44,11 +44,12 @@ class TestProviderRegistry:
     def registry(self, tmp_path: Path) -> ProviderRegistry:
         home = tmp_path / ".authsome"
         home.mkdir()
-        (home / "providers").mkdir()
-        return ProviderRegistry(home)
+        providers_dir = home / "providers"
+        providers_dir.mkdir()
+        return ProviderRegistry(providers_dir)
 
     def test_list_providers_empty(self, registry: ProviderRegistry) -> None:
-        registry._providers_dir.rmdir()
+        registry.providers_dir.rmdir()
         providers = registry.list_providers()
         assert isinstance(providers, list)
 
@@ -195,16 +196,16 @@ class TestProviderRegistry:
             registry._validate_provider(provider)
 
     def test_load_provider_file_error(self, registry: ProviderRegistry) -> None:
-        registry._providers_dir.mkdir(parents=True, exist_ok=True)
-        bad_file = registry._providers_dir / "bad.json"
+        registry.providers_dir.mkdir(parents=True, exist_ok=True)
+        bad_file = registry.providers_dir / "bad.json"
         bad_file.write_text("invalid json")
 
         with pytest.raises(InvalidProviderSchemaError, match="Failed to parse provider file"):
             registry._load_provider_file(bad_file)
 
     def test_load_local_providers_error_skipping(self, registry: ProviderRegistry) -> None:
-        registry._providers_dir.mkdir(parents=True, exist_ok=True)
-        bad_file = registry._providers_dir / "bad.json"
+        registry.providers_dir.mkdir(parents=True, exist_ok=True)
+        bad_file = registry.providers_dir / "bad.json"
         bad_file.write_text("invalid json")
 
         providers = registry._load_local_providers()

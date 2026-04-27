@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import timedelta
+from pathlib import Path
 from typing import Any
 
 import requests as http_client
@@ -61,10 +62,17 @@ class AuthLayer:
     Key construction (profile:<identity>:<provider>:...) lives here.
     """
 
-    def __init__(self, vault: Vault, registry: ProviderRegistry, identity: str) -> None:
+    def __init__(
+        self,
+        vault: Vault,
+        registry: ProviderRegistry,
+        identity: str,
+        profiles_dir: Path,
+    ) -> None:
         self._vault = vault
         self._registry = registry
         self._identity = identity  # profile slug
+        self._profiles_dir = profiles_dir
 
     @property
     def registry(self) -> ProviderRegistry:
@@ -322,7 +330,7 @@ class AuthLayer:
 
     def remove(self, provider: str) -> None:
         self.revoke(provider)
-        local_path = self._registry._authsome_home / "providers" / f"{provider}.json"
+        local_path = self._registry.providers_dir / f"{provider}.json"
         if local_path.exists():
             local_path.unlink()
             logger.info("Removed provider definition: %s", local_path)
@@ -360,23 +368,27 @@ class AuthLayer:
     def create_profile(self, name: str, description: str | None = None) -> Any:
         from authsome.auth.models.profile import ProfileMetadata
 
-        self._vault.ensure_profile(name)
-        profile_dir = self._vault._home / "profiles" / name
+        profile_dir = self._profiles_dir / name
+        profile_dir.mkdir(parents=True, exist_ok=True)
+
         metadata_path = profile_dir / "metadata.json"
         if not metadata_path.exists():
             now = utc_now()
             metadata = ProfileMetadata(name=name, created_at=now, updated_at=now, description=description)
             metadata_path.write_text(metadata.model_dump_json(indent=2), encoding="utf-8")
             return metadata
-        from authsome.auth.models.profile import ProfileMetadata
 
         return ProfileMetadata.model_validate_json(metadata_path.read_text(encoding="utf-8"))
 
     def list_profiles(self) -> list[Any]:
         from authsome.auth.models.profile import ProfileMetadata
 
+        profiles_dir = self._profiles_dir
+        if not profiles_dir.exists():
+            return []
+
         result = []
-        for profile_dir in self._vault.list_profile_dirs():
+        for profile_dir in sorted(p for p in profiles_dir.iterdir() if p.is_dir()):
             metadata_path = profile_dir / "metadata.json"
             if metadata_path.exists():
                 try:
@@ -386,8 +398,10 @@ class AuthLayer:
         return result
 
     def set_default_profile(self, name: str, home_path: Any) -> None:
-        if not self._vault.profile_exists(name):
+        profile_dir = self._profiles_dir / name
+        if not profile_dir.exists():
             raise ProfileNotFoundError(name)
+
         from authsome.auth.models.config import GlobalConfig
 
         config_path = home_path / "config.json"
@@ -398,41 +412,6 @@ class AuthLayer:
         config_path.write_text(config.model_dump_json(indent=2), encoding="utf-8")
 
     # ── Health check ──────────────────────────────────────────────────────
-
-    def doctor(self, home_path: Any) -> dict[str, Any]:
-        results: dict[str, Any] = {
-            "home_exists": home_path.exists(),
-            "version_file": (home_path / "version").exists(),
-            "config_file": (home_path / "config.json").exists(),
-            "providers_dir": (home_path / "providers").exists(),
-            "profiles_dir": (home_path / "profiles").exists(),
-            "encryption": False,
-            "store": False,
-            "providers_count": 0,
-            "profiles_count": 0,
-            "issues": [],
-        }
-
-        try:
-            self._vault.put("__doctor_test__", "ok", profile=self._identity)
-            val = self._vault.get("__doctor_test__", profile=self._identity)
-            self._vault.delete("__doctor_test__", profile=self._identity)
-            results["encryption"] = True
-            results["store"] = val == "ok"
-        except Exception as exc:
-            results["issues"].append(f"Vault: {exc}")
-
-        try:
-            results["providers_count"] = len(self.list_providers())
-        except Exception as exc:
-            results["issues"].append(f"Providers: {exc}")
-
-        try:
-            results["profiles_count"] = len(self.list_profiles())
-        except Exception as exc:
-            results["issues"].append(f"Profiles: {exc}")
-
-        return results
 
     # ── Internal helpers ──────────────────────────────────────────────────
 

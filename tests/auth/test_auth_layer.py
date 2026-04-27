@@ -13,7 +13,7 @@ from authsome.auth.input_provider import MockInputProvider
 from authsome.auth.models.connection import ConnectionRecord, ProviderClientRecord
 from authsome.auth.models.enums import AuthType, ConnectionStatus, ExportFormat, FlowType
 from authsome.auth.models.provider import ApiKeyConfig, OAuthConfig, ProviderDefinition
-from authsome.auth.providers.registry import ProviderRegistry
+from authsome.context import AuthsomeContext
 from authsome.errors import (
     AuthsomeError,
     ConnectionNotFoundError,
@@ -24,19 +24,14 @@ from authsome.errors import (
     UnsupportedFlowError,
 )
 from authsome.utils import utc_now
-from authsome.vault import Vault
 
 
 @pytest.fixture
 def auth(tmp_path: Path) -> AuthLayer:
     home = tmp_path / ".authsome"
-    vault = Vault(home)
-    vault.init()
-    registry = ProviderRegistry(home)
-    layer = AuthLayer(vault=vault, registry=registry, identity="default")
-    layer.create_profile("default")
-    yield layer
-    vault.close()
+    actx = AuthsomeContext.create(home=home)
+    yield actx.auth
+    actx.close()
 
 
 class TestAuthLayerInit:
@@ -44,32 +39,27 @@ class TestAuthLayerInit:
 
     def test_init_creates_structure(self, tmp_path: Path) -> None:
         home = tmp_path / ".authsome"
-        vault = Vault(home)
-        vault.init()
-        registry = ProviderRegistry(home)
-        layer = AuthLayer(vault=vault, registry=registry, identity="default")
-        layer.create_profile("default")
+        actx = AuthsomeContext.create(home=home)
 
         assert (home / "providers").is_dir()
         assert (home / "profiles" / "default").is_dir()
         assert (home / "profiles" / "default" / "metadata.json").exists()
-        vault.close()
+        actx.close()
 
     def test_master_key_created(self, tmp_path: Path) -> None:
         home = tmp_path / ".authsome"
-        vault = Vault(home)
-        vault.init()
+        actx = AuthsomeContext.create(home=home)
+        # Triggering encryption creates the key
+        actx.vault.put("test", "test", profile="default")
         assert (home / "master.key").exists()
-        vault.close()
+        actx.close()
 
     def test_vault_crypto_roundtrip(self, tmp_path: Path) -> None:
         home = tmp_path / ".authsome"
-        vault = Vault(home)
-        vault.init()
-        vault.ensure_profile("default")
-        vault.put("test:key", "secret", profile="default")
-        assert vault.get("test:key", profile="default") == "secret"
-        vault.close()
+        actx = AuthsomeContext.create(home=home)
+        actx.vault.put("test:key", "secret", profile="default")
+        assert actx.vault.get("test:key", profile="default") == "secret"
+        actx.close()
 
 
 class TestAuthLayerProviders:
@@ -126,7 +116,6 @@ class TestAuthLayerProfiles:
         assert "default" in names
 
     def test_create_profile(self, auth: AuthLayer) -> None:
-        auth._vault.ensure_profile("work")
         auth.create_profile("work", description="Work profile")
         profiles = auth.list_profiles()
         names = [p.name for p in profiles]
@@ -135,7 +124,7 @@ class TestAuthLayerProfiles:
     def test_list_profiles_no_dir(self, auth: AuthLayer) -> None:
         import shutil
 
-        profiles_dir = auth._vault._home / "profiles"
+        profiles_dir = auth._profiles_dir
         shutil.rmtree(profiles_dir)
         assert auth.list_profiles() == []
 
@@ -694,19 +683,25 @@ class TestAuthLayerExport:
 class TestAuthLayerDoctor:
     """Doctor health check tests."""
 
-    def test_doctor_healthy(self, auth: AuthLayer) -> None:
-        results = auth.doctor(auth._vault._home)
+    def test_doctor_healthy(self, tmp_path: Path) -> None:
+        home = tmp_path / ".authsome"
+        actx = AuthsomeContext.create(home=home)
+        results = actx.doctor()
         assert results["home_exists"] is True
         assert results["encryption"] is True
         assert results["store"] is True
         assert results["issues"] == []
+        actx.close()
 
-    def test_doctor_vault_failure(self, auth: AuthLayer) -> None:
-        with patch.object(auth._vault, "put", side_effect=Exception("vault boom")):
-            res = auth.doctor(auth._vault._home)
+    def test_doctor_vault_failure(self, tmp_path: Path) -> None:
+        home = tmp_path / ".authsome"
+        actx = AuthsomeContext.create(home=home)
+        with patch.object(actx.vault, "put", side_effect=Exception("vault boom")):
+            res = actx.doctor()
             assert not res["encryption"]
             assert not res["store"]
             assert any("Vault" in issue for issue in res["issues"])
+        actx.close()
 
 
 class TestAuthLayerConnections:
