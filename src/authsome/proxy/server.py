@@ -25,19 +25,33 @@ def _route(auth: AuthLayer, scheme: str, host: str, port: int, path: str) -> Rou
         return None
 
     matches: list[str] = []
-    for provider in auth.list_providers():
-        if not provider.host_url:
-            continue
-        if _is_auth_endpoint(provider, host, path):
-            continue
-        provider_host = _extract_host(provider.host_url)
-        if provider_host != host:
-            continue
-        try:
-            auth.get_connection(provider.name, "default")
-        except Exception:
-            continue
-        matches.append(provider.name)
+    # Check all active connections for host matches
+    for p_group in auth.list_connections():
+        p_name = p_group["name"]
+        for conn in p_group["connections"]:
+            if conn["connection_name"] != "default":
+                continue
+
+            # Connection record carries the resolved host_url
+            target_host_url = conn.get("host_url")
+            if not target_host_url:
+                continue
+
+            provider_host = _extract_host(target_host_url)
+            if provider_host != host:
+                continue
+
+            # Still need definition to check if this is an auth endpoint
+            try:
+                definition = auth.get_provider(p_name)
+                # Resolve templates in OAuth URLs before checking
+                resolved = definition.resolve_urls(conn.get("base_url"))
+                if _is_auth_endpoint(resolved, host, path):
+                    continue
+            except Exception:
+                pass
+
+            matches.append(p_name)
 
     if len(matches) == 0:
         return None

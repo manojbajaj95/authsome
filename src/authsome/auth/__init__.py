@@ -119,6 +119,8 @@ class AuthLayer:
                             "auth_type": record.auth_type.value,
                             "status": record.status.value,
                             "scopes": record.scopes,
+                            "base_url": record.base_url,
+                            "host_url": record.host_url,
                             "expires_at": record.expires_at.isoformat() if record.expires_at else None,
                         }
                     )
@@ -195,6 +197,15 @@ class AuthLayer:
                     default=definition.oauth.base_url,
                 )
             )
+            # Add host_url override if base_url is present
+            fields_to_collect.append(
+                InputField(
+                    name="host_url",
+                    label="API Host URL",
+                    secret=False,
+                    default=definition.host_url or "",
+                )
+            )
 
         if flow_type == FlowType.PKCE and not flow_client_id:
             static_hints.append({"type": "static", "label": "Redirect URL", "value": "http://127.0.0.1:7999/callback"})
@@ -242,6 +253,8 @@ class AuthLayer:
                 if inputs.get("base_url"):
                     flow_base_url = inputs["base_url"]
                     client_record.base_url = flow_base_url
+                if inputs.get("host_url"):
+                    client_record.host_url = inputs["host_url"]
                 if inputs.get("client_id"):
                     flow_client_id = inputs["client_id"]
                     client_record.client_id = flow_client_id
@@ -285,6 +298,7 @@ class AuthLayer:
             self._save_provider_client_credentials(client_record)
 
         result.connection.base_url = flow_base_url
+        result.connection.host_url = (client_record.host_url if client_record else None) or resolved_definition.host_url
         self._save_connection(result.connection)
         self._update_provider_metadata(provider, connection_name)
 
@@ -457,8 +471,6 @@ class AuthLayer:
             config = GlobalConfig.model_validate_json(config_path.read_text(encoding="utf-8"))
         config.default_profile = name
         config_path.write_text(config.model_dump_json(indent=2), encoding="utf-8")
-
-    # ── Health check ──────────────────────────────────────────────────────
 
     # ── Internal helpers ──────────────────────────────────────────────────
 
