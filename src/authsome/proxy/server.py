@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
-import logging
 import threading
 from urllib.parse import urlparse
 
+from loguru import logger
 from mitmproxy import http
 from mitmproxy.options import Options
 from mitmproxy.tools.dump import DumpMaster
 
 from authsome.auth import AuthLayer
 from authsome.proxy.router import RouteMatch
-
-logger = logging.getLogger(__name__)
 
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
@@ -45,7 +43,7 @@ def _route(auth: AuthLayer, scheme: str, host: str, port: int, path: str) -> Rou
         return None
     if len(matches) > 1:
         logger.warning(
-            "Ambiguous proxy match for %s://%s:%s%s — matched providers: %s. Forwarding unchanged.",
+            "Ambiguous proxy match for {}://{}:{}{}  — matched providers: {}. Forwarding unchanged.",
             scheme,
             host,
             port,
@@ -94,7 +92,7 @@ class AuthProxyAddon:
             headers = self._auth.get_auth_headers(match.provider, match.connection)
         except Exception:
             logger.warning(
-                "Failed to retrieve auth headers for provider=%s connection=%s. Forwarding unchanged.",
+                "Failed to retrieve auth headers for provider={} connection={}. Forwarding unchanged.",
                 match.provider,
                 match.connection,
             )
@@ -147,5 +145,5 @@ def start_proxy_server(auth: AuthLayer, host: str = "127.0.0.1", port: int = 0) 
         raise RuntimeError("Proxy server failed to initialize within 10 s")
 
     url = f"http://{host}:{port}"
-    logger.info("Proxy server listening on %s", url)
+    logger.info("Proxy server listening on {}", url)
     return RunningProxy(url=url, master=state["master"], thread=thread)

@@ -6,7 +6,6 @@ in environments where agents or scripts might intercept standard I/O.
 """
 
 import http.server
-import logging
 import socket
 import threading
 import urllib.parse
@@ -14,7 +13,7 @@ import webbrowser
 from html import escape
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 def _find_free_port() -> int:
@@ -111,7 +110,7 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
         threading.Thread(target=kill_server, daemon=True).start()
 
     def log_message(self, format: str, *args: Any) -> None:
-        logger.debug("Bridge server: %s", format % args)
+        logger.debug("Bridge server: {}", format % args)
 
 
 def secure_input_bridge(title: str, fields: list[dict[str, Any]]) -> dict[str, str]:

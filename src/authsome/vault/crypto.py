@@ -12,17 +12,15 @@ from __future__ import annotations
 
 import base64
 import json
-import logging
 import os
 import secrets
 from abc import ABC, abstractmethod
 from pathlib import Path
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from loguru import logger
 
 from authsome.errors import EncryptionUnavailableError
-
-logger = logging.getLogger(__name__)
 
 _KEY_SIZE_BYTES = 32  # 256-bit
 _NONCE_SIZE_BYTES = 12  # 96-bit for AES-GCM
@@ -87,7 +85,7 @@ class LocalFileCrypto(VaultCrypto):
             os.chmod(self._key_file, 0o600)
         except OSError:
             pass
-        logger.info("Generated new master key at %s", self._key_file)
+        logger.info("Generated new master key at {}", self._key_file)
         return AESGCM(master_key)
 
     def encrypt(self, plaintext: str) -> str:

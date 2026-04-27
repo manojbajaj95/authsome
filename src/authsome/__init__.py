@@ -15,6 +15,8 @@ Usage:
     headers = ctx.auth.get_auth_headers("openai")
 """
 
+from loguru import logger as _logger
+
 from authsome.auth import AuthLayer
 from authsome.auth.models.connection import ConnectionRecord, Sensitive
 from authsome.auth.models.enums import AuthType, ConnectionStatus, ExportFormat, FlowType
@@ -37,6 +39,8 @@ from authsome.errors import (
     UnsupportedFlowError,
 )
 from authsome.vault import Vault
+
+_logger.disable("authsome")
 
 __version__ = "0.2.0"
 

@@ -2,11 +2,12 @@
 
 import functools
 import json as json_lib
-import logging
 import sys
+from pathlib import Path
 from typing import Any
 
 import click
+from loguru import logger
 
 from authsome import __version__
 from authsome.auth.models.enums import ExportFormat, FlowType
@@ -99,13 +100,45 @@ def handle_errors(func):
     return wrapper
 
 
+def setup_logging(verbose: bool, log_file: Path | None) -> None:
+    """Enable authsome library logs and wire up sinks. CLI-only — never called from library code."""
+    logger.enable("authsome")
+
+    level = "DEBUG" if verbose else "WARNING"
+    logger.add(sys.stderr, level=level, colorize=True, diagnose=False)
+
+    if log_file is not None:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        logger.add(
+            str(log_file),
+            level="DEBUG",
+            rotation="10 MB",
+            retention=5,
+            compression="zip",
+            diagnose=False,
+        )
+
+
 @click.group()
 @click.version_option(__version__, "-v", "--version")
+@click.option("--verbose", is_flag=True, default=False, help="Enable DEBUG logging to stderr.")
+@click.option(
+    "--log-file",
+    "log_file",
+    default=str(Path.home() / ".authsome" / "logs" / "authsome.log"),
+    show_default=True,
+    help="Path for the rotating log file. Pass empty string to disable.",
+)
 @common_options
 @click.pass_context
-def cli(ctx: click.Context) -> None:
+def cli(ctx: click.Context, verbose: bool, log_file: str) -> None:
     """Authsome: Portable local authentication library for AI agents and tools."""
+<<<<<<< refactor/dirs
     logging.getLogger("authsome").setLevel(logging.WARNING if ctx.obj.quiet else logging.INFO)
+=======
+    resolved = Path(log_file) if log_file else None
+    setup_logging(verbose=verbose, log_file=resolved)
+>>>>>>> develop
 
 
 @cli.command(name="list")

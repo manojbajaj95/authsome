@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-import logging
 import time
 from datetime import timedelta
 from typing import Any
 
 import requests
+from loguru import logger
 
 from authsome.auth.flows.base import AuthFlow, FlowResult
 from authsome.auth.models.connection import AccountInfo, ConnectionRecord
@@ -16,8 +16,6 @@ from authsome.auth.models.enums import AuthType, ConnectionStatus
 from authsome.auth.models.provider import ProviderDefinition
 from authsome.errors import AuthenticationFailedError
 from authsome.utils import utc_now
-
-logger = logging.getLogger(__name__)
 
 _DEFAULT_POLL_INTERVAL = 5
 _MAX_POLL_DURATION = 900
@@ -154,7 +152,7 @@ class DeviceCodeFlow(AuthFlow):
                     provider.oauth.token_url, data=payload, headers={"Accept": "application/json"}, timeout=30
                 )
             except requests.RequestException as exc:
-                logger.warning("Token poll request failed: %s, retrying...", exc)
+                logger.warning("Token poll request failed: {}, retrying...", exc)
                 continue
 
             try:

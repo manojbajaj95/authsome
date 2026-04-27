@@ -4,16 +4,15 @@ from __future__ import annotations
 
 import importlib.resources
 import json
-import logging
 from pathlib import Path
 from urllib.parse import urlparse
+
+from loguru import logger
 
 from authsome.auth.models.enums import AuthType, FlowType
 from authsome.auth.models.provider import ProviderDefinition
 from authsome.errors import InvalidProviderSchemaError, ProviderNotFoundError
 from authsome.utils import is_filesystem_safe
-
-logger = logging.getLogger(__name__)
 
 _VALID_FLOWS: dict[AuthType, set[FlowType]] = {
     AuthType.OAUTH2: {FlowType.PKCE, FlowType.DEVICE_CODE, FlowType.DCR_PKCE},
@@ -62,7 +61,7 @@ class ProviderRegistry:
         if target.exists() and not force:
             raise FileExistsError(f"Provider '{definition.name}' already exists. Use force=True to overwrite.")
         target.write_text(definition.model_dump_json(indent=2, exclude_none=True), encoding="utf-8")
-        logger.info("Registered provider: %s -> %s", definition.name, target)
+        logger.info("Registered provider: {} -> {}", definition.name, target)
 
     def _validate_provider(self, definition: ProviderDefinition) -> None:
         if not is_filesystem_safe(definition.name):
@@ -116,7 +115,7 @@ class ProviderRegistry:
                 definition = self._load_provider_file(path)
                 providers[definition.name] = definition
             except InvalidProviderSchemaError:
-                logger.warning("Skipping invalid provider file: %s", path)
+                logger.warning("Skipping invalid provider file: {}", path)
         return providers
 
     def _load_bundled_providers(self) -> dict[str, ProviderDefinition]:
@@ -130,7 +129,7 @@ class ProviderRegistry:
                         definition = ProviderDefinition.model_validate(data)
                         providers[definition.name] = definition
                     except (json.JSONDecodeError, ValueError) as exc:
-                        logger.warning("Skipping invalid bundled provider %s: %s", resource.name, exc)
+                        logger.warning("Skipping invalid bundled provider {}: {}", resource.name, exc)
         except (ModuleNotFoundError, FileNotFoundError):
             logger.debug("No bundled providers package found")
         return providers

@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import logging
 import os
 import subprocess
 
+from loguru import logger
+
 from authsome.auth import AuthLayer
 from authsome.proxy.server import RunningProxy, start_proxy_server
-
-logger = logging.getLogger(__name__)
 
 
 class ProxyRunner:
@@ -49,7 +48,7 @@ class ProxyRunner:
                 continue
             for env_var in provider.export.env.values():
                 env[env_var] = "authsome-proxy-managed"
-                logger.debug("Set dummy env var %s for provider %s", env_var, provider.name)
+                logger.debug("Set dummy env var {} for provider {}", env_var, provider.name)
 
     @staticmethod
     def _merge_no_proxy(existing: str) -> str:

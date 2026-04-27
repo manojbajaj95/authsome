@@ -8,12 +8,12 @@ Does not touch encryption directly — all persistence goes through the Vault.
 from __future__ import annotations
 
 import json
-import logging
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 import requests as http_client
+from loguru import logger
 
 from authsome.auth.flows.api_key import ApiKeyFlow
 from authsome.auth.flows.base import AuthFlow
@@ -41,8 +41,6 @@ from authsome.errors import (
 )
 from authsome.utils import build_store_key, utc_now
 from authsome.vault import Vault
-
-logger = logging.getLogger(__name__)
 
 _NEAR_EXPIRY_SECONDS = 300
 
@@ -257,7 +255,7 @@ class AuthLayer:
         self._save_connection(result.connection)
         self._update_provider_metadata(provider, connection_name)
 
-        logger.info("Login successful: provider=%s connection=%s profile=%s", provider, connection_name, self._identity)
+        logger.info("Login successful: provider={} connection={} profile={}", provider, connection_name, self._identity)
         return result.connection
 
     # ── Token operations ──────────────────────────────────────────────────
@@ -308,7 +306,7 @@ class AuthLayer:
             try:
                 http_client.post(definition.oauth.revocation_url, data={"token": record.access_token}, timeout=15)
             except Exception as exc:
-                logger.warning("Remote revocation failed (continuing): %s", exc)
+                logger.warning("Remote revocation failed (continuing): {}", exc)
 
         key = build_store_key(
             profile=self._identity, provider=provider, record_type="connection", connection=connection
@@ -333,7 +331,7 @@ class AuthLayer:
         local_path = self._registry.providers_dir / f"{provider}.json"
         if local_path.exists():
             local_path.unlink()
-            logger.info("Removed provider definition: %s", local_path)
+            logger.info("Removed provider definition: {}", local_path)
 
     # ── Export operations ─────────────────────────────────────────────────
 
@@ -394,7 +392,7 @@ class AuthLayer:
                 try:
                     result.append(ProfileMetadata.model_validate_json(metadata_path.read_text(encoding="utf-8")))
                 except Exception:
-                    logger.warning("Skipping invalid profile: %s", profile_dir.name)
+                    logger.warning("Skipping invalid profile: {}", profile_dir.name)
         return result
 
     def set_default_profile(self, name: str, home_path: Any) -> None:
@@ -420,7 +418,7 @@ class AuthLayer:
         try:
             data = json.loads(record_json)
         except json.JSONDecodeError:
-            logger.warning("Corrupt record at key %s", key)
+            logger.warning("Corrupt record at key {}", key)
             return None
 
         if data.get("schema_version", 1) < 2:
@@ -559,7 +557,7 @@ class AuthLayer:
         state_record.last_refresh_error = None
         self._save_provider_state(state_record)
 
-        logger.info("Token refreshed: provider=%s", provider_name)
+        logger.info("Token refreshed: provider={}", provider_name)
         return record
 
     def _get_or_create_provider_state(self, provider: str) -> ProviderStateRecord:
