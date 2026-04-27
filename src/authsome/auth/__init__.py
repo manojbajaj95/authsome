@@ -227,6 +227,8 @@ class AuthLayer:
         if flow_type == FlowType.API_KEY:
             fields_to_collect.append(InputField(name="api_key", label="API Key", secret=True))
 
+        static_hints.extend(self._build_docs_hints(definition, flow_type))
+
         if fields_to_collect:
             ip: InputProvider = input_provider or BridgeInputProvider(
                 title=f"{definition.display_name} Credentials",
