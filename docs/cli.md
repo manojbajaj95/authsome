@@ -8,7 +8,6 @@ All commands support `--json` for machine-readable output.
 
 | Command | Description |
 |---------|-------------|
-| `init` | Initialize `~/.authsome` directory and default profile. |
 | `whoami` | Show home directory and encryption mode. |
 | `doctor` | Run health checks on directory layout and encryption. |
 | `list` | List all providers (bundled + custom) and their connection states. |
@@ -36,10 +35,9 @@ All commands support `--json` for machine-readable output.
 
 ## Command Details
 
-### `init` / `doctor` / `whoami`
+### `doctor` / `whoami`
 
 ```bash
-authsome init      # initialize ~/.authsome
 authsome doctor    # verify installation health
 authsome whoami    # show home directory and encryption mode
 ```
@@ -62,6 +60,7 @@ authsome login <provider> [OPTIONS]
 | `--flow <type>` | Override the auth flow. Valid values: `pkce`, `device_code`, `dcr_pkce`, `api_key`. |
 | `--connection <name>` | Connection name (default: `default`). |
 | `--scopes <s1,s2>` | Comma-separated scopes to request. |
+| `--base-url <url>` | Override the base URL for the provider. |
 | `--force` | Overwrite an existing connection. |
 
 ```bash

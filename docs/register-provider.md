@@ -33,15 +33,16 @@ Create a `.json` file using one of the templates below.
   "flow": "dcr_pkce",
   "host_url": "https://example.com",
   "oauth": {
-    "authorization_url": "https://example.com/oauth/authorize",
-    "token_url": "https://example.com/oauth/token",
+    "base_url": "https://example.com",
+    "authorization_url": "{base_url}/oauth/authorize",
+    "token_url": "{base_url}/oauth/token",
     "revocation_url": null,
     "device_authorization_url": null,
     "scopes": ["read", "write"],
     "pkce": true,
     "supports_device_flow": false,
     "supports_dcr": true,
-    "registration_endpoint": "https://example.com/oauth/register"
+    "registration_endpoint": "{base_url}/oauth/register"
   },
   "export": {
     "env": {
@@ -97,15 +98,16 @@ Create a `.json` file using one of the templates below.
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `authorization_url` | Yes | URL the user is redirected to for authorization. |
-| `token_url` | Yes | Endpoint to exchange auth codes for tokens. |
-| `revocation_url` | No | Endpoint for remote token revocation. |
-| `device_authorization_url` | No | Required if `supports_device_flow` is `true`. |
+| `authorization_url` | Yes | URL the user is redirected to for authorization. Supports `{base_url}` template. |
+| `token_url` | Yes | Endpoint to exchange auth codes for tokens. Supports `{base_url}` template. |
+| `revocation_url` | No | Endpoint for remote token revocation. Supports `{base_url}` template. |
+| `device_authorization_url` | No | Required if `supports_device_flow` is `true`. Supports `{base_url}` template. |
+| `base_url` | No | Default base URL for multi-tenant or self-hosted services (e.g. GitHub Enterprise, Okta). |
 | `scopes` | Yes | Default scopes to request. |
 | `pkce` | Yes | Whether PKCE is supported/required. |
 | `supports_device_flow` | No | Set `true` if device code flow is available. |
 | `supports_dcr` | No | Set `true` if Dynamic Client Registration is available. |
-| `registration_endpoint` | No | Required if `supports_dcr` is `true`. |
+| `registration_endpoint` | No | Required if `supports_dcr` is `true`. Supports `{base_url}` template. |
 
 ### Credential storage
 
@@ -123,9 +125,14 @@ Once saved, credentials are never read from environment variables or plain-text 
 | `header_name` | No | HTTP header name. Defaults to `"Authorization"`. |
 | `header_prefix` | No | Prefix before the key value. Defaults to `"Bearer"`. |
 
-### Export fields (`export` block)
+### Multi-tenant & Self-hosted Support
 
-The `export.env` object maps credential fields to environment variable names used by `authsome export` and `authsome run`.
+For services where the base URL varies per deployment (e.g., GitHub Enterprise, Okta, GitLab self-managed), use the `base_url` field and the `{base_url}` template placeholder:
+
+1.  Set `oauth.base_url` to the default public URL (e.g., `https://github.com`).
+2.  Use `{base_url}` in other URL fields (e.g., `"token_url": "{base_url}/login/oauth/access_token"`).
+
+During `authsome login`, the user will be prompted for the base URL, defaulting to the value in the JSON. If they provide a custom one, it will be saved to their profile and used for all future token refreshes for that connection.
 
 ---
 
