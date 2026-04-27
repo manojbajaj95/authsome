@@ -16,23 +16,23 @@ Two deployment modes:
 - **Sidecar**: `authsome run -- python agent.py` — transparent credential injection via HTTP proxy. No auth code in the agent.
 - **Library**: `from authsome import AuthLayer; layer.get_access_token("github")` — direct programmatic API.
 
-Both modes share the same layered architecture. The sidecar orchestrates the layers explicitly. The library exposes them through a higher-level stateful API. The low-level primitives are always accessible independently.
+Both modes share the same layered architecture. The sidecar orchestrates the layers explicitly for proxy mode. The library exposes them through `AuthLayer`, a higher-level stateful orchestrator that can depend on a vault interface. The low-level primitives are always accessible independently.
 
 ---
 
 ## Architecture
 
-Five internal layers plus a sidecar orchestrator. Each layer has one bounded responsibility.
+Five internal layers plus explicit orchestrators. Each layer has one bounded responsibility.
 
-**Rule: no layer calls another layer directly. Only the sidecar calls layers.**
+**Rule: layers do not reach sideways into other layers. Explicit orchestrators compose them.**
 
-This constraint makes every layer independently testable and independently swappable.
+This constraint makes every layer independently testable and independently swappable. In proxy mode, the sidecar is the orchestrator. In library mode, `AuthLayer` is the orchestrator and may accept any implementation of the vault interface.
 
 ```
 authsome run -- <agent>
        │
        ▼
-   [ sidecar ]            ← the only orchestrator
+   [ sidecar ]            ← proxy-mode orchestrator
        │
        ├──▶ identity      ← who is acting, on whose behalf
        ├──▶ policy        ← is this allowed
@@ -40,6 +40,28 @@ authsome run -- <agent>
        ├──▶ auth          ← refresh if expired
        └──▶ audit         ← record everything
 ```
+
+Library mode uses the same primitives without the proxy:
+
+```python
+auth_layer = AuthLayer(vault=my_vault, registry=providers, identity=agent_or_profile)
+token = auth_layer.get_access_token("github", connection="main")
+```
+
+`AuthLayer` owns the library lifecycle: read from vault, refresh if needed, write back, and return a usable credential.
+
+---
+
+## Current Alpha Implementation
+
+The alpha implementation intentionally covers the first useful slice:
+
+- Auth layer with provider registry, OAuth/API-key acquisition flows, token refresh, and provider metadata.
+- Vault layer with encrypted local storage.
+- CLI commands for init, login, list, get, export, register, revoke/remove, doctor, whoami, and proxy-backed `run`.
+- Host-based proxy injection using provider `host_url`.
+
+Identity, Policy, and Audit are planned layers. They are part of the long-term architecture described in this document, but they are not required to understand the current alpha implementation.
 
 ---
 
@@ -57,6 +79,13 @@ Does not store credentials. Does not make access decisions. Does not know about 
 - HTTPS interception requires TLS certificate trust (mitmproxy CA must be installed on the machine)
 - Non-HTTP protocols (WebSockets, gRPC, database connections) are not intercepted
 - Host-based routing is fragile if two providers share a base URL
+
+**v1 routing contract**:
+- Provider definitions may declare `host_url`.
+- The proxy matches outbound requests by exact host.
+- Ambiguous matches are not injected; the request is forwarded unchanged.
+- The default connection is used for injected credentials.
+- Path matching, header matching, priorities, and per-request connection selection are future work.
 
 ---
 
@@ -101,21 +130,38 @@ Does not store credentials. Does not refresh tokens. Does not know about encrypt
 
 ### Vault
 
-**Owns**: encrypted credential storage, expiry metadata.
+**Owns**: minimal credential storage interface.
 
-Verifies the signed principal chain token before serving any credential. Retrieves the credential from SQLite. Decrypts it in memory using the master key. Returns the plaintext value plus expiry metadata. Accepts write-back of refreshed credentials from the sidecar.
+Vault is intentionally small. It exposes only:
 
-Credential paths are user-scoped: `{user}/service/credential-name` (e.g., `manoj/gmail/access-token`). Isolation is enforced by the key itself, not only by code logic.
+```python
+vault.init()
+vault.health()
+vault.get(key)
+vault.put(key, value)
+vault.delete(key)
+vault.list(prefix)
+```
 
-**Encryption**: AES-256-GCM. 256-bit random master key. 96-bit random nonce per encryption. Authenticated encryption.
+Vault does not know about OAuth, providers, token expiry, refresh, policy, audit, or principal-chain semantics. It stores and retrieves credential records by key. Orchestrators decide which keys to read, whether access is allowed, whether a token must be refreshed, and what should be audited.
 
-**Master key storage**:
-- Primary: OS keychain (macOS Keychain, Linux Secret Service, Windows Credential Manager). Never written to disk.
-- Fallback: Local file at `~/.authsome/master.key` (mode 0600). Supported for CI and Docker environments where a keychain daemon is not available.
+**Backends**:
+- Dev/test: simple JSON or file-backed vault.
+- Local: encrypted SQLite key-value vault.
+- Production/self-managed: Postgres or another durable backend.
 
-**Storage backend**: SQLite with WAL mode. Per-user credential stores.
+The logical credential address is independent of physical storage. Conceptually, a credential is addressed by profile/user, provider/service, connection, and credential kind. A file backend may map that to nested directories. A KV backend may map it to a key such as `profile:<profile>:<provider>:connection:<name>`. A Postgres backend may map it to columns and indexes. The vault interface stays the same.
 
-Does not make access decisions. Does not refresh tokens. Does not know about the agent beyond verifying the token signature.
+**Encryption guidance**:
+- Agent identity gates access to the vault.
+- The agent identity key should not directly be the symmetric data encryption key.
+- Vault data should use a separate data encryption key (DEK).
+- The DEK is wrapped or unwrapped by agent identity material, OS keychain material, or backend-specific key management.
+- This allows identity rotation, recovery, and future multi-agent sharing without changing the vault API.
+
+For the local encrypted backend, the expected primitive remains AES-256-GCM with a 256-bit random data key and a 96-bit random nonce per encryption.
+
+Does not make access decisions. Does not refresh tokens. Does not know about the agent beyond whatever backend-specific key unwrapping is required to open the vault.
 
 ---
 
@@ -143,7 +189,7 @@ fresh_token, expires_at = auth.flows.refresh(
 
 **High level — stateful client (`AuthLayer`)**
 
-A convenience wrapper with vault dependency. Reads the credential from the vault, calls the stateless refresh if expired, writes the result back to the vault, returns a usable token. This is what library users call. The vault dependency lives here, not in the low-level flow.
+A convenience orchestrator with a vault dependency. Reads the credential from the vault, calls the stateless refresh if expired, writes the result back to the vault, returns a usable token. This is what library users call. The vault dependency lives here, not in the low-level flow.
 
 ```python
 # Called by library users
@@ -152,7 +198,7 @@ token = auth_layer.get_access_token("github", connection="main")
 
 **In sidecar mode**: the sidecar calls the low-level stateless refresh directly and handles vault write-back itself, keeping all orchestration in one place.
 
-**In library mode**: `AuthLayer` calls the low-level refresh internally and handles vault write-back. The caller does not think about it.
+**In library mode**: `AuthLayer` calls the low-level refresh internally and handles vault write-back through its injected vault. The caller does not think about it.
 
 **Acquisition flows**: PKCE (RFC 7636), Device Authorization Grant (RFC 8628), Dynamic Client Registration + PKCE, API Key.
 
@@ -173,7 +219,7 @@ Records every request through the stack: timestamp, agent, user, operation, reso
 
 ---
 
-## Call Graph (Sidecar Mode)
+## Target Call Graph (Sidecar Mode)
 
 ```
 agent
@@ -204,14 +250,14 @@ audit     ←  append-only log entry at every step
 | Sidecar | Identity, Policy, Vault, Auth (low-level), Audit | Agent (via HTTP_PROXY) |
 | Identity | OS keychain | Sidecar |
 | Policy | Nothing (receives identity as parameter) | Sidecar |
-| Vault | OS keychain (master key) | Sidecar |
+| Vault | Backend-specific storage and key management | Sidecar, AuthLayer |
 | Auth (low-level) | External token endpoint | Sidecar |
 | Auth (AuthLayer) | Vault, Auth (low-level) | Library callers |
 | Audit | Nothing | Sidecar |
 
 ---
 
-## Open Question: Library API Without Vault Dependency
+## Library API and Vault Dependency
 
 When authsome is used as a pure library and the caller does not want to bring the vault as a dependency — because they manage credentials themselves, run in a context without a local filesystem, or embed authsome in a larger system with its own secret store — the right API surface is not yet decided.
 
@@ -225,12 +271,12 @@ my_store.put("github/access-token", fresh)
 ```
 Maximally composable. Vault is not a dependency at all. The caller owns orchestration. Burden shifts to the caller.
 
-**Option B — AuthLayer accepts an injectable store interface**
+**Option B — AuthLayer accepts an injectable vault interface**
 ```python
-auth_layer = AuthLayer(store=my_store)  # store satisfies a protocol
+auth_layer = AuthLayer(vault=my_vault)  # vault satisfies the minimal protocol
 token = auth_layer.get_access_token("github")
 ```
-AuthLayer keeps its lifecycle management. The vault is one implementation of the store protocol. Callers can bring their own. This is the most ergonomic option for embedding.
+AuthLayer keeps its lifecycle management. The local encrypted vault is one implementation of the vault protocol. Callers can bring their own. This is the most ergonomic option for embedding.
 
 **Option C — AuthLayer operates on tokens, not a store; returns refreshed tokens to caller**
 ```python
@@ -240,7 +286,7 @@ Stateless at the AuthLayer level. Caller decides storage. Requires the caller to
 
 **The tension**: Option A is maximally composable but moves complexity to the caller. Option B keeps the lifecycle managed and is the most natural library API. Option C is a middle ground that avoids the vault dependency but still requires the caller to manage write-back.
 
-**This is unresolved.** The decision should be made before the public library API is published. Option B is the current working hypothesis.
+**Decision direction**: Option B is the preferred long-term shape. `AuthLayer` should accept an injectable vault interface. Option A remains available through low-level primitives for callers that want to own orchestration themselves.
 
 ---
 
@@ -257,20 +303,22 @@ authsome/
 │       ├── errors.py
 │       ├── utils.py
 │       │
-│       ├── sidecar/                # process lifecycle, subprocess, proxy wiring
-│       ├── identity/               # key generation, principal chain token
-│       ├── policy/                 # allow/deny evaluation
-│       ├── vault/                  # encrypted storage, keychain integration
+│       ├── sidecar/                # process lifecycle, subprocess, proxy wiring (planned name)
+│       ├── proxy/                  # alpha proxy implementation
+│       ├── identity/               # key generation, principal chain token (planned)
+│       ├── policy/                 # allow/deny evaluation (planned)
+│       ├── vault/                  # minimal storage interface + backends
 │       ├── auth/                   # token refresh, OAuth flows, AuthLayer
-│       └── audit/                  # append-only event log
+│       └── audit/                  # append-only event log (planned)
 │
 └── tests/
-    ├── test_sidecar.py
-    ├── test_identity.py
-    ├── test_policy.py
-    ├── test_vault.py
-    ├── test_auth.py
-    └── test_audit.py
+    ├── proxy/
+    ├── auth/
+    ├── vault/
+    ├── common/
+    ├── identity/                 # planned
+    ├── policy/                   # planned
+    └── audit/                    # planned
 ```
 
 ---
@@ -278,11 +326,13 @@ authsome/
 ## CLI
 
 ```bash
-authsome init              # generate identity keys, set up vault, store master key
+authsome init              # initialize local config, profile, and vault
 authsome login <provider>  # OAuth acquisition (PKCE / Device Code / DCR+PKCE / API Key)
 authsome run -- <command>  # start sidecar + agent, wire HTTP_PROXY automatically
-authsome status            # sidecar state, registered identities, vault health
-authsome audit             # tail the audit log
+authsome doctor            # vault/provider/profile health checks
+authsome whoami            # show local authsome context
+authsome status            # planned: sidecar state, registered identities, vault health
+authsome audit             # planned: tail the audit log
 ```
 
 ---
@@ -295,9 +345,9 @@ authsome audit             # tail the audit log
 | Key pair | Ed25519 | — |
 | Principal chain token | Local signed JWT, actor+subject claims | RFC 8693 Token Exchange |
 | Access control | TOML default-allow | Cedar (Amazon) |
-| Credential storage | SQLite, WAL mode | — |
+| Credential storage | Vault interface; local backend uses SQLite/WAL | JSON/file dev backend, Postgres backend |
 | Encryption at rest | AES-256-GCM, 256-bit key, 96-bit nonce | — |
-| Master key storage | OS keychain (primary), local file (fallback) | — |
+| Key access | Agent identity gates vault access; backend unwraps DEK | Multi-agent sharing and key rotation |
 | Token refresh | OAuth 2.0 (RFC 6749) | — |
 | Browser-less OAuth | Device Authorization Grant (RFC 8628) | — |
 | PKCE | RFC 7636 | — |
@@ -315,12 +365,12 @@ authsome audit             # tail the audit log
 
 ## Open Questions
 
-1. **Library API without vault dependency** — see dedicated section above. Option B (injectable store protocol) is the working hypothesis. Unresolved before public library API is published.
+1. **Vault protocol shape** — The intended public surface is `init`, `health`, `get`, `put`, `delete`, and `list`. The exact Python protocol types, sync/async split, error contract, and health-check shape still need to be finalized before broad public API use.
 
 2. **User token for multi-user** — OS-session derivation works for single-user local. Multi-user needs an explicit token mechanism. Not designed yet.
 
 3. **Cedar migration from TOML** — How do TOML default-allow rules map to Cedar entities when migrating? No migration plan yet.
 
-4. **Policy identity bootstrap** — Policy evaluates `can(agent, ...)` but needs to know the valid set of agent identities. The candidate answer: the sidecar resolves identity first, then passes it to policy as a parameter (not a lookup). This preserves the "no component calls another" rule. Not confirmed.
+4. **Policy identity bootstrap** — Policy evaluates `can(agent, ...)` but needs to know the valid set of agent identities. The candidate answer: the sidecar resolves identity first, then passes it to policy as a parameter (not a lookup). This preserves the "layers do not reach sideways" rule. Not confirmed.
 
-5. **Credential path migration** — Current storage uses `profile:<id>:<provider>:connection:<name>`. The canonical design uses `{user}/service/credential-name`. Migration strategy not yet written.
+5. **Credential address mapping** — The logical credential address should be stable across vault backends, but the physical key/path/schema is backend-specific. The current KV storage uses `profile:<id>:<provider>:connection:<name>` and remains valid for KV-style backends. The canonical logical address model and migration strategy are not finalized.
