@@ -123,6 +123,21 @@ class TestProviderDefinition:
         restored = ProviderDefinition.model_validate_json(json_str)
         assert restored.name == "test"
 
+    def test_docs_field_is_optional_and_parsed(self) -> None:
+        provider = ProviderDefinition.model_validate(
+            {
+                "schema_version": 1,
+                "name": "calendly",
+                "display_name": "Calendly",
+                "auth_type": "api_key",
+                "flow": "api_key",
+                "api_key": {"header_name": "Authorization", "header_prefix": "Bearer"},
+                "docs": "https://example.com/setup",
+            }
+        )
+
+        assert provider.docs == "https://example.com/setup"
+
 
 class TestSensitiveAnnotation:
     """Sensitive field annotation tests."""

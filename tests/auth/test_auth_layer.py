@@ -282,6 +282,49 @@ class TestAuthLayerLogin:
             assert creds.client_id == "cid"
             assert creds.client_secret is None
 
+    def test_login_api_key_bridge_includes_docs_instructions(self, auth: AuthLayer) -> None:
+        from authsome.auth.flows.base import FlowResult
+
+        provider = ProviderDefinition.model_validate(
+            {
+                "name": "docsapi",
+                "display_name": "Docs API",
+                "auth_type": "api_key",
+                "flow": "api_key",
+                "api_key": {"header_name": "Authorization", "header_prefix": "Bearer"},
+                "docs": "https://example.com/create-key",
+            }
+        )
+        auth.register_provider(provider)
+
+        mock_record = ConnectionRecord(
+            schema_version=2,
+            provider="docsapi",
+            profile="default",
+            connection_name="default",
+            auth_type=AuthType.API_KEY,
+            status=ConnectionStatus.CONNECTED,
+            api_key="sk-123",
+        )
+
+        with patch("authsome.auth._FLOW_HANDLERS") as handlers:
+            mock_handler = MagicMock()
+            mock_handler.authenticate.return_value = FlowResult(connection=mock_record)
+            handlers.get.return_value = lambda: mock_handler
+
+            with patch("authsome.auth.BridgeInputProvider") as bridge_cls:
+                bridge_instance = MagicMock()
+                bridge_instance.collect.return_value = {"api_key": "sk-123"}
+                bridge_cls.return_value = bridge_instance
+
+                auth.login("docsapi")
+
+                static_fields = bridge_cls.call_args.kwargs["static_fields"]
+                assert len(static_fields) == 1
+                assert static_fields[0]["type"] == "instructions"
+                assert static_fields[0]["label"] == "Instructions"
+                assert static_fields[0]["url"] == "https://example.com/create-key"
+
 
 class TestAuthLayerCredentials:
     """Credential retrieval tests."""

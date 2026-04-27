@@ -17,6 +17,11 @@ def test_find_free_port():
 
 def test_secure_input_bridge_success():
     fields = [
+        {
+            "type": "instructions",
+            "label": "Instructions",
+            "url": "https://example.com/oauth-app",
+        },
         {"name": "api_key", "label": "API Key", "type": "password"},
         {"name": "username", "label": "Username", "required": False},
     ]
@@ -28,6 +33,9 @@ def test_secure_input_bridge_success():
             assert response.status == 200
             html = response.read().decode("utf-8")
             assert "Test Auth" in html
+            assert "Instructions" in html
+            assert "Read setup docs" in html
+            assert "https://example.com/oauth-app" in html
             assert "API Key" in html
             assert "Username" in html
 

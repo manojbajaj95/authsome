@@ -289,6 +289,23 @@ class AuthLayer:
         logger.info("Login successful: provider={} connection={} profile={}", provider, connection_name, self._identity)
         return result.connection
 
+    @staticmethod
+    def _build_docs_hints(definition: ProviderDefinition, flow_type: FlowType) -> list[dict[str, Any]]:
+        """Convert provider docs URL into a bridge instruction block."""
+        if not definition.docs:
+            return []
+
+        if flow_type not in (FlowType.PKCE, FlowType.DEVICE_CODE, FlowType.DCR_PKCE, FlowType.API_KEY):
+            return []
+
+        return [
+            {
+                "type": "instructions",
+                "label": "Instructions",
+                "url": definition.docs,
+            }
+        ]
+
     # ── Token operations ──────────────────────────────────────────────────
 
     def get_access_token(self, provider: str, connection: str = "default") -> str:

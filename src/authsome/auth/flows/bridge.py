@@ -46,6 +46,10 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
             "border-radius: 4px; cursor: pointer; font-size: 16px; }",
             "button:hover { background-color: #0052a3; }",
             "button.copybtn { width: auto; padding: 8px 12px; font-size: 14px; flex-shrink: 0; }",
+            ".instructions { margin-bottom: 16px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; }",
+            ".instructions-title { margin: 0 0 8px; font-weight: 600; }",
+            ".instructions-links { margin: 0; padding-left: 20px; }",
+            ".instructions-links li { margin-bottom: 6px; }",
             "</style>",
             "</head><body>",
             f"<h2>{self.title}</h2>",
@@ -54,6 +58,18 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
 
         for field in self.fields:
             label = field["label"]
+            if field.get("type") == "instructions":
+                url = field.get("url")
+                if url:
+                    html.append("<div class='instructions'>")
+                    html.append(f"<p class='instructions-title'>{escape(label)}</p>")
+                    url_esc = escape(url, quote=True)
+                    html.append(
+                        "<ul class='instructions-links'>"
+                        f"<li><a href='{url_esc}' target='_blank' rel='noopener noreferrer'>Read setup docs</a></li>"
+                        "</ul></div>"
+                    )
+                continue
             if field.get("type") == "static":
                 val = field.get("value", "")
                 val_esc = escape(val, quote=True)

@@ -21,5 +21,6 @@
       "access_token": "KLAVIYO_OAUTH_ACCESS_TOKEN",
       "refresh_token": "KLAVIYO_OAUTH_REFRESH_TOKEN"
     }
-  }
+  },
+  "docs": "https://developers.klaviyo.com/en/docs/manage_your_app"
 }

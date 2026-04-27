@@ -13,5 +13,6 @@
     "env": {
       "api_key": "SENDGRID_API_KEY"
     }
-  }
+  },
+  "docs": "https://www.twilio.com/docs/sendgrid/ui/account-and-settings/api-keys"
 }

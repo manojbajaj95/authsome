@@ -61,6 +61,7 @@ class ProviderDefinition(BaseModel):
     oauth: OAuthConfig | None = None
     api_key: ApiKeyConfig | None = None
     export: ExportConfig | None = None
+    docs: str | None = None
     host_url: str | None = None
 
     metadata: dict[str, Any] = Field(default_factory=dict)
