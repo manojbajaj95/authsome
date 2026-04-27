@@ -6,18 +6,17 @@ No business logic lives here — only dependency wiring.
 
 from __future__ import annotations
 
-import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from loguru import logger
+
 if TYPE_CHECKING:
     from authsome.auth import AuthLayer
     from authsome.proxy.runner import ProxyRunner
     from authsome.vault import Vault
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass

@@ -12,13 +12,12 @@ All key schema decisions belong to the caller (AuthLayer).
 from __future__ import annotations
 
 import builtins
-import logging
 from pathlib import Path
+
+from loguru import logger
 
 from authsome.vault.crypto import VaultCrypto, create_crypto
 from authsome.vault.storage import SQLiteStorage
-
-logger = logging.getLogger(__name__)
 
 _DEFAULT_PROFILE = "default"
 
@@ -89,7 +88,7 @@ class Vault:
 
         # Touch master key (lazy init triggers key generation)
         _ = self.crypto
-        logger.info("Vault initialized at %s", self._home)
+        logger.info("Vault initialized at {}", self._home)
 
     def ensure_profile(self, profile: str) -> None:
         """Create a profile directory if it does not exist."""

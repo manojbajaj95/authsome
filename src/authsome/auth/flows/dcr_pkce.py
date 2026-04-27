@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import http.server
 import json
-import logging
 import secrets
 import threading
 import urllib.parse
@@ -15,6 +14,7 @@ from datetime import timedelta
 from typing import Any
 
 import requests as http_client
+from loguru import logger
 
 from authsome.auth.flows.base import AuthFlow, FlowResult
 from authsome.auth.models.connection import AccountInfo, ConnectionRecord, ProviderClientRecord
@@ -22,8 +22,6 @@ from authsome.auth.models.enums import AuthType, ConnectionStatus
 from authsome.auth.models.provider import ProviderDefinition
 from authsome.errors import AuthenticationFailedError, DiscoveryError
 from authsome.utils import utc_now
-
-logger = logging.getLogger(__name__)
 
 _CALLBACK_TIMEOUT_SECONDS = 300
 
@@ -54,7 +52,7 @@ class _CallbackHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body.encode("utf-8"))
 
     def log_message(self, format: str, *args: Any) -> None:
-        logger.debug("Callback server: %s", format % args)
+        logger.debug("Callback server: {}", format % args)
 
 
 def _generate_pkce() -> tuple[str, str]:

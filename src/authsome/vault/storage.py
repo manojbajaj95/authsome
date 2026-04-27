@@ -7,14 +7,13 @@ Uses WAL mode and fcntl advisory locking for concurrent safety.
 from __future__ import annotations
 
 import fcntl
-import logging
 import sqlite3
 from pathlib import Path
 from typing import IO
 
-from authsome.errors import StoreUnavailableError
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from authsome.errors import StoreUnavailableError
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS kv (
@@ -57,7 +56,7 @@ class SQLiteStorage:
             self._lock_fd = open(self._lock_path, "w")  # noqa: SIM115
             fcntl.flock(self._lock_fd, fcntl.LOCK_EX)
         except OSError as exc:
-            logger.warning("Advisory lock acquisition failed: %s", exc)
+            logger.warning("Advisory lock acquisition failed: {}", exc)
 
     def _release_lock(self) -> None:
         if self._lock_fd is not None:

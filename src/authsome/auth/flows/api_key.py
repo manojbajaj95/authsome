@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import logging
-
 from authsome.auth.flows.base import AuthFlow, FlowResult
 from authsome.auth.models.connection import AccountInfo, ConnectionRecord
 from authsome.auth.models.enums import AuthType, ConnectionStatus
 from authsome.auth.models.provider import ProviderDefinition
 from authsome.errors import AuthenticationFailedError
 from authsome.utils import utc_now
-
-logger = logging.getLogger(__name__)
 
 
 class ApiKeyFlow(AuthFlow):
