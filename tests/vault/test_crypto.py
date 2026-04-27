@@ -12,7 +12,7 @@ class TestLocalFileCrypto:
 
     @pytest.fixture
     def crypto(self, tmp_path: Path) -> LocalFileCrypto:
-        return LocalFileCrypto(tmp_path)
+        return LocalFileCrypto(tmp_path / "master.key")
 
     def test_encrypt_returns_string(self, crypto: LocalFileCrypto) -> None:
         result = crypto.encrypt("my-secret-token")
@@ -43,15 +43,16 @@ class TestLocalFileCrypto:
         assert e1 != e2  # different nonces
 
     def test_key_persistence(self, tmp_path: Path) -> None:
-        crypto1 = LocalFileCrypto(tmp_path)
+        key_file = tmp_path / "master.key"
+        crypto1 = LocalFileCrypto(key_file)
         encrypted = crypto1.encrypt("persist-test")
 
-        crypto2 = LocalFileCrypto(tmp_path)
+        crypto2 = LocalFileCrypto(key_file)
         decrypted = crypto2.decrypt(encrypted)
         assert decrypted == "persist-test"
 
     def test_master_key_file_created(self, tmp_path: Path) -> None:
-        _ = LocalFileCrypto(tmp_path)
+        _ = LocalFileCrypto(tmp_path / "master.key")
         key_file = tmp_path / "master.key"
         assert key_file.exists()
 
@@ -67,7 +68,7 @@ class TestLocalFileCrypto:
         key_file = tmp_path / "master.key"
         key_file.write_text("invalid json")
         with pytest.raises(EncryptionUnavailableError, match="Failed to read local key file"):
-            LocalFileCrypto(tmp_path)
+            LocalFileCrypto(tmp_path / "master.key")
 
     def test_chmod_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         import os
@@ -77,7 +78,7 @@ class TestLocalFileCrypto:
 
         monkeypatch.setattr(os, "chmod", mock_chmod)
         # Should not raise
-        _ = LocalFileCrypto(tmp_path)
+        _ = LocalFileCrypto(tmp_path / "master.key")
 
     def test_decrypt_malformed_ciphertext(self, crypto: LocalFileCrypto) -> None:
         from authsome.errors import EncryptionUnavailableError
@@ -95,7 +96,7 @@ class TestLocalFileCrypto:
         from authsome.errors import EncryptionUnavailableError
 
         # Encrypt with one key, try to decrypt with a different key instance
-        other_crypto = LocalFileCrypto(tmp_path / "other")
+        other_crypto = LocalFileCrypto(tmp_path / "other" / "master.key")
         ct = other_crypto.encrypt("secret")
         with pytest.raises(EncryptionUnavailableError, match="Decryption failed"):
             crypto.decrypt(ct)

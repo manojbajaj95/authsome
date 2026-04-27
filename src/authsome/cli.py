@@ -108,34 +108,6 @@ def cli(ctx: click.Context) -> None:
     logging.getLogger("authsome").setLevel(logging.WARNING if ctx.obj.quiet else logging.INFO)
 
 
-@cli.command()
-@common_options
-@pass_ctx
-@handle_errors
-def init(ctx_obj: ContextObj) -> None:
-    """Initialize the authsome root directory and default profile."""
-    actx = ctx_obj.initialize()
-    actx.vault.init()
-    actx.auth.create_profile("default", description="Default local profile")
-
-    home = actx.vault._home
-    version_file = home / "version"
-    if not version_file.exists():
-        version_file.write_text("2\n", encoding="utf-8")
-
-    from authsome.auth.models.config import GlobalConfig
-
-    config_file = home / "config.json"
-    if not config_file.exists():
-        config = GlobalConfig()
-        config_file.write_text(config.model_dump_json(indent=2), encoding="utf-8")
-
-    if ctx_obj.json_output:
-        ctx_obj.print_json({"status": "initialized", "home": str(home)})
-    else:
-        ctx_obj.echo(f"Initialized authsome at {home}", color="green")
-
-
 @cli.command(name="list")
 @common_options
 @pass_ctx
@@ -401,7 +373,7 @@ def whoami(ctx_obj: ContextObj) -> None:
     actx = ctx_obj.initialize()
     from authsome.auth.models.config import GlobalConfig
 
-    home = actx.vault._home
+    home = actx.home
     config_path = home / "config.json"
     config = GlobalConfig()
     if config_path.exists():
@@ -428,18 +400,18 @@ def whoami(ctx_obj: ContextObj) -> None:
 def doctor(ctx_obj: ContextObj) -> None:
     """Run health checks on directory layout and encryption."""
     actx = ctx_obj.initialize()
-    results = actx.auth.doctor(actx.vault._home)
+    results = actx.doctor()
 
     if ctx_obj.json_output:
         ctx_obj.print_json(results)
     else:
         all_ok = True
         for key, val in results.items():
-            if key in ["issues", "providers_count"]:
+            if key in ["issues", "providers_count", "profiles_count"]:
                 continue
             status = "OK" if val else "FAIL"
             color = "green" if val else "red"
-            if not val:
+            if isinstance(val, bool) and not val:
                 all_ok = False
             ctx_obj.echo(f"{key}: ", nl=False)
             ctx_obj.echo(status, color=color)

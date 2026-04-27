@@ -59,10 +59,10 @@ def _decode(token: str) -> tuple[bytes, bytes]:
 
 
 class LocalFileCrypto(VaultCrypto):
-    """AES-256-GCM with master key stored as a local file at ~/.authsome/master.key."""
+    """AES-256-GCM with master key stored as a local file."""
 
-    def __init__(self, authsome_home: Path) -> None:
-        self._key_file = authsome_home / "master.key"
+    def __init__(self, key_file: Path) -> None:
+        self._key_file = key_file
         self._aesgcm = self._load_or_create()
 
     def _load_or_create(self) -> AESGCM:
@@ -152,8 +152,10 @@ class KeyringCrypto(VaultCrypto):
             raise EncryptionUnavailableError(f"Decryption failed: {exc}") from exc
 
 
-def create_crypto(home: Path, mode: str = "local_key") -> VaultCrypto:
+def create_crypto(key_file: Path | None, mode: str = "local_key") -> VaultCrypto:
     """Factory: return the appropriate VaultCrypto backend for the given mode."""
     if mode == "keyring":
         return KeyringCrypto()
-    return LocalFileCrypto(home)
+    if key_file is None:
+        raise ValueError("key_file is required for 'local_key' mode")
+    return LocalFileCrypto(key_file)

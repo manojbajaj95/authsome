@@ -24,23 +24,6 @@ def mock_ctx():
         yield ctx
 
 
-def test_init_command(runner, mock_ctx, tmp_path):
-    mock_ctx.vault._home = tmp_path
-    result = runner.invoke(cli, ["init"])
-    assert result.exit_code == 0
-    assert str(tmp_path) in result.output
-    mock_ctx.vault.init.assert_called_once()
-    mock_ctx.auth.create_profile.assert_called_once()
-
-
-def test_init_json(runner, mock_ctx, tmp_path):
-    mock_ctx.vault._home = tmp_path
-    result = runner.invoke(cli, ["init", "--json"])
-    assert result.exit_code == 0
-    data = json.loads(result.output)
-    assert data["status"] == "initialized"
-
-
 def test_list_command(runner, mock_ctx):
     mock_ctx.auth.list_connections.return_value = [
         {
@@ -394,7 +377,7 @@ def test_register_bad_json(runner, mock_ctx, tmp_path):
 
 
 def test_whoami(runner, mock_ctx, tmp_path):
-    mock_ctx.vault._home = tmp_path
+    mock_ctx.home = tmp_path
     result = runner.invoke(cli, ["whoami"])
     assert result.exit_code == 0
     assert str(tmp_path) in result.output
@@ -402,7 +385,7 @@ def test_whoami(runner, mock_ctx, tmp_path):
 
 
 def test_whoami_with_config(runner, mock_ctx, tmp_path):
-    mock_ctx.vault._home = tmp_path
+    mock_ctx.home = tmp_path
     config_data = {"spec_version": 1, "default_profile": "default", "encryption": {"mode": "keyring"}}
     (tmp_path / "config.json").write_text(json.dumps(config_data))
 
@@ -413,7 +396,7 @@ def test_whoami_with_config(runner, mock_ctx, tmp_path):
 
 
 def test_doctor(runner, mock_ctx):
-    mock_ctx.auth.doctor.return_value = {
+    mock_ctx.doctor.return_value = {
         "home_exists": True,
         "encryption": False,
         "issues": ["error"],
@@ -425,7 +408,7 @@ def test_doctor(runner, mock_ctx):
 
 
 def test_doctor_json(runner, mock_ctx):
-    mock_ctx.auth.doctor.return_value = {
+    mock_ctx.doctor.return_value = {
         "home_exists": True,
         "encryption": True,
         "issues": [],
@@ -437,7 +420,7 @@ def test_doctor_json(runner, mock_ctx):
 
 
 def test_doctor_all_ok(runner, mock_ctx):
-    mock_ctx.auth.doctor.return_value = {
+    mock_ctx.doctor.return_value = {
         "home_exists": True,
         "encryption": True,
         "issues": [],

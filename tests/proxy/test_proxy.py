@@ -9,20 +9,15 @@ import pytest
 
 from authsome.auth import AuthLayer
 from authsome.auth.input_provider import MockInputProvider
-from authsome.auth.providers.registry import ProviderRegistry
+from authsome.context import AuthsomeContext
 from authsome.proxy.router import RouteMatch
 from authsome.proxy.server import AuthProxyAddon, _route
-from authsome.vault import Vault
 
 
 def _make_auth(tmp_path: Path) -> AuthLayer:
     home = tmp_path / ".authsome"
-    vault = Vault(home)
-    vault.init()
-    registry = ProviderRegistry(home)
-    layer = AuthLayer(vault=vault, registry=registry, identity="default")
-    layer.create_profile("default")
-    return layer
+    actx = AuthsomeContext.create(home=home)
+    return actx.auth
 
 
 # ── Routing function tests ────────────────────────────────────────────────
