@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -16,6 +16,8 @@ class OAuthConfig(BaseModel):
     token_url: str
     revocation_url: str | None = None
     device_authorization_url: str | None = None
+    #: ``json`` = poll token URL with ``POST`` JSON body ``{"device_code": "..."}`` (e.g. Postiz CLI auth).
+    device_token_request: Literal["oauth2_form", "json"] = "oauth2_form"
     scopes: list[str] = Field(default_factory=list)
     pkce: bool = True
     supports_device_flow: bool = False

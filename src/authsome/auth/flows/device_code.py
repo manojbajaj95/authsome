@@ -40,10 +40,7 @@ class DeviceCodeFlow(AuthFlow):
             raise AuthenticationFailedError(
                 "Provider does not have a device_authorization_url configured.", provider=provider.name
             )
-        if not client_id:
-            raise AuthenticationFailedError("Device code flow requires a client_id.", provider=provider.name)
-
-        effective_scopes = scopes or provider.oauth.scopes or []
+        effective_scopes = list(scopes) if scopes is not None else list(provider.oauth.scopes or [])
         device_data = self._request_device_code(provider=provider, client_id=client_id, scopes=effective_scopes)
 
         device_code = device_data.get("device_code")
@@ -100,10 +97,14 @@ class DeviceCodeFlow(AuthFlow):
             )
         )
 
-    def _request_device_code(self, provider: ProviderDefinition, client_id: str, scopes: list[str]) -> dict[str, Any]:
+    def _request_device_code(
+        self, provider: ProviderDefinition, client_id: str | None, scopes: list[str]
+    ) -> dict[str, Any]:
         assert provider.oauth is not None
         assert provider.oauth.device_authorization_url is not None
-        payload: dict[str, str] = {"client_id": client_id}
+        payload: dict[str, str] = {}
+        if client_id:
+            payload["client_id"] = client_id
         if scopes:
             payload["scope"] = " ".join(scopes)
         try:
@@ -127,7 +128,7 @@ class DeviceCodeFlow(AuthFlow):
     def _poll_for_token(
         self,
         provider: ProviderDefinition,
-        client_id: str,
+        client_id: str | None,
         client_secret: str | None,
         device_code: str,
         interval: int,
@@ -137,20 +138,31 @@ class DeviceCodeFlow(AuthFlow):
         poll_interval = max(interval, 1)
         deadline = time.monotonic() + expires_in
 
+        use_json = provider.oauth.device_token_request == "json"
+
         while time.monotonic() < deadline:
             time.sleep(poll_interval)
-            payload: dict[str, str] = {
-                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
-                "device_code": device_code,
-                "client_id": client_id,
-            }
-            if client_secret:
-                payload["client_secret"] = client_secret
 
             try:
-                resp = requests.post(
-                    provider.oauth.token_url, data=payload, headers={"Accept": "application/json"}, timeout=30
-                )
+                if use_json:
+                    resp = requests.post(
+                        provider.oauth.token_url,
+                        json={"device_code": device_code},
+                        headers={"Accept": "application/json", "Content-Type": "application/json"},
+                        timeout=30,
+                    )
+                else:
+                    payload: dict[str, str] = {
+                        "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                        "device_code": device_code,
+                    }
+                    if client_id:
+                        payload["client_id"] = client_id
+                    if client_secret:
+                        payload["client_secret"] = client_secret
+                    resp = requests.post(
+                        provider.oauth.token_url, data=payload, headers={"Accept": "application/json"}, timeout=30
+                    )
             except requests.RequestException as exc:
                 logger.warning("Token poll request failed: {}, retrying...", exc)
                 continue

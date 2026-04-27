@@ -1,0 +1,24 @@
+{
+    "schema_version": 1,
+    "name": "postiz",
+    "display_name": "Postiz",
+    "auth_type": "oauth2",
+    "flow": "device_code",
+    "host_url": "api.postiz.com",
+    "oauth": {
+      "authorization_url": "https://platform.postiz.com/oauth/authorize",
+      "token_url": "https://cli-auth.postiz.com/device/token",
+      "revocation_url": null,
+      "device_authorization_url": "https://cli-auth.postiz.com/device/code",
+      "device_token_request": "json",
+      "scopes": [],
+      "pkce": true,
+      "supports_device_flow": true,
+      "supports_dcr": false
+    },
+    "export": {
+      "env": {
+        "access_token": "POSTIZ_ACCESS_TOKEN"
+      }
+    }
+  } 

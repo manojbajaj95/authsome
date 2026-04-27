@@ -45,12 +45,60 @@ def test_missing_device_url():
         flow.authenticate(provider, "default", "default", client_id="cid")
 
 
-def test_missing_client_id():
+def test_authenticate_without_client_id_succeeds():
+    """Device flow allows omitted client_id for public / mediated providers."""
     provider = _make_provider()
     flow = DeviceCodeFlow()
 
-    with pytest.raises(AuthenticationFailedError, match="requires a client_id"):
-        flow.authenticate(provider, "default", "default")
+    device_resp = MagicMock()
+    device_resp.json.return_value = {
+        "device_code": "dc",
+        "user_code": "uc",
+        "verification_uri": "http://uri",
+        "expires_in": 300,
+        "interval": 1,
+    }
+    token_success = MagicMock()
+    token_success.status_code = 200
+    token_success.json.return_value = {"access_token": "acc"}
+
+    with patch("authsome.auth.flows.device_code.requests.post", side_effect=[device_resp, token_success]):
+        with patch("authsome.auth.flows.device_code.time.sleep"):
+            with patch("authsome.auth.flows.device_code.time.monotonic", side_effect=[0, 0]):
+                result = flow.authenticate(provider, "default", "default", client_id=None, scopes=None)
+
+    assert result.connection.status == ConnectionStatus.CONNECTED
+    assert result.connection.access_token == "acc"
+
+
+def test_json_device_token_request_uses_json_body():
+    provider = _make_provider()
+    assert provider.oauth is not None
+    provider.oauth.device_token_request = "json"
+    flow = DeviceCodeFlow()
+
+    device_resp = MagicMock()
+    device_resp.json.return_value = {
+        "device_code": "dc",
+        "user_code": "uc",
+        "verification_uri": "http://uri",
+        "expires_in": 300,
+        "interval": 1,
+    }
+    token_success = MagicMock()
+    token_success.status_code = 200
+    token_success.json.return_value = {"access_token": "tok"}
+
+    mock_post = MagicMock(side_effect=[device_resp, token_success])
+    with patch("authsome.auth.flows.device_code.requests.post", mock_post):
+        with patch("authsome.auth.flows.device_code.time.sleep"):
+            with patch("authsome.auth.flows.device_code.time.monotonic", side_effect=[0, 0]):
+                flow.authenticate(provider, "default", "default", client_id=None)
+
+    assert mock_post.call_count == 2
+    second = mock_post.call_args_list[1]
+    assert second.kwargs.get("json") == {"device_code": "dc"}
+    assert "data" not in second.kwargs or second.kwargs.get("data") is None
 
 
 def test_request_device_code_http_error():

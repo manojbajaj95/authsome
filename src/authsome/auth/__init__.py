@@ -196,9 +196,21 @@ class AuthLayer:
                 )
             )
 
-        if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE) and not flow_client_id:
+        if flow_type == FlowType.PKCE and not flow_client_id:
             static_hints.append({"type": "static", "label": "Redirect URL", "value": "http://127.0.0.1:7999/callback"})
             fields_to_collect.append(InputField(name="client_id", label="Client ID", secret=False))
+            fields_to_collect.append(
+                InputField(name="client_secret", label="Client Secret (Optional)", secret=True, default="")
+            )
+        elif flow_type == FlowType.DEVICE_CODE and not flow_client_id:
+            fields_to_collect.append(
+                InputField(
+                    name="client_id",
+                    label="Client ID (leave blank for public device flow)",
+                    secret=False,
+                    default="",
+                )
+            )
             fields_to_collect.append(
                 InputField(name="client_secret", label="Client Secret (Optional)", secret=True, default="")
             )
