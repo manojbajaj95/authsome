@@ -3,7 +3,7 @@
   "name": "github",
   "display_name": "GitHub",
   "auth_type": "oauth2",
-  "flow": "device_code",
+  "flow": "pkce",
   "oauth": {
     "base_url": "https://github.com",
     "authorization_url": "{base_url}/login/oauth/authorize",
