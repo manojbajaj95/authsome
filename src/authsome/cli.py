@@ -206,12 +206,19 @@ def list_cmd(ctx_obj: ContextObj) -> None:
 @click.option("--connection", default="default", help="Connection name.")
 @click.option("--flow", help="Authentication flow override.")
 @click.option("--scopes", help="Comma-separated scopes to request.")
+@click.option("--base-url", help="Base URL for the provider (e.g. for GitHub Enterprise).")
 @click.option("--force", is_flag=True, help="Overwrite an existing connection if it already exists.")
 @common_options
 @pass_ctx
 @handle_errors
 def login(
-    ctx_obj: ContextObj, provider: str, connection: str, flow: str | None, scopes: str | None, force: bool
+    ctx_obj: ContextObj,
+    provider: str,
+    connection: str,
+    flow: str | None,
+    scopes: str | None,
+    base_url: str | None,
+    force: bool,
 ) -> None:
     """Authenticate with a provider using its configured flow."""
     actx = ctx_obj.initialize()
@@ -224,7 +231,12 @@ def login(
         ctx_obj.echo(f"Starting login for {provider}...", color="cyan")
 
     record = actx.auth.login(
-        provider=provider, connection_name=connection, scopes=scope_list, flow_override=flow_enum, force=force
+        provider=provider,
+        connection_name=connection,
+        scopes=scope_list,
+        flow_override=flow_enum,
+        force=force,
+        base_url=base_url,
     )
 
     if ctx_obj.json_output:

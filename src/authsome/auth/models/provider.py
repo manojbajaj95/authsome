@@ -21,6 +21,7 @@ class OAuthConfig(BaseModel):
     supports_device_flow: bool = False
     supports_dcr: bool = False
     registration_endpoint: str | None = None
+    base_url: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -63,3 +64,34 @@ class ProviderDefinition(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"extra": "allow"}
+
+    def resolve_urls(self, base_url: str | None = None) -> ProviderDefinition:
+        """Return a new ProviderDefinition with {base_url} templates resolved."""
+        # Use provided base_url or fall back to the one in oauth config
+        resolved_base_url = base_url or (self.oauth.base_url if self.oauth else None)
+        if not resolved_base_url:
+            return self
+
+        # Create a copy
+        resolved = self.model_copy(deep=True)
+
+        def resolve(url: str | None) -> str | None:
+            if url and "{base_url}" in url:
+                return url.replace("{base_url}", resolved_base_url.rstrip("/"))
+            return url
+
+        # Resolve OAuth URLs
+        if resolved.oauth:
+            resolved.oauth.authorization_url = (
+                resolve(resolved.oauth.authorization_url) or resolved.oauth.authorization_url
+            )
+            resolved.oauth.token_url = resolve(resolved.oauth.token_url) or resolved.oauth.token_url
+            resolved.oauth.revocation_url = resolve(resolved.oauth.revocation_url)
+            resolved.oauth.device_authorization_url = resolve(resolved.oauth.device_authorization_url)
+            if resolved.oauth.registration_endpoint:
+                resolved.oauth.registration_endpoint = resolve(resolved.oauth.registration_endpoint)
+
+        # Resolve host_url if it contains the template
+        resolved.host_url = resolve(resolved.host_url) or resolved.host_url
+
+        return resolved

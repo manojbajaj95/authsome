@@ -154,6 +154,7 @@ class AuthLayer:
         flow_override: FlowType | None = None,
         force: bool = False,
         input_provider: InputProvider | None = None,
+        base_url: str | None = None,
     ) -> ConnectionRecord:
         definition = self.get_provider(provider)
 
@@ -177,12 +178,23 @@ class AuthLayer:
 
         flow_client_id = client_record.client_id if client_record else None
         flow_client_secret = client_record.client_secret if client_record else None
+        flow_base_url = base_url or (client_record.base_url if client_record else None)
         flow_api_key = None
         persisted_scopes = client_record.scopes if client_record else None
 
         # Build list of fields that still need to be collected
         fields_to_collect: list[InputField] = []
         static_hints: list[dict] = []  # display-only hints shown in the bridge form
+
+        if definition.oauth and definition.oauth.base_url and not flow_base_url:
+            fields_to_collect.append(
+                InputField(
+                    name="base_url",
+                    label="Base URL",
+                    secret=False,
+                    default=definition.oauth.base_url,
+                )
+            )
 
         if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE) and not flow_client_id:
             static_hints.append({"type": "static", "label": "Redirect URL", "value": "http://127.0.0.1:7999/callback"})
@@ -213,6 +225,9 @@ class AuthLayer:
             if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE, FlowType.DCR_PKCE):
                 if client_record is None:
                     client_record = ProviderClientRecord(profile=self._identity, provider=provider)
+                if inputs.get("base_url"):
+                    flow_base_url = inputs["base_url"]
+                    client_record.base_url = flow_base_url
                 if inputs.get("client_id"):
                     flow_client_id = inputs["client_id"]
                     client_record.client_id = flow_client_id
@@ -234,8 +249,11 @@ class AuthLayer:
             else (client_record.scopes if client_record and client_record.scopes is not None else None)
         )
 
+        # Resolve URLs if base_url is present
+        resolved_definition = definition.resolve_urls(flow_base_url)
+
         result = handler.authenticate(
-            provider=definition,
+            provider=resolved_definition,
             profile=self._identity,
             connection_name=connection_name,
             scopes=final_scopes,
@@ -252,6 +270,7 @@ class AuthLayer:
             client_record.client_secret = result.client_record.client_secret
             self._save_provider_client_credentials(client_record)
 
+        result.connection.base_url = flow_base_url
         self._save_connection(result.connection)
         self._update_provider_metadata(provider, connection_name)
 
@@ -297,16 +316,15 @@ class AuthLayer:
         except ConnectionNotFoundError:
             return
 
-        if (
-            record.auth_type == AuthType.OAUTH2
-            and definition.oauth
-            and definition.oauth.revocation_url
-            and record.access_token
-        ):
-            try:
-                http_client.post(definition.oauth.revocation_url, data={"token": record.access_token}, timeout=15)
-            except Exception as exc:
-                logger.warning("Remote revocation failed (continuing): {}", exc)
+        if record.auth_type == AuthType.OAUTH2 and record.access_token:
+            resolved_definition = definition.resolve_urls(record.base_url)
+            if resolved_definition.oauth and resolved_definition.oauth.revocation_url:
+                try:
+                    http_client.post(
+                        resolved_definition.oauth.revocation_url, data={"token": record.access_token}, timeout=15
+                    )
+                except Exception as exc:
+                    logger.warning("Remote revocation failed (continuing): {}", exc)
 
         key = build_store_key(
             profile=self._identity, provider=provider, record_type="connection", connection=connection
@@ -526,9 +544,14 @@ class AuthLayer:
         if client_secret:
             payload["client_secret"] = client_secret
 
+        base_url = record.base_url or (client_record.base_url if client_record else None)
+        resolved_definition = definition.resolve_urls(base_url)
+        if not resolved_definition.oauth:
+            raise RefreshFailedError("Resolved provider missing OAuth configuration", provider=provider_name)
+
         try:
             resp = http_client.post(
-                definition.oauth.token_url,
+                resolved_definition.oauth.token_url,
                 data=payload,
                 headers={"Accept": "application/json"},
                 timeout=30,

@@ -95,6 +95,8 @@ class ProviderRegistry:
 
     @staticmethod
     def _validate_url(url: str, field_name: str, provider_name: str) -> None:
+        if "{base_url}" in url:
+            return
         parsed = urlparse(url)
         if not parsed.scheme or not parsed.netloc:
             raise InvalidProviderSchemaError(f"Invalid URL for '{field_name}': {url}", provider=provider_name)

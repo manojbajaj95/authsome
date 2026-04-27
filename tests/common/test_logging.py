@@ -39,7 +39,7 @@ def test_cli_verbose_flag_does_not_crash(tmp_path):
         ctx = MagicMock()
         ctx.vault._home = tmp_path
         mock_cls.create.return_value = ctx
-        result = runner.invoke(cli, ["--verbose", "init"])
+        result = runner.invoke(cli, ["--verbose", "whoami"])
     assert result.exit_code == 0, result.output
 
 
@@ -57,6 +57,6 @@ def test_cli_log_file_creates_file(tmp_path):
         ctx = MagicMock()
         ctx.vault._home = tmp_path
         mock_cls.create.return_value = ctx
-        result = runner.invoke(cli, ["--log-file", str(log_path), "init"])
+        result = runner.invoke(cli, ["--log-file", str(log_path), "whoami"])
     assert result.exit_code == 0, result.output
     assert log_path.exists(), "Log file should have been created"

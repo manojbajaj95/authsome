@@ -112,6 +112,7 @@ def test_login_with_scopes_flag(runner, mock_ctx):
         scopes=["repo", "user"],
         flow_override=None,
         force=False,
+        base_url=None,
     )
 
 
