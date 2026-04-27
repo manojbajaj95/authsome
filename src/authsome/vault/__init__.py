@@ -16,8 +16,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from loguru import logger
-
 from authsome.vault.storage import SQLiteStorage
 
 if TYPE_CHECKING:
@@ -80,36 +78,6 @@ class Vault:
     def list(self, prefix: str = "", *, profile: str = _DEFAULT_PROFILE) -> builtins.list[str]:
         """List all keys matching a prefix."""
         return self._storage(profile).list_keys(prefix)
-
-    # ── Lifecycle ─────────────────────────────────────────────────────────
-
-    def init(self) -> None:
-        """
-        Initialize the authsome directory structure.
-
-        Creates ~/.authsome/, providers/, profiles/default/, and generates
-        the master key if it does not already exist.
-        """
-        self._home.mkdir(parents=True, exist_ok=True)
-        (self._home / "providers").mkdir(parents=True, exist_ok=True)
-        (self._home / "profiles" / _DEFAULT_PROFILE).mkdir(parents=True, exist_ok=True)
-
-        # Touch master key (lazy init triggers key generation)
-        _ = self.crypto
-        logger.info("Vault initialized at {}", self._home)
-
-    def ensure_profile(self, profile: str) -> None:
-        """Create a profile directory if it does not exist."""
-        (self._home / "profiles" / profile).mkdir(parents=True, exist_ok=True)
-
-    def profile_exists(self, profile: str) -> bool:
-        return (self._home / "profiles" / profile).exists()
-
-    def list_profile_dirs(self) -> builtins.list[Path]:
-        profiles_dir = self._home / "profiles"
-        if not profiles_dir.exists():
-            return []
-        return sorted(p for p in profiles_dir.iterdir() if p.is_dir())
 
     def close(self) -> None:
         """Close all open storage connections."""
