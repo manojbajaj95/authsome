@@ -11,6 +11,7 @@ import requests
 from loguru import logger
 
 from authsome.auth.flows.base import AuthFlow, FlowResult
+from authsome.auth.flows.bridge import DeviceCodeBridgeHandle, device_code_bridge
 from authsome.auth.models.connection import AccountInfo, ConnectionRecord
 from authsome.auth.models.enums import AuthType, ConnectionStatus
 from authsome.auth.models.provider import ProviderDefinition
@@ -65,18 +66,41 @@ class DeviceCodeFlow(AuthFlow):
         print(f"\n  Waiting for authorization (expires in {expires_in}s)...")
         print(f"{'=' * 60}\n")
 
-        token_data = self._poll_for_token(
-            provider=provider,
-            client_id=client_id,
-            client_secret=client_secret,
-            device_code=device_code,
-            interval=interval,
-            expires_in=expires_in,
-        )
+        bridge: DeviceCodeBridgeHandle | None = None
+        try:
+            bridge = device_code_bridge(
+                title=f"{provider.display_name} — Device Authorization",
+                user_code=user_code,
+                verification_uri=verification_uri,
+                verification_uri_complete=verification_uri_complete,
+            )
+        except Exception as exc:
+            # Bridge is best-effort; fall back to terminal output only.
+            logger.warning("Device authorization browser bridge unavailable: {}", exc)
+
+        try:
+            token_data = self._poll_for_token(
+                provider=provider,
+                client_id=client_id,
+                client_secret=client_secret,
+                device_code=device_code,
+                interval=interval,
+                expires_in=expires_in,
+            )
+        except AuthenticationFailedError as exc:
+            if bridge is not None:
+                state = "expired" if "expired" in str(exc).lower() else "failed"
+                bridge.notify(state, str(exc))
+                bridge.shutdown(delay=3.0)
+            raise
 
         now = utc_now()
         token_expires_in = token_data.get("expires_in")
         print(f"✓ Successfully authorized with {provider.display_name}!\n")
+
+        if bridge is not None:
+            bridge.notify("done", f"Authorized with {provider.display_name}. You can close this window.")
+            bridge.shutdown(delay=3.0)
 
         return FlowResult(
             connection=ConnectionRecord(
