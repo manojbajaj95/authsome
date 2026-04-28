@@ -49,14 +49,16 @@ def common_options(f):
     @click.option("--json", "json_output", is_flag=True, help="Output in machine-readable JSON format.")
     @click.option("--quiet", is_flag=True, help="Suppress non-essential output.")
     @click.option("--no-color", is_flag=True, help="Disable ANSI colors.")
+    @click.option("--no-audit", is_flag=True, help="Disable audit logging (with warning).")
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         json_output = kwargs.pop("json_output", False)
         quiet = kwargs.pop("quiet", False)
         no_color = kwargs.pop("no_color", False)
+        no_audit = kwargs.pop("no_audit", False)
         ctx = click.get_current_context()
         if getattr(ctx, "obj", None) is None:
-            ctx.obj = ContextObj(json_output, quiet, no_color)
+            ctx.obj = ContextObj(json_output, quiet, no_color, no_audit)
         else:
             if json_output:
                 ctx.obj.json_output = True
@@ -64,6 +66,8 @@ def common_options(f):
                 ctx.obj.quiet = True
             if no_color:
                 ctx.obj.no_color = True
+            if no_audit:
+                ctx.obj.no_audit = True
         return f(*args, **kwargs)
 
     return wrapper
@@ -130,13 +134,10 @@ def setup_logging(verbose: bool, log_file: Path | None) -> None:
     show_default=True,
     help="Path for the rotating log file. Pass empty string to disable.",
 )
-@click.option("--no-audit", is_flag=True, help="Disable audit logging (with warning).")
 @common_options
 @click.pass_context
-def cli(ctx: click.Context, verbose: bool, log_file: str, no_audit: bool) -> None:
+def cli(ctx: click.Context, verbose: bool, log_file: str) -> None:
     """Authsome: Portable local authentication library for AI agents and tools."""
-    if getattr(ctx, "obj", None) is not None:
-        ctx.obj.no_audit = no_audit
     resolved = Path(log_file) if log_file else None
     setup_logging(verbose=verbose, log_file=resolved)
 
