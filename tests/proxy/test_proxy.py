@@ -131,11 +131,13 @@ class TestProxyRunner:
         with patch("authsome.proxy.runner.subprocess.run") as run_mock:
             run_mock.return_value.returncode = 0
             with patch.object(runner, "_start_proxy", return_value=("http://127.0.0.1:8899", Mock())):
-                runner.run(["python", "-c", "print('ok')"])
+                with patch.object(runner, "_build_ca_bundle", return_value=Path("/tmp/fake-ca.pem")):
+                    runner.run(["python", "-c", "print('ok')"])
 
         env = run_mock.call_args.kwargs["env"]
         assert env["HTTP_PROXY"] == "http://127.0.0.1:8899"
         assert env["HTTPS_PROXY"] == "http://127.0.0.1:8899"
+        assert env["SSL_CERT_FILE"] == "/tmp/fake-ca.pem"
         assert "localhost" in env["NO_PROXY"]
         assert "127.0.0.1" in env["NO_PROXY"]
         assert env.get("OPENAI_API_KEY") != "authsome-proxy-managed"
@@ -151,7 +153,8 @@ class TestProxyRunner:
         with patch("authsome.proxy.runner.subprocess.run") as run_mock:
             run_mock.return_value.returncode = 0
             with patch.object(runner, "_start_proxy", return_value=("http://127.0.0.1:8899", Mock())):
-                runner.run(["python", "-c", "print('ok')"])
+                with patch.object(runner, "_build_ca_bundle", return_value=None):
+                    runner.run(["python", "-c", "print('ok')"])
 
         env = run_mock.call_args.kwargs["env"]
         assert env["OPENAI_API_KEY"] == "authsome-proxy-managed"
@@ -166,8 +169,9 @@ class TestProxyRunner:
 
         with patch("authsome.proxy.runner.subprocess.run", side_effect=RuntimeError("boom")):
             with patch.object(runner, "_start_proxy", return_value=("http://127.0.0.1:8899", server)):
-                with pytest.raises(RuntimeError, match="boom"):
-                    runner.run(["python", "-c", "print('ok')"])
+                with patch.object(runner, "_build_ca_bundle", return_value=None):
+                    with pytest.raises(RuntimeError, match="boom"):
+                        runner.run(["python", "-c", "print('ok')"])
 
         server.shutdown.assert_called_once()
 
