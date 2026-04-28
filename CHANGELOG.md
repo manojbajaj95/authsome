@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/manojbajaj95/authsome/compare/authsome-v0.2.0...authsome-v0.2.1) (2026-04-28)
+
+
+### Bug Fixes
+
+* set connection host_url directly from resolved definition ([149b347](https://github.com/manojbajaj95/authsome/commit/149b34705a8d107d99352faac15671c4ed975112))
+* set connection host_url directly from resolved definition ([b8f499a](https://github.com/manojbajaj95/authsome/commit/b8f499a7e12aa0b1f9e6e6f714d230f75afba23f))
+
 ## [0.2.0](https://github.com/manojbajaj95/authsome/compare/authsome-v0.1.12...authsome-v0.2.0) (2026-04-28)
 
 
