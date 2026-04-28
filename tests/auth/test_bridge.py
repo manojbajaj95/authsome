@@ -6,7 +6,12 @@ from unittest.mock import patch
 
 import pytest
 
-from authsome.auth.flows.bridge import _BridgeHandler, _find_free_port, secure_input_bridge
+from authsome.auth.flows.bridge import (
+    _BridgeHandler,
+    _find_free_port,
+    device_code_bridge,
+    secure_input_bridge,
+)
 
 
 def test_find_free_port():
@@ -68,3 +73,58 @@ def test_secure_input_bridge_timeout():
 def test_log_message():
     handler = _BridgeHandler.__new__(_BridgeHandler)
     handler.log_message("test %s", "arg")
+
+
+def test_device_code_bridge_renders_url_and_code():
+    """Browser sees the user code, verification URL, and copy button."""
+    captured: dict[str, str] = {}
+
+    def fake_open(url: str) -> bool:
+        captured["url"] = url
+        with urllib.request.urlopen(url) as response:
+            assert response.status == 200
+            captured["html"] = response.read().decode("utf-8")
+        return True
+
+    with patch("authsome.auth.flows.bridge.webbrowser.open", side_effect=fake_open):
+        handle = device_code_bridge(
+            title="Postiz — Device Authorization",
+            user_code="WDJB-MJHT",
+            verification_uri="https://postiz.example.com/device",
+            verification_uri_complete="https://postiz.example.com/device?code=WDJB-MJHT",
+        )
+
+    try:
+        html = captured["html"]
+        assert "Postiz — Device Authorization" in html
+        assert "WDJB-MJHT" in html
+        assert "postiz.example.com/device?code=WDJB-MJHT" in html
+        assert "Copy" in html
+    finally:
+        handle.shutdown()
+
+
+def test_device_code_bridge_open_browser_failure_is_swallowed():
+    """If webbrowser.open raises, the bridge still starts and remains usable."""
+    with patch("authsome.auth.flows.bridge.webbrowser.open", side_effect=RuntimeError("nope")):
+        handle = device_code_bridge(
+            title="Test",
+            user_code="ABCD-1234",
+            verification_uri="https://example.com/device",
+        )
+    try:
+        with urllib.request.urlopen(handle.url) as response:
+            assert response.status == 200
+    finally:
+        handle.shutdown()
+
+
+def test_device_code_bridge_shutdown_is_idempotent():
+    with patch("authsome.auth.flows.bridge.webbrowser.open"):
+        handle = device_code_bridge(
+            title="Test",
+            user_code="X",
+            verification_uri="https://example.com/device",
+        )
+    handle.shutdown()
+    handle.shutdown()  # second call must be a no-op
