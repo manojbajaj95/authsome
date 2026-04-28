@@ -87,20 +87,13 @@ class DeviceCodeFlow(AuthFlow):
                 interval=interval,
                 expires_in=expires_in,
             )
-        except AuthenticationFailedError as exc:
+        finally:
             if bridge is not None:
-                state = "expired" if "expired" in str(exc).lower() else "failed"
-                bridge.notify(state, str(exc))
-                bridge.shutdown(delay=3.0)
-            raise
+                bridge.shutdown()
 
         now = utc_now()
         token_expires_in = token_data.get("expires_in")
         print(f"✓ Successfully authorized with {provider.display_name}!\n")
-
-        if bridge is not None:
-            bridge.notify("done", f"Authorized with {provider.display_name}. You can close this window.")
-            bridge.shutdown(delay=3.0)
 
         return FlowResult(
             connection=ConnectionRecord(

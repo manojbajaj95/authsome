@@ -11,7 +11,6 @@ stdout.
 """
 
 import http.server
-import json as json_lib
 import socket
 import threading
 import urllib.parse
@@ -176,30 +175,14 @@ def secure_input_bridge(title: str, fields: list[dict[str, Any]]) -> dict[str, s
 
 
 class _DeviceBridgeHandler(http.server.BaseHTTPRequestHandler):
-    """HTTP handler that renders device-flow instructions and serves a status feed."""
+    """HTTP handler that renders the device-flow URL + user code."""
 
     title: str = "Device Authorization"
     user_code: str = ""
     verification_uri: str = ""
     verification_uri_complete: str | None = None
-    state: str = "pending"  # pending | done | failed | expired
-    state_message: str = ""
 
     def do_GET(self) -> None:
-        if self.path.rstrip("/") == "/status":
-            self._serve_status()
-            return
-        self._serve_page()
-
-    def _serve_status(self) -> None:
-        payload = json_lib.dumps({"state": _DeviceBridgeHandler.state, "message": _DeviceBridgeHandler.state_message})
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(payload.encode("utf-8"))
-
-    def _serve_page(self) -> None:
         title_esc = escape(self.title)
         code_esc = escape(self.user_code, quote=True)
         verify_url = self.verification_uri_complete or self.verification_uri
@@ -223,10 +206,6 @@ a.verify {{ display: inline-block; margin-bottom: 16px; padding: 10px 16px;
   background: #0066cc; color: #fff; text-decoration: none; border-radius: 6px; }}
 a.verify:hover {{ background: #0052a3; }}
 .verify-url {{ color: #666; font-size: 12px; word-break: break-all; margin-bottom: 24px; }}
-#status {{ padding: 12px; border-radius: 6px; border: 1px solid #ddd; }}
-#status.pending {{ background: #fffbe6; border-color: #f5c518; }}
-#status.done {{ background: #e6ffed; border-color: #28a745; }}
-#status.failed, #status.expired {{ background: #ffeef0; border-color: #d73a49; }}
 .label {{ font-weight: 600; margin-bottom: 6px; display: block; }}
 </style></head>
 <body>
@@ -243,38 +222,6 @@ a.verify:hover {{ background: #0052a3; }}
     <button class='copybtn' type='button'
       onclick="navigator.clipboard.writeText(document.getElementById('user-code').value)">Copy</button>
   </div>
-
-  <div id='status' class='pending'>Waiting for authorization…</div>
-
-  <script>
-    (function () {{
-      const el = document.getElementById('status');
-      async function tick() {{
-        try {{
-          const r = await fetch('/status', {{ cache: 'no-store' }});
-          const j = await r.json();
-          el.className = j.state;
-          if (j.state === 'pending') {{
-            el.textContent = 'Waiting for authorization…';
-          }} else if (j.state === 'done') {{
-            el.textContent = j.message || 'Authorized! You can close this window.';
-            return;
-          }} else if (j.state === 'expired') {{
-            el.textContent = j.message || 'Device code expired. Please retry.';
-            return;
-          }} else if (j.state === 'failed') {{
-            el.textContent = j.message || 'Authorization failed.';
-            return;
-          }}
-        }} catch (e) {{
-          el.textContent = 'Lost connection to local bridge.';
-          return;
-        }}
-        setTimeout(tick, 2000);
-      }}
-      tick();
-    }})();
-  </script>
 </body></html>
 """
 
@@ -297,28 +244,16 @@ class DeviceCodeBridgeHandle:
         self._shutdown_started = False
         self.url = url
 
-    def notify(self, state: str, message: str = "") -> None:
-        """Update the state polled by the browser page (pending|done|failed|expired)."""
-        _DeviceBridgeHandler.state = state
-        _DeviceBridgeHandler.state_message = message
-
-    def shutdown(self, delay: float = 0.0) -> None:
-        """Stop the bridge server. ``delay`` lets the browser poll once more first."""
+    def shutdown(self) -> None:
+        """Stop the bridge server."""
         if self._shutdown_started:
             return
         self._shutdown_started = True
-
-        def _stop() -> None:
-            try:
-                self._server.shutdown()
-                self._server.server_close()
-            except Exception:
-                logger.debug("Device bridge shutdown raised", exc_info=True)
-
-        if delay > 0:
-            threading.Timer(delay, _stop).start()
-        else:
-            _stop()
+        try:
+            self._server.shutdown()
+            self._server.server_close()
+        except Exception:
+            logger.debug("Device bridge shutdown raised", exc_info=True)
 
 
 def device_code_bridge(
@@ -331,15 +266,12 @@ def device_code_bridge(
 ) -> DeviceCodeBridgeHandle:
     """Start a local bridge that displays a device-authorization code in the browser.
 
-    Returns a handle the caller can use to update the page's status (pending / done /
-    failed / expired) and to shut the server down once polling completes.
+    Returns a handle whose ``shutdown()`` stops the server once polling completes.
     """
     _DeviceBridgeHandler.title = title
     _DeviceBridgeHandler.user_code = user_code
     _DeviceBridgeHandler.verification_uri = verification_uri
     _DeviceBridgeHandler.verification_uri_complete = verification_uri_complete
-    _DeviceBridgeHandler.state = "pending"
-    _DeviceBridgeHandler.state_message = ""
 
     port = _find_free_port()
     server = http.server.HTTPServer(("127.0.0.1", port), _DeviceBridgeHandler)

@@ -17,7 +17,7 @@ from authsome.errors import AuthenticationFailedError
 def _stub_device_code_bridge():
     """Prevent DeviceCodeFlow from spawning a real HTTP bridge / opening a browser."""
     with patch("authsome.auth.flows.device_code.device_code_bridge") as mock_bridge:
-        mock_bridge.return_value = MagicMock(url="http://127.0.0.1:0", notify=MagicMock(), shutdown=MagicMock())
+        mock_bridge.return_value = MagicMock(url="http://127.0.0.1:0", shutdown=MagicMock())
         yield mock_bridge
 
 

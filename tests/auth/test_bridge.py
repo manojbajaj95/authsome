@@ -1,6 +1,5 @@
 """Tests for the secure browser bridge."""
 
-import json
 import urllib.parse
 import urllib.request
 from unittest.mock import patch
@@ -76,8 +75,8 @@ def test_log_message():
     handler.log_message("test %s", "arg")
 
 
-def test_device_code_bridge_renders_and_status_transitions():
-    """Browser sees the user code + URL, and /status reflects notify() updates."""
+def test_device_code_bridge_renders_url_and_code():
+    """Browser sees the user code, verification URL, and copy button."""
     captured: dict[str, str] = {}
 
     def fake_open(url: str) -> bool:
@@ -85,9 +84,6 @@ def test_device_code_bridge_renders_and_status_transitions():
         with urllib.request.urlopen(url) as response:
             assert response.status == 200
             captured["html"] = response.read().decode("utf-8")
-
-        with urllib.request.urlopen(url + "/status") as response:
-            captured["status_initial"] = response.read().decode("utf-8")
         return True
 
     with patch("authsome.auth.flows.bridge.webbrowser.open", side_effect=fake_open):
@@ -99,16 +95,11 @@ def test_device_code_bridge_renders_and_status_transitions():
         )
 
     try:
-        assert "Postiz — Device Authorization" in captured["html"]
-        assert "WDJB-MJHT" in captured["html"]
-        assert "postiz.example.com/device?code=WDJB-MJHT" in captured["html"]
-        # Polling endpoint starts in pending state
-        assert json.loads(captured["status_initial"]) == {"state": "pending", "message": ""}
-
-        handle.notify("done", "Authorized.")
-        with urllib.request.urlopen(handle.url + "/status") as response:
-            payload = json.loads(response.read().decode("utf-8"))
-        assert payload == {"state": "done", "message": "Authorized."}
+        html = captured["html"]
+        assert "Postiz — Device Authorization" in html
+        assert "WDJB-MJHT" in html
+        assert "postiz.example.com/device?code=WDJB-MJHT" in html
+        assert "Copy" in html
     finally:
         handle.shutdown()
 
@@ -122,9 +113,8 @@ def test_device_code_bridge_open_browser_failure_is_swallowed():
             verification_uri="https://example.com/device",
         )
     try:
-        with urllib.request.urlopen(handle.url + "/status") as response:
-            payload = json.loads(response.read().decode("utf-8"))
-        assert payload["state"] == "pending"
+        with urllib.request.urlopen(handle.url) as response:
+            assert response.status == 200
     finally:
         handle.shutdown()
 
