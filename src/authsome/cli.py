@@ -119,19 +119,6 @@ def setup_logging(verbose: bool, log_file: Path | None) -> None:
         )
 
 
-def parse_connection_overrides(values: tuple[str, ...]) -> dict[str, str]:
-    """Parse provider=connection overrides for proxy routing."""
-    overrides: dict[str, str] = {}
-    for value in values:
-        provider, separator, connection = value.partition("=")
-        provider = provider.strip()
-        connection = connection.strip()
-        if not separator or not provider or not connection:
-            raise click.ClickException("Connection overrides must use PROVIDER=CONNECTION")
-        overrides[provider] = connection
-    return overrides
-
-
 @click.group()
 @click.version_option(__version__, "-v", "--version")
 @click.option("--verbose", is_flag=True, default=False, help="Enable DEBUG logging to stderr.")
@@ -375,25 +362,14 @@ def export(ctx_obj: ContextObj, provider: str, connection: str, export_format: s
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
-@click.option(
-    "--connection",
-    "connection_overrides",
-    multiple=True,
-    metavar="PROVIDER=CONNECTION",
-    help="Use a named connection for a provider in proxy mode.",
-)
 @click.argument("command", nargs=-1, required=True)
 @common_options
 @pass_ctx
 @handle_errors
-def run(ctx_obj: ContextObj, connection_overrides: tuple[str, ...], command: tuple[str]) -> None:
+def run(ctx_obj: ContextObj, command: tuple[str]) -> None:
     """Run a subprocess behind the local auth proxy."""
     actx = ctx_obj.initialize()
-    overrides = parse_connection_overrides(connection_overrides)
-    if overrides:
-        result = actx.proxy.run(list(command), connection_overrides=overrides)
-    else:
-        result = actx.proxy.run(list(command))
+    result = actx.proxy.run(list(command))
     sys.exit(result.returncode)
 
 

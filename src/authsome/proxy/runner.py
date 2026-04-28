@@ -19,13 +19,9 @@ class ProxyRunner:
     def __init__(self, auth: AuthLayer) -> None:
         self._auth = auth
 
-    def run(
-        self,
-        command: list[str],
-        connection_overrides: dict[str, str] | None = None,
-    ) -> subprocess.CompletedProcess[str]:
+    def run(self, command: list[str]) -> subprocess.CompletedProcess[str]:
         """Run *command* behind the auth-injecting proxy."""
-        proxy_url, server = self._start_proxy(connection_overrides=connection_overrides)
+        proxy_url, server = self._start_proxy()
         env = os.environ.copy()
         env["HTTP_PROXY"] = proxy_url
         env["HTTPS_PROXY"] = proxy_url
@@ -62,8 +58,8 @@ class ProxyRunner:
                 except OSError:
                     pass
 
-    def _start_proxy(self, connection_overrides: dict[str, str] | None = None) -> tuple[str, RunningProxy]:
-        server = start_proxy_server(self._auth, connection_overrides=connection_overrides)
+    def _start_proxy(self) -> tuple[str, RunningProxy]:
+        server = start_proxy_server(self._auth)
         return server.url, server
 
     def _inject_dummy_credentials(self, env: dict[str, str]) -> None:

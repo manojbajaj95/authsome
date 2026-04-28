@@ -71,9 +71,6 @@ authsome run -- python my_agent.py
 # runs behind a local auth proxy that injects headers at request time
 # without exposing secrets in the child process environment.
 # matched automatically via provider host_url (e.g. api.openai.com)
-
-authsome run --connection openai=work -- python my_agent.py
-# uses a named connection for proxy routing
 ```
 
 Credentials are stored locally, encrypted at rest, and refreshed before expiry. No server. No account. No cloud.

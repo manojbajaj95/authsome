@@ -38,8 +38,8 @@ class _HeaderCacheEntry:
 class ProxyRouter:
     """Cached provider route table for proxy request matching."""
 
-    def __init__(self, auth: AuthLayer, connection_overrides: dict[str, str] | None = None) -> None:
-        self._routes_by_host = self._build_routes(auth, connection_overrides or {})
+    def __init__(self, auth: AuthLayer) -> None:
+        self._routes_by_host = self._build_routes(auth)
 
     def route(self, scheme: str, host: str, port: int, path: str) -> RouteMatch | None:
         """Return a route for a request, or None when the request should pass through."""
@@ -71,23 +71,14 @@ class ProxyRouter:
         return matches[0]
 
     @staticmethod
-    def _build_routes(auth: AuthLayer, connection_overrides: dict[str, str]) -> dict[str, tuple[_RouteTarget, ...]]:
+    def _build_routes(auth: AuthLayer) -> dict[str, tuple[_RouteTarget, ...]]:
         routes_by_host: dict[str, list[_RouteTarget]] = {}
-        providers_seen: set[str] = set()
-        overrides_matched: set[str] = set()
 
         for provider_group in auth.list_connections():
             provider_name = provider_group["name"]
-            providers_seen.add(provider_name)
-            connections = provider_group["connections"]
-            if provider_name in connection_overrides:
-                connection_name = connection_overrides[provider_name]
-                selected_connections = [conn for conn in connections if conn["connection_name"] == connection_name]
-                if not selected_connections:
-                    raise ValueError(f"No connection named '{connection_name}' for provider '{provider_name}'")
-                overrides_matched.add(provider_name)
-            else:
-                selected_connections = connections
+            selected_connections = [
+                conn for conn in provider_group["connections"] if conn["connection_name"] == "default"
+            ]
 
             try:
                 definition = auth.get_provider(provider_name)
@@ -113,14 +104,6 @@ class ProxyRouter:
                         auth_endpoint_paths=auth_endpoint_paths,
                     )
                 )
-
-        unknown_overrides = sorted(set(connection_overrides) - providers_seen)
-        if unknown_overrides:
-            raise ValueError(f"No connected provider found for override(s): {', '.join(unknown_overrides)}")
-
-        unmatched_overrides = sorted(set(connection_overrides) - overrides_matched)
-        if unmatched_overrides:
-            raise ValueError(f"No connection found for override(s): {', '.join(unmatched_overrides)}")
 
         return {host: tuple(routes) for host, routes in routes_by_host.items()}
 
@@ -190,9 +173,9 @@ def _auth_endpoint_paths(provider, host: str) -> frozenset[str]:
 class AuthProxyAddon:
     """Mitmproxy addon that injects auth headers for matched requests."""
 
-    def __init__(self, auth: AuthLayer, connection_overrides: dict[str, str] | None = None) -> None:
+    def __init__(self, auth: AuthLayer) -> None:
         self._auth = auth
-        self._router = ProxyRouter(auth, connection_overrides)
+        self._router = ProxyRouter(auth)
         self._header_cache: dict[tuple[str, str], _HeaderCacheEntry] = {}
         self._header_locks: dict[tuple[str, str], threading.Lock] = {}
 
@@ -305,14 +288,13 @@ def start_proxy_server(
     auth: AuthLayer,
     host: str = "127.0.0.1",
     port: int = 0,
-    connection_overrides: dict[str, str] | None = None,
 ) -> RunningProxy:
     """Start a mitmproxy DumpMaster in a background thread."""
     import asyncio
 
     # Use the default mitmproxy confdir (~/.mitmproxy) for CA certificates
     confdir = Path.home() / ".mitmproxy"
-    auth_addon = AuthProxyAddon(auth=auth, connection_overrides=connection_overrides)
+    auth_addon = AuthProxyAddon(auth=auth)
 
     ready = threading.Event()
     state: dict = {}

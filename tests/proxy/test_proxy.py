@@ -40,7 +40,7 @@ class TestRouting:
 
         assert _route(auth, "http", "api.openai.com", 80, "/v1/responses") is None
 
-    def test_routes_single_named_connection(self, tmp_path: Path) -> None:
+    def test_ignores_named_connection_without_default(self, tmp_path: Path) -> None:
         auth = _make_auth(tmp_path)
         auth.login(
             "openai",
@@ -51,9 +51,9 @@ class TestRouting:
 
         match = _route(auth, "https", "api.openai.com", 443, "/v1/responses")
 
-        assert match == RouteMatch(provider="openai", connection="work")
+        assert match is None
 
-    def test_connection_override_selects_named_connection(self, tmp_path: Path) -> None:
+    def test_routes_default_when_named_connection_also_exists(self, tmp_path: Path) -> None:
         auth = _make_auth(tmp_path)
         auth.login("openai", force=True, input_provider=MockInputProvider({"api_key": "sk-default"}))
         auth.login(
@@ -63,24 +63,9 @@ class TestRouting:
             input_provider=MockInputProvider({"api_key": "sk-work"}),
         )
 
-        router = ProxyRouter(auth, connection_overrides={"openai": "work"})
+        match = _route(auth, "https", "api.openai.com", 443, "/v1/responses")
 
-        assert router.route("https", "api.openai.com", 443, "/v1/responses") == RouteMatch(
-            provider="openai",
-            connection="work",
-        )
-
-    def test_ambiguous_same_host_connections_are_not_routed(self, tmp_path: Path) -> None:
-        auth = _make_auth(tmp_path)
-        auth.login("openai", force=True, input_provider=MockInputProvider({"api_key": "sk-default"}))
-        auth.login(
-            "openai",
-            connection_name="work",
-            force=True,
-            input_provider=MockInputProvider({"api_key": "sk-work"}),
-        )
-
-        assert _route(auth, "https", "api.openai.com", 443, "/v1/responses") is None
+        assert match == RouteMatch(provider="openai", connection="default")
 
     def test_host_url_path_limits_routing(self) -> None:
         auth = Mock()
@@ -362,20 +347,6 @@ class TestProxyCLI:
                 _result = runner.invoke(cli, ["run", "--", "echo", "hello"])
 
         run_mock.assert_called_once()
-
-    def test_run_parses_connection_overrides(self, tmp_path: Path) -> None:
-        from click.testing import CliRunner
-
-        from authsome.cli import cli
-
-        with patch("authsome.proxy.runner.ProxyRunner.run") as run_mock:
-            run_mock.return_value = Mock(returncode=0)
-            with patch("authsome.proxy.runner.ProxyRunner.__init__", return_value=None):
-                runner = CliRunner()
-                result = runner.invoke(cli, ["run", "--connection", "openai=work", "--", "echo", "hello"])
-
-        assert result.exit_code == 0
-        run_mock.assert_called_once_with(["echo", "hello"], connection_overrides={"openai": "work"})
 
 
 # ── Documentation tests ──────────────────────────────────────────────────

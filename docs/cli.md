@@ -107,18 +107,14 @@ authsome export github --format shell   # export GITHUB_TOKEN=...
 
 ```bash
 authsome run -- <command> [args...]
-authsome run --connection openai=work -- <command> [args...]
 ```
 
 Runs `<command>` behind a local auth proxy that injects provider auth headers into matched HTTP(S) requests at request time. This is the most secure way to run agents as it avoids exporting raw secrets into the child process environment.
 
-The proxy automatically matches outbound requests to known provider hosts (e.g. `api.openai.com`, `api.github.com`) using the `host_url` field in provider definitions and injects the appropriate auth headers (OAuth Bearer tokens or API keys). Unmatched traffic is forwarded unchanged.
-
-Use `--connection PROVIDER=CONNECTION` to route a provider through a named connection. Repeat the option for multiple providers.
+The proxy automatically matches outbound requests to known provider hosts (e.g. `api.openai.com`, `api.github.com`) using the `host_url` field in provider definitions and injects the appropriate auth headers from the default connection (OAuth Bearer tokens or API keys). Unmatched traffic is forwarded unchanged.
 
 ```bash
 authsome run -- python my_agent.py
-authsome run --connection openai=work -- python my_agent.py
 authsome run -- curl https://api.openai.com/v1/models
 ```
 
