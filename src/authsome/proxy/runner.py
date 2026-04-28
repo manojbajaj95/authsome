@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import subprocess
+import tempfile
+from pathlib import Path
 
 from loguru import logger
 
@@ -30,10 +32,26 @@ class ProxyRunner:
         # e.g. OPENAI_API_KEY to be set will initialise and route through the proxy
         self._inject_dummy_credentials(env)
 
+        # Build a combined CA bundle so subprocesses trust the mitmproxy CA
+        ca_bundle_path = self._build_ca_bundle(server)
+        if ca_bundle_path:
+            env["SSL_CERT_FILE"] = str(ca_bundle_path)
+            env["REQUESTS_CA_BUNDLE"] = str(ca_bundle_path)
+            env["CURL_CA_BUNDLE"] = str(ca_bundle_path)
+            # NODE_EXTRA_CA_CERTS adds to (not replaces) Node's built-in CAs
+            env["NODE_EXTRA_CA_CERTS"] = str(server.ca_cert_path)
+            logger.debug("CA bundle injected: {}", ca_bundle_path)
+
         try:
             return subprocess.run(command, env=env, capture_output=False, text=True, check=False)
         finally:
             server.shutdown()
+            # Clean up the temporary CA bundle
+            if ca_bundle_path and ca_bundle_path.exists():
+                try:
+                    ca_bundle_path.unlink()
+                except OSError:
+                    pass
 
     def _start_proxy(self) -> tuple[str, RunningProxy]:
         server = start_proxy_server(self._auth)
@@ -49,6 +67,34 @@ class ProxyRunner:
             for env_var in provider.export.env.values():
                 env[env_var] = "authsome-proxy-managed"
                 logger.debug("Set dummy env var {} for provider {}", env_var, provider.name)
+
+    @staticmethod
+    def _build_ca_bundle(server: RunningProxy) -> Path | None:
+        """Create a temp file containing system CAs + the mitmproxy CA cert."""
+        mitm_ca = server.ca_cert_path
+        if not mitm_ca.exists():
+            logger.warning("Mitmproxy CA cert not found at {}; HTTPS may fail", mitm_ca)
+            return None
+
+        # Find the system CA bundle (certifi is a dependency of requests, so it's guaranteed)
+        import certifi
+
+        system_ca_path = Path(certifi.where())
+
+        # Combine system CAs + mitmproxy CA into a temp file
+        # We use a unique prefix to avoid collisions if multiple instances run
+        fd, name = tempfile.mkstemp(prefix="authsome-ca-", suffix=".pem", text=True)
+        try:
+            with os.fdopen(fd, "w") as tmp:
+                tmp.write(system_ca_path.read_text(encoding="utf-8"))
+                tmp.write("\n")
+                tmp.write(mitm_ca.read_text(encoding="utf-8"))
+        except Exception as e:
+            logger.error("Failed to create combined CA bundle: {}", e)
+            os.close(fd)
+            return None
+
+        return Path(name)
 
     @staticmethod
     def _merge_no_proxy(existing: str) -> str:

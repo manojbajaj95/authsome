@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 from urllib.parse import urlparse
 
 from loguru import logger
@@ -119,10 +120,16 @@ class AuthProxyAddon:
 class RunningProxy:
     """Handle for a proxy running in a background thread."""
 
-    def __init__(self, url: str, master: DumpMaster, thread: threading.Thread) -> None:
+    def __init__(self, url: str, master: DumpMaster, thread: threading.Thread, confdir: Path) -> None:
         self.url = url
         self.master = master
         self.thread = thread
+        self.confdir = confdir
+
+    @property
+    def ca_cert_path(self) -> Path:
+        """Path to the mitmproxy CA certificate (PEM format)."""
+        return self.confdir / "mitmproxy-ca-cert.pem"
 
     def shutdown(self) -> None:
         self.master.shutdown()
@@ -138,12 +145,20 @@ def start_proxy_server(auth: AuthLayer, host: str = "127.0.0.1", port: int = 0) 
     if port == 0:
         port = _find_free_port()
 
+    # Use the default mitmproxy confdir (~/.mitmproxy) for CA certificates
+    confdir = Path.home() / ".mitmproxy"
+
     ready = threading.Event()
     state: dict = {}
 
     def _run() -> None:
         async def _async_main() -> None:
-            opts = Options(listen_host=host, listen_port=port, ssl_insecure=True)
+            opts = Options(
+                listen_host=host,
+                listen_port=port,
+                ssl_insecure=True,
+                confdir=str(confdir),
+            )
             master = DumpMaster(opts, with_termlog=False, with_dumper=False)
             master.addons.add(AuthProxyAddon(auth=auth))
             state["master"] = master
@@ -160,4 +175,4 @@ def start_proxy_server(auth: AuthLayer, host: str = "127.0.0.1", port: int = 0) 
 
     url = f"http://{host}:{port}"
     logger.info("Proxy server listening on {}", url)
-    return RunningProxy(url=url, master=state["master"], thread=thread)
+    return RunningProxy(url=url, master=state["master"], thread=thread, confdir=confdir)
