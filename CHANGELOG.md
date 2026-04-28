@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.2.0](https://github.com/manojbajaj95/authsome/compare/authsome-v0.1.12...authsome-v0.2.0) (2026-04-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* Complete internal restructuring. All public Python API has moved; CLI commands and flags are unchanged.
+
+### Features
+
+* add --verbose and --log-file options to CLI with loguru sinks ([0058f09](https://github.com/manojbajaj95/authsome/commit/0058f09cd643eeecde7e902c66db35b7c8b17695))
+* add base URL templating support for providers ([ee172db](https://github.com/manojbajaj95/authsome/commit/ee172dbbeed1cc1761a9eb52901d22e39060cad8))
+* add host_url support to auth connections and update proxy serve… ([72a478d](https://github.com/manojbajaj95/authsome/commit/72a478df7953ec5cc5ddca409ff8091f46810bd5))
+* add host_url support to auth connections and update proxy server to match based on resolved connection hosts ([73c5f72](https://github.com/manojbajaj95/authsome/commit/73c5f7259840b3e4d2caeb83e8b71c34590de602))
+* add support for dynamic URL templating using {base_url} in provider definitions and CLI ([156ecf0](https://github.com/manojbajaj95/authsome/commit/156ecf0cbfb8f1fa282e73cd0df695e017353a9c))
+* added support for docs in providers ([#85](https://github.com/manojbajaj95/authsome/issues/85)) ([f112275](https://github.com/manojbajaj95/authsome/commit/f11227528ae02b75eb70d5b07f5f50abc733d482))
+* inject combined system and mitmproxy CA bundle into subprocess … ([#90](https://github.com/manojbajaj95/authsome/issues/90)) ([b5d042b](https://github.com/manojbajaj95/authsome/commit/b5d042b5c975ff51a06909279441c28016757837))
+* silence authsome library logger by default (loguru best practice) ([2fe4c88](https://github.com/manojbajaj95/authsome/commit/2fe4c88d900eb7303e80907ea432849b25db332c))
+* v0.2.0 — Vault + AuthLayer architecture, InputProvider, FlowResult ([bfd75ee](https://github.com/manojbajaj95/authsome/commit/bfd75eeae0e82f41e8e7bc5647aa55503aea08b5))
+
+
+### Bug Fixes
+
+* added support for posthiz device flow ([#81](https://github.com/manojbajaj95/authsome/issues/81)) ([9b9a485](https://github.com/manojbajaj95/authsome/commit/9b9a485460b6214e6434772ad2b2a44fae01057a))
+* allow SQLite connection across threads for proxy auth injection ([536d78b](https://github.com/manojbajaj95/authsome/commit/536d78b81fb4500cd862f1e34c50b392f80d70e5)), closes [#76](https://github.com/manojbajaj95/authsome/issues/76)
+* device flow ([#89](https://github.com/manojbajaj95/authsome/issues/89)) ([b596ee1](https://github.com/manojbajaj95/authsome/commit/b596ee1fafab57f846f722293ac3b6ee84062962))
+* resolve ty type check errors in dcr_pkce and vault ([dc471d2](https://github.com/manojbajaj95/authsome/commit/dc471d2aac54191e1d3af7d6b7c3322560ba0813))
+
+
+### Documentation
+
+* Add documentation for current design and future direction ([7cc0e2c](https://github.com/manojbajaj95/authsome/commit/7cc0e2cc37cfa5fdae4d03e01efd31a2db3d6391))
+* clarify authsome architecture direction ([e4eef7a](https://github.com/manojbajaj95/authsome/commit/e4eef7a7e22738211e7e6c81e84936d2b0f52f2b))
+* Remove superpower ([f53f86c](https://github.com/manojbajaj95/authsome/commit/f53f86c1fec9b289864e2cb9e946e3238b01d5e1))
+
 ## [0.1.12](https://github.com/manojbajaj95/authsome/compare/authsome-v0.1.11...authsome-v0.1.12) (2026-04-24)
 
 
