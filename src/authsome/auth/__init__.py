@@ -298,7 +298,7 @@ class AuthLayer:
             self._save_provider_client_credentials(client_record)
 
         result.connection.base_url = flow_base_url
-        result.connection.host_url = (client_record.host_url if client_record else None) or resolved_definition.host_url
+        result.connection.host_url = resolved_definition.host_url
         self._save_connection(result.connection)
         self._update_provider_metadata(provider, connection_name)
 
