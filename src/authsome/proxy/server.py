@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import threading
 from pathlib import Path
 from urllib.parse import urlparse
@@ -11,6 +12,7 @@ from mitmproxy import http
 from mitmproxy.options import Options
 from mitmproxy.tools.dump import DumpMaster
 
+from authsome import audit
 from authsome.auth import AuthLayer
 from authsome.proxy.router import RouteMatch
 
@@ -55,8 +57,12 @@ def _route(auth: AuthLayer, scheme: str, host: str, port: int, path: str) -> Rou
             matches.append(p_name)
 
     if len(matches) == 0:
+        sys.stderr.write(f"Proxy Miss: {host} (no match)\n")
+        audit.log("proxy_miss", host=host, reason="no_match")
         return None
     if len(matches) > 1:
+        reason_str = f"ambiguous_match: {','.join(matches)}"
+        sys.stderr.write(f"Proxy Miss: {host} ({reason_str})\n")
         logger.warning(
             "Ambiguous proxy match for {}://{}:{}{}  — matched providers: {}. Forwarding unchanged.",
             scheme,
@@ -65,6 +71,7 @@ def _route(auth: AuthLayer, scheme: str, host: str, port: int, path: str) -> Rou
             path,
             ", ".join(matches),
         )
+        audit.log("proxy_miss", host=host, reason=reason_str)
         return None
     return RouteMatch(provider=matches[0], connection="default")
 
@@ -115,6 +122,14 @@ class AuthProxyAddon:
 
         for key, value in headers.items():
             flow.request.headers[key] = value
+
+        audit.log(
+            "proxy_injection",
+            provider=match.provider,
+            matched_host=flow.request.host,
+            request_method=flow.request.method,
+            request_path=flow.request.path,
+        )
 
 
 class RunningProxy:

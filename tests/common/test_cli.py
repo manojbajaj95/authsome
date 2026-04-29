@@ -16,10 +16,11 @@ def runner():
 
 
 @pytest.fixture
-def mock_ctx():
+def mock_ctx(tmp_path):
     """Patch AuthsomeContext.create and return the mock context."""
-    with patch("authsome.cli.AuthsomeContext") as mock_cls:
+    with patch("authsome.cli.AuthsomeContext") as mock_cls, patch("authsome.cli.audit"):
         ctx = MagicMock()
+        ctx.home = tmp_path
         mock_cls.create.return_value = ctx
         yield ctx
 
