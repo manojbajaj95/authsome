@@ -207,6 +207,104 @@ class TestRouting:
 
         assert router.route("https", "api.example.com", 443, "/v1/resources") is None
 
+    def test_regex_host_url_matches_multiple_hosts(self) -> None:
+        auth = Mock()
+        provider = Mock()
+        provider.oauth = None
+        provider.resolve_urls.return_value = provider
+        auth.get_provider.return_value = provider
+        auth.list_connections.return_value = [
+            {
+                "name": "github-shards",
+                "connections": [
+                    {
+                        "connection_name": "default",
+                        "host_url": r"regex:^api[0-9]+\.github\.com$",
+                        "base_url": None,
+                    }
+                ],
+            }
+        ]
+
+        router = ProxyRouter(auth)
+
+        assert router.route("https", "api1.github.com", 443, "/repos") == RouteMatch(
+            provider="github-shards",
+            connection="default",
+        )
+        assert router.route("https", "api2.github.com", 443, "/repos") == RouteMatch(
+            provider="github-shards",
+            connection="default",
+        )
+        assert router.route("https", "api.github.com", 443, "/repos") is None
+
+    def test_exact_host_route_wins_over_regex_route(self) -> None:
+        auth = Mock()
+        provider = Mock()
+        provider.oauth = None
+        provider.resolve_urls.return_value = provider
+        auth.get_provider.return_value = provider
+        auth.list_connections.return_value = [
+            {
+                "name": "regex",
+                "connections": [
+                    {
+                        "connection_name": "default",
+                        "host_url": r"regex:^api[0-9]+\.github\.com$",
+                        "base_url": None,
+                    }
+                ],
+            },
+            {
+                "name": "exact",
+                "connections": [
+                    {
+                        "connection_name": "default",
+                        "host_url": "api1.github.com",
+                        "base_url": None,
+                    }
+                ],
+            },
+        ]
+
+        router = ProxyRouter(auth)
+
+        assert router.route("https", "api1.github.com", 443, "/repos") == RouteMatch(
+            provider="exact",
+            connection="default",
+        )
+        assert router.route("https", "api2.github.com", 443, "/repos") == RouteMatch(
+            provider="regex",
+            connection="default",
+        )
+
+    def test_plain_host_url_does_not_use_regex_matching(self) -> None:
+        auth = Mock()
+        provider = Mock()
+        provider.oauth = None
+        provider.resolve_urls.return_value = provider
+        auth.get_provider.return_value = provider
+        auth.list_connections.return_value = [
+            {
+                "name": "plain",
+                "connections": [
+                    {
+                        "connection_name": "default",
+                        "host_url": "api.github.com",
+                        "base_url": None,
+                    }
+                ],
+            }
+        ]
+
+        router = ProxyRouter(auth)
+
+        assert router.route("https", "api.github.com", 443, "/repos") == RouteMatch(
+            provider="plain",
+            connection="default",
+        )
+        assert router.route("https", "apiXgithub.com", 443, "/repos") is None
+
     def test_rejects_loopback_host(self, tmp_path: Path) -> None:
         auth = _make_auth(tmp_path)
 
