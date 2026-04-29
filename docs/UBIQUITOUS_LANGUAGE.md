@@ -75,7 +75,7 @@
 
 > **Dev:** "If I call `authsome login github`, does it create a new **Profile**?"
 >
-> **Domain expert:** "No — `login` adds a **Connection** to the currently active **Profile**. A **Profile** is created once with `authsome init`. The `login` command runs the **Flow** specified in the GitHub **ProviderDefinition** and stores the result as a **ConnectionRecord** via the **Vault**."
+> **Domain expert:** "No — `login` adds a **Connection** to the currently active **Profile**. A **Profile** is created automatically if it doesn't exist. The `login` command runs the **Flow** specified in the GitHub **ProviderDefinition** and stores the result as a **ConnectionRecord** via the **Vault**."
 >
 > **Dev:** "So the **Connection** is what I query later to get the access token?"
 >

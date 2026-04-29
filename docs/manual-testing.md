@@ -17,7 +17,7 @@ authsome --version
 # Start fresh (optional — skip if you want to keep existing config)
 rm -rf ~/.authsome
 
-authsome init
+# No explicit init required (auto-initialized on first run)
 ```
 
 **Expected:**
@@ -74,10 +74,10 @@ authsome get openai --field status
 **Expected:** Prints `connected`.
 
 ```bash
-authsome export openai --format shell
+authsome export openai --format env
 ```
 
-**Expected:** Prints `export OPENAI_API_KEY=<your-key>`.
+**Expected:** Prints `Successfully exported credentials to environment.` and the key is now present in `os.environ`.
 
 ---
 
@@ -98,10 +98,10 @@ authsome get github
 **Expected:** Shows access token as `***REDACTED***`, status `connected`.
 
 ```bash
-authsome export github --format shell
+authsome export github --format env
 ```
 
-**Expected:** Prints `export GITHUB_TOKEN=<token>`.
+**Expected:** Prints `Successfully exported credentials to environment.`
 
 ---
 
