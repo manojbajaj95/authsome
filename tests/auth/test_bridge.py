@@ -58,6 +58,68 @@ def test_secure_input_bridge_success():
     assert res == {"api_key": "secret123", "username": "testuser"}
 
 
+def test_secure_input_bridge_rejects_bad_pattern_then_accepts():
+    """A POST with a value that violates ``pattern`` re-renders the form;
+    the bridge keeps running and a subsequent valid POST completes the flow."""
+    fields = [
+        {
+            "name": "api_key",
+            "label": "API Key",
+            "type": "password",
+            "pattern": r"^sk-[A-Za-z0-9_-]{8,}$",
+            "pattern_hint": "Keys start with 'sk-'.",
+        },
+    ]
+
+    def mock_open(url):
+        # 1. GET advertises the pattern + hint.
+        with urllib.request.urlopen(url) as response:
+            html = response.read().decode("utf-8")
+            assert "pattern='^sk-[A-Za-z0-9_-]{8,}$'" in html
+            assert "Keys start with &#x27;sk-&#x27;." in html  # escaped hint
+
+        # 2. Bad POST stays on the form with an error banner.
+        bad = urllib.parse.urlencode({"api_key": "982832"}).encode("utf-8")
+        bad_req = urllib.request.Request(url, data=bad, method="POST")
+        with urllib.request.urlopen(bad_req) as response:
+            assert response.status == 200
+            html = response.read().decode("utf-8")
+            assert "Please fix the highlighted field" in html
+            assert "Keys start with &#x27;sk-&#x27;." in html
+            assert "Success!" not in html
+
+        # 3. Good POST shuts the server down and returns success.
+        good = urllib.parse.urlencode({"api_key": "sk-abcdefgh1234"}).encode("utf-8")
+        good_req = urllib.request.Request(url, data=good, method="POST")
+        with urllib.request.urlopen(good_req) as response:
+            assert response.status == 200
+            html = response.read().decode("utf-8")
+            assert "Success!" in html
+
+    with patch("authsome.auth.flows.bridge.webbrowser.open", side_effect=mock_open):
+        res = secure_input_bridge("Test Auth", fields)
+
+    assert res == {"api_key": "sk-abcdefgh1234"}
+
+
+def test_secure_input_bridge_no_pattern_skips_validation():
+    """Fields without a ``pattern`` accept anything (back-compat)."""
+    fields = [{"name": "api_key", "label": "API Key", "type": "password"}]
+
+    def mock_open(url):
+        # A nonsense value is accepted because no pattern is declared.
+        data = urllib.parse.urlencode({"api_key": "982832"}).encode("utf-8")
+        req = urllib.request.Request(url, data=data, method="POST")
+        with urllib.request.urlopen(req) as response:
+            html = response.read().decode("utf-8")
+            assert "Success!" in html
+
+    with patch("authsome.auth.flows.bridge.webbrowser.open", side_effect=mock_open):
+        res = secure_input_bridge("Test Auth", fields)
+
+    assert res == {"api_key": "982832"}
+
+
 def test_secure_input_bridge_timeout():
     fields = [{"name": "key", "label": "Key"}]
 

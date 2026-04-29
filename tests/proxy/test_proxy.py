@@ -28,7 +28,7 @@ class TestRouting:
 
     def test_matches_provider_host(self, tmp_path: Path) -> None:
         auth = _make_auth(tmp_path)
-        auth.login("openai", force=True, input_provider=MockInputProvider({"api_key": "sk-test"}))
+        auth.login("openai", force=True, input_provider=MockInputProvider({"api_key": "sk-test-padded-for-regex-12"}))
 
         match = _route(auth, "https", "api.openai.com", 443, "/v1/responses")
 
@@ -146,7 +146,7 @@ class TestProxyRunner:
         from authsome.proxy.runner import ProxyRunner
 
         auth = _make_auth(tmp_path)
-        auth.login("openai", force=True, input_provider=MockInputProvider({"api_key": "sk-real"}))
+        auth.login("openai", force=True, input_provider=MockInputProvider({"api_key": "sk-real-padded-for-regex-12"}))
 
         runner = ProxyRunner(auth)
 

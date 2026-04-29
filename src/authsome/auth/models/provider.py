@@ -33,6 +33,10 @@ class ApiKeyConfig(BaseModel):
 
     header_name: str = "Authorization"
     header_prefix: str = "Bearer"
+    #: Optional regex (``re.fullmatch``) that valid keys must satisfy. When unset, no validation runs.
+    key_pattern: str | None = None
+    #: Optional human-readable hint shown when ``key_pattern`` does not match (e.g. "Keys start with 'sk-'.").
+    key_pattern_hint: str | None = None
 
     model_config = {"extra": "allow"}
 
