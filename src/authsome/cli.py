@@ -3,6 +3,7 @@
 import functools
 import json as json_lib
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -119,6 +120,38 @@ def setup_logging(verbose: bool, log_file: Path | None) -> None:
         )
 
 
+def format_expires_at(expires_at: str | None) -> str | None:
+    """Return a compact relative expiry label for CLI output."""
+    if not expires_at:
+        return None
+    try:
+        expiry = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+    except ValueError:
+        return f"expires at {expires_at}"
+    if expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=UTC)
+
+    total_seconds = int((expiry - datetime.now(UTC)).total_seconds())
+    if total_seconds < 0:
+        label = _format_duration(-total_seconds)
+        return f"expired {label} ago"
+    label = _format_duration(total_seconds)
+    return f"expires in {label}"
+
+
+def _format_duration(total_seconds: int) -> str:
+    if total_seconds < 60:
+        return f"{total_seconds}s"
+    minutes = total_seconds // 60
+    if minutes < 60:
+        return f"{minutes}m"
+    hours = minutes // 60
+    if hours < 48:
+        return f"{hours}h"
+    days = hours // 24
+    return f"{days}d"
+
+
 @click.group()
 @click.version_option(__version__, "-v", "--version")
 @click.option("--verbose", is_flag=True, default=False, help="Enable DEBUG logging to stderr.")
@@ -194,6 +227,9 @@ def list_cmd(ctx_obj: ContextObj) -> None:
                     color = "green" if status == "connected" else "yellow"
                     ctx_obj.echo(f"    {c['connection_name']}  ", nl=False)
                     ctx_obj.echo(status, color=color)
+                    expiry = format_expires_at(c.get("expires_at"))
+                    if expiry:
+                        ctx_obj.echo(f"      {expiry}")
             else:
                 ctx_obj.echo("    (no connections)", color="yellow")
 

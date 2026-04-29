@@ -1,6 +1,7 @@
 """Tests for the Authsome CLI."""
 
 import json
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -26,6 +27,7 @@ def mock_ctx():
 
 
 def test_list_command(runner, mock_ctx):
+    expires_at = (datetime.now(UTC) + timedelta(hours=2)).isoformat()
     mock_ctx.auth.list_connections.return_value = [
         {
             "name": "openai",
@@ -35,7 +37,7 @@ def test_list_command(runner, mock_ctx):
                     "status": "connected",
                     "auth_type": "api_key",
                     "scopes": ["read"],
-                    "expires_at": "2030",
+                    "expires_at": expires_at,
                 }
             ],
         }
@@ -55,6 +57,38 @@ def test_list_command(runner, mock_ctx):
     assert "Bundled Providers:" in result.output
     assert "OpenAI" in result.output
     assert "connected" in result.output
+    assert "expires in 1h" in result.output or "expires in 2h" in result.output
+
+
+def test_list_command_expired_connection(runner, mock_ctx):
+    expires_at = (datetime.now(UTC) - timedelta(minutes=5)).isoformat()
+    mock_ctx.auth.list_connections.return_value = [
+        {
+            "name": "github",
+            "connections": [
+                {
+                    "connection_name": "default",
+                    "status": "expired",
+                    "auth_type": "oauth2",
+                    "expires_at": expires_at,
+                }
+            ],
+        }
+    ]
+
+    mock_provider = MagicMock()
+    mock_provider.name = "github"
+    mock_provider.display_name = "GitHub"
+    mock_provider.auth_type.value = "oauth2"
+    mock_ctx.auth.list_providers_by_source.return_value = {
+        "bundled": [mock_provider],
+        "custom": [],
+    }
+
+    result = runner.invoke(cli, ["list"])
+    assert result.exit_code == 0
+    assert "expired" in result.output
+    assert "expired 5m ago" in result.output
 
 
 def test_list_command_no_connections(runner, mock_ctx):
