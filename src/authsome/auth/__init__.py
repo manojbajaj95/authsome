@@ -8,8 +8,8 @@ Does not touch encryption directly — all persistence goes through the Vault.
 from __future__ import annotations
 
 import json
-import re
 import os
+import re
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
