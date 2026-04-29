@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 import requests as http_client
 from loguru import logger
@@ -192,7 +193,9 @@ class AuthLayer:
         try:
             existing = self.get_connection(provider, connection_name)
             if existing and not force:
-                if self._connection_is_valid(existing):
+                if self._connection_is_valid(existing) and self._requested_context_matches(
+                    existing, scopes=scopes, base_url=base_url
+                ):
                     return LoginResult(record=existing, already_connected=True)
         except ConnectionNotFoundError:
             pass
@@ -339,6 +342,42 @@ class AuthLayer:
         if record.expires_at is None:
             return True
         return utc_now() < record.expires_at
+
+    @classmethod
+    def _requested_context_matches(
+        cls,
+        record: ConnectionRecord,
+        *,
+        scopes: list[str] | None,
+        base_url: str | None,
+    ) -> bool:
+        if scopes is not None and cls._normalize_scopes(scopes) != cls._normalize_scopes(record.scopes):
+            return False
+        if base_url is not None and cls._normalize_base_url(base_url) != cls._normalize_base_url(record.base_url):
+            return False
+        return True
+
+    @staticmethod
+    def _normalize_scopes(scopes: list[str] | None) -> set[str]:
+        return {scope.strip() for scope in scopes or [] if scope.strip()}
+
+    @staticmethod
+    def _normalize_base_url(base_url: str | None) -> str | None:
+        if not base_url:
+            return None
+        raw = base_url.strip().rstrip("/")
+        parsed = urlsplit(raw)
+        if not parsed.scheme or not parsed.netloc:
+            return raw
+        return urlunsplit(
+            (
+                parsed.scheme.lower(),
+                parsed.netloc.lower(),
+                parsed.path.rstrip("/"),
+                parsed.query,
+                "",
+            )
+        )
 
     @staticmethod
     def _build_docs_hints(definition: ProviderDefinition, flow_type: FlowType) -> list[dict[str, Any]]:

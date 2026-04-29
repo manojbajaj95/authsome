@@ -209,6 +209,170 @@ class TestAuthLayerLogin:
         assert result.record.access_token == "new"
         mock_handler.authenticate.assert_called_once()
 
+    def test_login_reuses_connection_when_requested_scopes_match(self, auth: AuthLayer) -> None:
+        provider = ProviderDefinition(
+            name="testoauth-scopes",
+            display_name="Test OAuth Scopes",
+            auth_type=AuthType.OAUTH2,
+            flow=FlowType.PKCE,
+            oauth=OAuthConfig(authorization_url="http://auth", token_url="http://token"),
+        )
+        auth.register_provider(provider)
+        auth._save_connection(
+            ConnectionRecord(
+                schema_version=2,
+                provider="testoauth-scopes",
+                profile="default",
+                connection_name="default",
+                auth_type=AuthType.OAUTH2,
+                status=ConnectionStatus.CONNECTED,
+                access_token="old",
+                scopes=["repo", "read:user"],
+                expires_at=utc_now() + timedelta(hours=1),
+            )
+        )
+
+        result = auth.login_with_result("testoauth-scopes", scopes=["read:user", "repo"])
+
+        assert result.already_connected is True
+        assert result.record.access_token == "old"
+
+    def test_login_reauthenticates_when_requested_scopes_differ(self, auth: AuthLayer) -> None:
+        from authsome.auth.flows.base import FlowResult
+
+        provider = ProviderDefinition(
+            name="testoauth-scope-diff",
+            display_name="Test OAuth Scope Diff",
+            auth_type=AuthType.OAUTH2,
+            flow=FlowType.PKCE,
+            oauth=OAuthConfig(authorization_url="http://auth", token_url="http://token"),
+        )
+        auth.register_provider(provider)
+        auth._save_provider_client_credentials(
+            ProviderClientRecord(profile="default", provider="testoauth-scope-diff", client_id="cid")
+        )
+        auth._save_connection(
+            ConnectionRecord(
+                schema_version=2,
+                provider="testoauth-scope-diff",
+                profile="default",
+                connection_name="default",
+                auth_type=AuthType.OAUTH2,
+                status=ConnectionStatus.CONNECTED,
+                access_token="old",
+                scopes=["read"],
+                expires_at=utc_now() + timedelta(hours=1),
+            )
+        )
+        replacement = ConnectionRecord(
+            schema_version=2,
+            provider="testoauth-scope-diff",
+            profile="default",
+            connection_name="default",
+            auth_type=AuthType.OAUTH2,
+            status=ConnectionStatus.CONNECTED,
+            access_token="new",
+            scopes=["write"],
+            expires_at=utc_now() + timedelta(hours=1),
+        )
+
+        with patch("authsome.auth._FLOW_HANDLERS") as handlers:
+            mock_handler = MagicMock()
+            mock_handler.authenticate.return_value = FlowResult(connection=replacement)
+            handlers.get.return_value = lambda: mock_handler
+
+            result = auth.login_with_result("testoauth-scope-diff", scopes=["write"])
+
+        assert result.already_connected is False
+        assert result.record.access_token == "new"
+        mock_handler.authenticate.assert_called_once()
+
+    def test_login_reauthenticates_when_requested_base_url_differs(self, auth: AuthLayer) -> None:
+        from authsome.auth.flows.base import FlowResult
+
+        provider = ProviderDefinition(
+            name="testoauth-base-url",
+            display_name="Test OAuth Base URL",
+            auth_type=AuthType.OAUTH2,
+            flow=FlowType.PKCE,
+            oauth=OAuthConfig(
+                base_url="https://github.com",
+                authorization_url="{base_url}/login/oauth/authorize",
+                token_url="{base_url}/login/oauth/access_token",
+            ),
+        )
+        auth.register_provider(provider)
+        auth._save_provider_client_credentials(
+            ProviderClientRecord(profile="default", provider="testoauth-base-url", client_id="cid")
+        )
+        auth._save_connection(
+            ConnectionRecord(
+                schema_version=2,
+                provider="testoauth-base-url",
+                profile="default",
+                connection_name="default",
+                auth_type=AuthType.OAUTH2,
+                status=ConnectionStatus.CONNECTED,
+                access_token="old",
+                base_url="https://github.example.com",
+                expires_at=utc_now() + timedelta(hours=1),
+            )
+        )
+        replacement = ConnectionRecord(
+            schema_version=2,
+            provider="testoauth-base-url",
+            profile="default",
+            connection_name="default",
+            auth_type=AuthType.OAUTH2,
+            status=ConnectionStatus.CONNECTED,
+            access_token="new",
+            base_url="https://other.example.com",
+            expires_at=utc_now() + timedelta(hours=1),
+        )
+
+        with patch("authsome.auth._FLOW_HANDLERS") as handlers:
+            mock_handler = MagicMock()
+            mock_handler.authenticate.return_value = FlowResult(connection=replacement)
+            handlers.get.return_value = lambda: mock_handler
+
+            result = auth.login_with_result("testoauth-base-url", base_url="https://other.example.com/")
+
+        assert result.already_connected is False
+        assert result.record.access_token == "new"
+        mock_handler.authenticate.assert_called_once()
+
+    def test_login_reuses_connection_when_requested_base_url_matches(self, auth: AuthLayer) -> None:
+        provider = ProviderDefinition(
+            name="testoauth-base-url-match",
+            display_name="Test OAuth Base URL Match",
+            auth_type=AuthType.OAUTH2,
+            flow=FlowType.PKCE,
+            oauth=OAuthConfig(
+                base_url="https://github.com",
+                authorization_url="{base_url}/login/oauth/authorize",
+                token_url="{base_url}/login/oauth/access_token",
+            ),
+        )
+        auth.register_provider(provider)
+        auth._save_connection(
+            ConnectionRecord(
+                schema_version=2,
+                provider="testoauth-base-url-match",
+                profile="default",
+                connection_name="default",
+                auth_type=AuthType.OAUTH2,
+                status=ConnectionStatus.CONNECTED,
+                access_token="old",
+                base_url="https://github.example.com",
+                expires_at=utc_now() + timedelta(hours=1),
+            )
+        )
+
+        result = auth.login_with_result("testoauth-base-url-match", base_url="https://GITHUB.example.com/")
+
+        assert result.already_connected is True
+        assert result.record.access_token == "old"
+
     def test_login_unsupported_flow(self, auth: AuthLayer) -> None:
         def mock_get_provider(name):
             mock_def = MagicMock()
