@@ -14,10 +14,10 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 if TYPE_CHECKING:
+    from authsome.audit import AuditLogger
     from authsome.auth import AuthLayer
     from authsome.proxy.runner import ProxyRunner
     from authsome.vault import Vault
-    from authsome.audit import AuditLogger
 
 
 @dataclass
@@ -38,13 +38,13 @@ class AuthsomeContext:
         no_audit: bool = False,
     ) -> AuthsomeContext:
         """Wire up all layers and return a ready-to-use context."""
+        from authsome.audit import AuditLogger
         from authsome.auth import AuthLayer
         from authsome.auth.models.config import GlobalConfig
         from authsome.auth.providers.registry import ProviderRegistry
         from authsome.proxy.runner import ProxyRunner
         from authsome.vault import Vault
         from authsome.vault.storage import SQLiteStorage
-        from authsome.audit import AuditLogger
 
         resolved_home = home or Path(os.environ.get("AUTHSOME_HOME", str(Path.home() / ".authsome")))
         cls._ensure_initialized(resolved_home)

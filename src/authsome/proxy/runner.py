@@ -9,8 +9,8 @@ from pathlib import Path
 
 from loguru import logger
 
-from authsome.auth import AuthLayer
 from authsome.audit import AuditLogger
+from authsome.auth import AuthLayer
 from authsome.proxy.server import RunningProxy, start_proxy_server
 
 

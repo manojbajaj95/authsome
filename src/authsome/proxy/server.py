@@ -11,8 +11,8 @@ from mitmproxy import http
 from mitmproxy.options import Options
 from mitmproxy.tools.dump import DumpMaster
 
-from authsome.auth import AuthLayer
 from authsome.audit import AuditLogger
+from authsome.auth import AuthLayer
 from authsome.proxy.router import RouteMatch
 
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})

@@ -220,7 +220,7 @@ def log_cmd(ctx_obj: ContextObj, lines: int) -> None:
         sys.exit(0)
 
     try:
-        with open(audit_file, "r", encoding="utf-8") as f:
+        with open(audit_file, encoding="utf-8") as f:
             log_lines = f.readlines()
         for line in log_lines[-lines:]:
             ctx_obj.echo(line.strip())
@@ -268,7 +268,7 @@ def login(
             base_url=base_url,
         )
         actx.audit.log("login", provider=provider, connection=connection, flow=record.auth_type.value, status="success")
-    except Exception as e:
+    except Exception:
         actx.audit.log("login", provider=provider, connection=connection, status="failure")
         raise
 
