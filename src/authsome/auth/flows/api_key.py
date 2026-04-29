@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from authsome.auth.flows.base import AuthFlow, FlowResult
 from authsome.auth.models.connection import AccountInfo, ConnectionRecord
 from authsome.auth.models.enums import AuthType, ConnectionStatus
@@ -28,6 +30,14 @@ class ApiKeyFlow(AuthFlow):
         if not api_key or not api_key.strip():
             raise AuthenticationFailedError("API key cannot be empty", provider=provider.name)
 
+        cleaned_key = api_key.strip()
+        pattern = provider.api_key.key_pattern
+        if pattern and re.fullmatch(pattern, cleaned_key) is None:
+            hint = provider.api_key.key_pattern_hint or (
+                f"API key for {provider.display_name} doesn't match the expected format."
+            )
+            raise AuthenticationFailedError(hint, provider=provider.name)
+
         return FlowResult(
             connection=ConnectionRecord(
                 schema_version=2,  # TODO: Version should be somewhere else, like a global var
@@ -36,7 +46,7 @@ class ApiKeyFlow(AuthFlow):
                 connection_name=connection_name,
                 auth_type=AuthType.API_KEY,
                 status=ConnectionStatus.CONNECTED,
-                api_key=api_key.strip(),
+                api_key=cleaned_key,
                 obtained_at=utc_now(),
                 account=AccountInfo(),
                 metadata={},

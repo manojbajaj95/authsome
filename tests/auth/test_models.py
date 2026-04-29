@@ -31,7 +31,6 @@ class TestEnums:
 
     def test_export_format_values(self) -> None:
         assert ExportFormat.ENV.value == "env"
-        assert ExportFormat.SHELL.value == "shell"
         assert ExportFormat.JSON.value == "json"
 
 

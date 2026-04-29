@@ -10,7 +10,7 @@ from typing import Any
 import click
 from loguru import logger
 
-from authsome import __version__
+from authsome import __version__, audit
 from authsome.auth.models.enums import ExportFormat, FlowType
 from authsome.context import AuthsomeContext
 from authsome.errors import AuthsomeError
@@ -29,6 +29,7 @@ class ContextObj:
     def initialize(self) -> AuthsomeContext:
         if self._ctx is None:
             self._ctx = AuthsomeContext.create()
+            audit.setup(self._ctx.home / "audit.log")
         return self._ctx
 
     def print_json(self, data: Any) -> None:
@@ -302,6 +303,42 @@ def list_cmd(ctx_obj: ContextObj) -> None:
         ctx_obj.echo(render_row(row))
 
 
+@cli.command(name="log")
+@click.option("-n", "--lines", default=50, help="Number of lines to show.")
+@common_options
+@pass_ctx
+@handle_errors
+def log_cmd(ctx_obj: ContextObj, lines: int) -> None:
+    """View the authsome audit log."""
+    actx = ctx_obj.initialize()
+    audit_file = actx.home / "audit.log"
+    if not audit_file.exists():
+        if ctx_obj.json_output:
+            ctx_obj.print_json([])
+        else:
+            ctx_obj.echo("No audit log found.", err=True, color="yellow")
+        sys.exit(0)
+
+    try:
+        with open(audit_file, encoding="utf-8") as f:
+            log_lines = f.readlines()
+
+        target_lines = [line.strip() for line in log_lines[-lines:] if line.strip()]
+
+        if ctx_obj.json_output:
+            parsed_lines = [json_lib.loads(line) for line in target_lines]
+            ctx_obj.print_json(parsed_lines)
+        else:
+            for line in target_lines:
+                ctx_obj.echo(line)
+    except Exception as e:
+        if ctx_obj.json_output:
+            ctx_obj.print_json({"error": str(e)})
+        else:
+            ctx_obj.echo(f"Error reading audit log: {e}", err=True, color="red")
+        sys.exit(1)
+
+
 @cli.command()
 @click.argument("provider")
 @click.option("--connection", default="default", help="Connection name.")
@@ -331,15 +368,20 @@ def login(
     if not ctx_obj.json_output:
         ctx_obj.echo(f"Starting login for {provider}...", color="cyan")
 
-    login_result = actx.auth.login_with_result(
-        provider=provider,
-        connection_name=connection,
-        scopes=scope_list,
-        flow_override=flow_enum,
-        force=force,
-        base_url=base_url,
-    )
-    record = login_result.record
+    try:
+        login_result = actx.auth.login_with_result(
+            provider=provider,
+            connection_name=connection,
+            scopes=scope_list,
+            flow_override=flow_enum,
+            force=force,
+            base_url=base_url,
+        )
+        record = login_result.record
+        audit.log("login", provider=provider, connection=connection, flow=record.auth_type.value, status="success")
+    except Exception:
+        audit.log("login", provider=provider, connection=connection, status="failure")
+        raise
 
     if ctx_obj.json_output:
         ctx_obj.print_json(
@@ -366,6 +408,7 @@ def logout(ctx_obj: ContextObj, provider: str, connection: str) -> None:
     """Log out of a connection and remove local state."""
     actx = ctx_obj.initialize()
     actx.auth.logout(provider, connection)
+    audit.log("logout", provider=provider, connection=connection)
 
     if ctx_obj.json_output:
         ctx_obj.print_json({"status": "logged_out", "provider": provider, "connection": connection})
@@ -382,6 +425,7 @@ def revoke(ctx_obj: ContextObj, provider: str) -> None:
     """Complete reset of the provider, removing all connections and client secrets."""
     actx = ctx_obj.initialize()
     actx.auth.revoke(provider)
+    audit.log("revoke", provider=provider, connection="all")
 
     if ctx_obj.json_output:
         ctx_obj.print_json({"status": "revoked", "provider": provider})
@@ -398,6 +442,7 @@ def remove(ctx_obj: ContextObj, provider: str) -> None:
     """Uninstall a local provider or reset a bundled one."""
     actx = ctx_obj.initialize()
     actx.auth.remove(provider)
+    audit.log("remove", provider=provider, connection="all")
 
     if ctx_obj.json_output:
         ctx_obj.print_json({"status": "removed", "provider": provider})
@@ -417,6 +462,9 @@ def get(ctx_obj: ContextObj, provider: str, connection: str, field: str | None, 
     """Return provider connection metadata by default."""
     actx = ctx_obj.initialize()
     record = actx.auth.get_connection(provider, connection)
+
+    if show_secret:
+        audit.log("get", provider=provider, connection=connection, field=field or "all")
 
     data = redact(record) if not show_secret else record.model_dump(mode="json")
 
@@ -461,17 +509,18 @@ def inspect(ctx_obj: ContextObj, provider: str) -> None:
 
 
 @cli.command()
-@click.argument("provider")
+@click.argument("provider", required=False)
 @click.option("--connection", default="default", help="Connection name.")
-@click.option("--format", "export_format", type=click.Choice(["env", "shell", "json"]), default="env")
+@click.option("--format", "export_format", type=click.Choice(["env", "json"]), default="env")
 @common_options
 @pass_ctx
 @handle_errors
-def export(ctx_obj: ContextObj, provider: str, connection: str, export_format: str) -> None:
+def export(ctx_obj: ContextObj, provider: str | None, connection: str, export_format: str) -> None:
     """Export credential material in selected format."""
     actx = ctx_obj.initialize()
     fmt = ExportFormat(export_format)
     output = actx.auth.export(provider, connection, format=fmt)
+    audit.log("export", provider=provider, connection=connection, format=export_format)
     if output:
         click.echo(output)
 
@@ -510,6 +559,18 @@ def register(ctx_obj: ContextObj, path: str, force: bool) -> None:
 
         definition = ProviderDefinition.model_validate(data)
         actx.auth.register_provider(definition, force=force)
+
+        endpoints = [
+            ep
+            for ep in [
+                definition.oauth.authorization_url if definition.oauth else None,
+                definition.oauth.token_url if definition.oauth else None,
+                definition.oauth.revocation_url if definition.oauth else None,
+                definition.host_url,
+            ]
+            if ep
+        ]
+        audit.log("register", provider=definition.name, endpoints=endpoints)
 
         if ctx_obj.json_output:
             ctx_obj.print_json({"status": "registered", "provider": definition.name})

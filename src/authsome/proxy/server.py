@@ -15,6 +15,7 @@ from mitmproxy import http
 from mitmproxy.options import Options
 from mitmproxy.tools.dump import DumpMaster
 
+from authsome import audit
 from authsome.auth import AuthLayer
 from authsome.proxy.router import RouteMatch
 from authsome.utils import utc_now
@@ -74,12 +75,16 @@ class ProxyRouter:
         ]
 
         if len(matching_targets) == 0:
+            audit.log("proxy_miss", host=normalized_host, reason="no_match")
             return None
 
         best_specificity = max(_target_specificity(target) for target in matching_targets)
         best_targets = [target for target in matching_targets if _target_specificity(target) == best_specificity]
 
         if len(best_targets) > 1:
+            reason = "ambiguous_match:" + ",".join(
+                f"{target.match.provider}/{target.match.connection}" for target in best_targets
+            )
             logger.warning(
                 "Ambiguous proxy match for https://{}:{}{} — matched connections: {}. Forwarding unchanged.",
                 normalized_host,
@@ -87,6 +92,7 @@ class ProxyRouter:
                 path,
                 ", ".join(f"{target.match.provider}/{target.match.connection}" for target in best_targets),
             )
+            audit.log("proxy_miss", host=normalized_host, reason=reason)
             return None
         return best_targets[0].match
 
@@ -277,6 +283,14 @@ class AuthProxyAddon:
 
         for key, value in headers.items():
             flow.request.headers[key] = value
+
+        audit.log(
+            "proxy_injection",
+            provider=match.provider,
+            matched_host=flow.request.host,
+            request_method=flow.request.method,
+            request_path=flow.request.path,
+        )
 
     def _get_auth_headers(self, match: RouteMatch) -> dict[str, str]:
         cache_key = (match.provider, match.connection)
