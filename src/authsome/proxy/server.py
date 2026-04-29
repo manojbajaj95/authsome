@@ -74,16 +74,12 @@ class ProxyRouter:
         ]
 
         if len(matching_targets) == 0:
-            audit.log("proxy_miss", host=normalized_host, reason="no_match")
             return None
 
         best_specificity = max(_target_specificity(target) for target in matching_targets)
         best_targets = [target for target in matching_targets if _target_specificity(target) == best_specificity]
 
         if len(best_targets) > 1:
-            reason = "ambiguous_match:" + ",".join(
-                f"{target.match.provider}/{target.match.connection}" for target in best_targets
-            )
             logger.warning(
                 "Ambiguous proxy match for https://{}:{}{} — matched connections: {}. Forwarding unchanged.",
                 normalized_host,
@@ -91,7 +87,6 @@ class ProxyRouter:
                 path,
                 ", ".join(f"{target.match.provider}/{target.match.connection}" for target in best_targets),
             )
-            audit.log("proxy_miss", host=normalized_host, reason=reason)
             return None
         return best_targets[0].match
 
@@ -282,34 +277,6 @@ class AuthProxyAddon:
 
         for key, value in headers.items():
             flow.request.headers[key] = value
-
-    def _get_auth_headers(self, match: RouteMatch) -> dict[str, str]:
-        cache_key = (match.provider, match.connection)
-        now = utc_now()
-        cached = self._header_cache.get(cache_key)
-        if cached and _header_cache_valid(cached, now):
-            return cached.headers.copy()
-
-        lock = self._header_locks.setdefault(cache_key, threading.Lock())
-        with lock:
-            now = utc_now()
-            cached = self._header_cache.get(cache_key)
-            if cached and _header_cache_valid(cached, now):
-                return cached.headers.copy()
-
-            headers = self._auth.get_auth_headers(match.provider, match.connection)
-            record = self._auth.get_connection(match.provider, match.connection)
-            self._header_cache[cache_key] = _HeaderCacheEntry(
-                headers=headers.copy(),
-                expires_at=record.expires_at,
-            )
-            return headers
-
-
-def _header_cache_valid(entry: _HeaderCacheEntry, now: datetime) -> bool:
-    if entry.expires_at is None:
-        return True
-    return now < entry.expires_at - _HEADER_REFRESH_WINDOW
 
     def _get_auth_headers(self, match: RouteMatch) -> dict[str, str]:
         cache_key = (match.provider, match.connection)
