@@ -709,14 +709,14 @@ class TestAuthLayerExport:
         )
         auth.register_provider(custom)
 
-        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-openai"}))
+        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-openai-padded-for-regex"}))
         auth.login("custom", input_provider=MockInputProvider({"api_key": "sk-custom"}))
 
         output = auth.export(format=ExportFormat.JSON)
         data = json.loads(output)
 
         assert data["CUSTOM_API_KEY"] == "sk-custom"
-        assert data["OPENAI_API_KEY"] == "sk-openai"
+        assert data["OPENAI_API_KEY"] == "sk-openai-padded-for-regex"
 
     def test_export_oauth_format(self, auth: AuthLayer, monkeypatch: pytest.MonkeyPatch) -> None:
         provider = ProviderDefinition(
