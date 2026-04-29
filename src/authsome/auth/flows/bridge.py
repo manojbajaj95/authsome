@@ -11,6 +11,7 @@ stdout.
 """
 
 import http.server
+import re
 import socket
 import threading
 import urllib.parse
@@ -28,6 +29,52 @@ def _find_free_port() -> int:
         return s.getsockname()[1]
 
 
+_BRIDGE_STYLE = (
+    "body { font-family: system-ui, sans-serif; max-width: 400px; margin: 40px auto; padding: 20px; }"
+    "label { display: block; margin-bottom: 8px; font-weight: bold; }"
+    "input { width: 100%; padding: 8px; margin-bottom: 16px; border: 1px solid #ccc;"
+    " border-radius: 4px; box-sizing: border-box; }"
+    "input.has-error { border-color: #c62828; background: #fff5f5; }"
+    "input.has-error:focus { outline: none; border-color: #c62828; box-shadow: 0 0 0 3px rgba(198,40,40,0.15); }"
+    ".field-error { color: #c62828; font-size: 13px; margin: -12px 0 16px; }"
+    ".form-error { background: #fdecea; color: #b71c1c; border: 1px solid #f5c2c0;"
+    " border-radius: 4px; padding: 10px 12px; margin-bottom: 16px; font-size: 14px; }"
+    ".static-wrap { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }"
+    ".static-wrap input[readonly] { margin-bottom: 0; flex: 1; background: #f5f5f5; cursor: default; }"
+    "button { width: 100%; padding: 10px; background-color: #0066cc; color: white; border: none;"
+    " border-radius: 4px; cursor: pointer; font-size: 16px; }"
+    "button:hover { background-color: #0052a3; }"
+    "button.copybtn { width: auto; padding: 8px 12px; font-size: 14px; flex-shrink: 0; }"
+    ".instructions { margin-bottom: 16px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; }"
+    ".instructions-title { margin: 0 0 8px; font-weight: 600; }"
+    ".instructions-links { margin: 0; padding-left: 20px; }"
+    ".instructions-links li { margin-bottom: 6px; }"
+)
+
+
+def _validate_bridge_submission(fields: list[dict[str, Any]], submitted: dict[str, str]) -> dict[str, str]:
+    """Return ``{field_name: error_message}`` for any pattern violations.
+
+    Only fields that declare a ``pattern`` are checked, and only when the user
+    actually submitted a non-empty value (emptiness/required-ness is enforced
+    by the HTML ``required`` attribute and the receiving flow).
+    """
+    errors: dict[str, str] = {}
+    for field in fields:
+        if field.get("type") in ("instructions", "static"):
+            continue
+        pattern = field.get("pattern")
+        if not pattern:
+            continue
+        name = field.get("name")
+        if not name:
+            continue
+        value = submitted.get(name, "")
+        if value and re.fullmatch(pattern, value) is None:
+            errors[name] = field.get("pattern_hint") or f"{field.get('label', name)} doesn't match the expected format."
+    return errors
+
+
 class _BridgeHandler(http.server.BaseHTTPRequestHandler):
     """HTTP handler that renders a form and captures input."""
 
@@ -37,29 +84,25 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         """Serve the HTML form."""
-        html = [
+        self._render_form(values={}, errors={})
+
+    def _render_form(self, values: dict[str, str], errors: dict[str, str]) -> None:
+        html: list[str] = [
             "<!DOCTYPE html>",
             "<html><head><title>Authsome Secure Input</title>",
-            "<style>",
-            "body { font-family: system-ui, sans-serif; max-width: 400px; margin: 40px auto; padding: 20px; }",
-            "label { display: block; margin-bottom: 8px; font-weight: bold; }",
-            "input { width: 100%; padding: 8px; margin-bottom: 16px; border: 1px solid #ccc; ",
-            "border-radius: 4px; box-sizing: border-box; }",
-            ".static-wrap { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }",
-            ".static-wrap input[readonly] { margin-bottom: 0; flex: 1; background: #f5f5f5; cursor: default; }",
-            "button { width: 100%; padding: 10px; background-color: #0066cc; color: white; border: none; ",
-            "border-radius: 4px; cursor: pointer; font-size: 16px; }",
-            "button:hover { background-color: #0052a3; }",
-            "button.copybtn { width: auto; padding: 8px 12px; font-size: 14px; flex-shrink: 0; }",
-            ".instructions { margin-bottom: 16px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; }",
-            ".instructions-title { margin: 0 0 8px; font-weight: 600; }",
-            ".instructions-links { margin: 0; padding-left: 20px; }",
-            ".instructions-links li { margin-bottom: 6px; }",
-            "</style>",
+            f"<style>{_BRIDGE_STYLE}</style>",
             "</head><body>",
-            f"<h2>{self.title}</h2>",
-            "<form method='POST'>",
+            f"<h2>{escape(self.title)}</h2>",
+            "<form method='POST' novalidate>",
         ]
+
+        if errors:
+            html.append(
+                "<div class='form-error' role='alert'>"
+                "Please fix the highlighted field"
+                f"{'s' if len(errors) > 1 else ''} below."
+                "</div>"
+            )
 
         for field in self.fields:
             label = field["label"]
@@ -78,7 +121,7 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
             if field.get("type") == "static":
                 val = field.get("value", "")
                 val_esc = escape(val, quote=True)
-                html.append(f"<label>{label}</label>")
+                html.append(f"<label>{escape(label)}</label>")
                 html.append(
                     "<div class='static-wrap'>"
                     f"<input type='text' readonly value='{val_esc}' aria-readonly='true'>"
@@ -90,10 +133,22 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
             name = field["name"]
             input_type = field.get("type", "text")
             required = "required" if field.get("required", True) else ""
-            value = field.get("value", "")
-            val_esc = escape(value, quote=True) if value else ""
-            html.append(f"<label for='{name}'>{label}</label>")
-            html.append(f"<input type='{input_type}' id='{name}' name='{name}' value='{val_esc}' {required}>")
+            # Don't echo back password values on re-render — force the user to retype.
+            display_value = "" if input_type == "password" else values.get(name, field.get("value", ""))
+            val_esc = escape(display_value, quote=True) if display_value else ""
+            pattern = field.get("pattern")
+            pattern_attr = f" pattern='{escape(pattern, quote=True)}'" if pattern else ""
+            hint = field.get("pattern_hint")
+            title_attr = f" title='{escape(hint, quote=True)}'" if hint else ""
+            error = errors.get(name)
+            cls_attr = " class='has-error'" if error else ""
+            html.append(f"<label for='{name}'>{escape(label)}</label>")
+            html.append(
+                f"<input type='{input_type}' id='{name}' name='{name}' value='{val_esc}'"
+                f"{pattern_attr}{title_attr}{cls_attr} {required}>"
+            )
+            if error:
+                html.append(f"<div class='field-error' id='{name}-error'>{escape(error)}</div>")
 
         html.append("<button type='submit'>Submit Securely</button>")
         html.append("</form></body></html>")
@@ -109,10 +164,15 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
         post_data = self.rfile.read(content_length).decode("utf-8")
         parsed = urllib.parse.parse_qs(post_data)
 
-        # Flatten the parse_qs output (which returns lists)
-        _BridgeHandler.result = {k: v[0] for k, v in parsed.items() if v}
+        submitted = {k: v[0] for k, v in parsed.items() if v}
+        errors = _validate_bridge_submission(self.fields, submitted)
+        if errors:
+            # Keep the server running and re-render the form with the inline error banner.
+            self._render_form(values=submitted, errors=errors)
+            return
 
-        # Send success page
+        _BridgeHandler.result = submitted
+
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
@@ -124,7 +184,6 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
         )
         self.wfile.write(success_html.encode("utf-8"))
 
-        # Notify that we are done
         def kill_server():
             self.server.shutdown()
 

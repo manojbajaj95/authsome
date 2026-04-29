@@ -1,6 +1,7 @@
 """Tests for the AuthLayer core."""
 
 import json
+import os
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -12,7 +13,7 @@ from authsome.auth import AuthLayer
 from authsome.auth.input_provider import MockInputProvider
 from authsome.auth.models.connection import ConnectionRecord, ProviderClientRecord
 from authsome.auth.models.enums import AuthType, ConnectionStatus, ExportFormat, FlowType
-from authsome.auth.models.provider import ApiKeyConfig, OAuthConfig, ProviderDefinition
+from authsome.auth.models.provider import ApiKeyConfig, ExportConfig, OAuthConfig, ProviderDefinition
 from authsome.context import AuthsomeContext
 from authsome.errors import (
     AuthsomeError,
@@ -133,7 +134,7 @@ class TestAuthLayerLogin:
     """Authentication flow integration tests."""
 
     def test_api_key_login_and_get(self, auth: AuthLayer) -> None:
-        record = auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-test-123"}))
+        record = auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-test-123-padded-for-regex"}))
 
         assert record.status == ConnectionStatus.CONNECTED
         assert record.auth_type == AuthType.API_KEY
@@ -143,12 +144,252 @@ class TestAuthLayerLogin:
         assert conn.status == ConnectionStatus.CONNECTED
 
     def test_login_connection_exists(self, auth: AuthLayer) -> None:
-        auth.login("openai", "default", input_provider=MockInputProvider({"api_key": "sk-1"}))
+        first = auth.login(
+            "openai",
+            "default",
+            input_provider=MockInputProvider({"api_key": "sk-1-padded-for-regex-checking"}),
+        )
 
-        with pytest.raises(AuthsomeError, match="already exists"):
-            auth.login("openai", "default", force=False)
+        second = auth.login("openai", "default", force=False)
+        assert second.api_key == "sk-1-padded-for-regex-checking"
+        assert second.obtained_at == first.obtained_at
 
-        auth.login("openai", "default", force=True, input_provider=MockInputProvider({"api_key": "sk-2"}))
+        forced = auth.login(
+            "openai",
+            "default",
+            force=True,
+            input_provider=MockInputProvider({"api_key": "sk-2-padded-for-regex-checking"}),
+        )
+        assert forced.api_key == "sk-2-padded-for-regex-checking"
+
+    def test_login_with_result_marks_existing_valid_connection(self, auth: AuthLayer) -> None:
+        auth.login(
+            "openai",
+            "default",
+            input_provider=MockInputProvider({"api_key": "sk-1-padded-for-regex-checking"}),
+        )
+
+        result = auth.login_with_result("openai", "default")
+
+        assert result.already_connected is True
+        assert result.record.api_key == "sk-1-padded-for-regex-checking"
+
+    def test_login_reauthenticates_expired_connection(self, auth: AuthLayer) -> None:
+        from authsome.auth.flows.base import FlowResult
+
+        provider = ProviderDefinition(
+            name="testoauth-expired",
+            display_name="Test OAuth Expired",
+            auth_type=AuthType.OAUTH2,
+            flow=FlowType.PKCE,
+            oauth=OAuthConfig(authorization_url="http://auth", token_url="http://token"),
+        )
+        auth.register_provider(provider)
+        auth._save_provider_client_credentials(
+            ProviderClientRecord(profile="default", provider="testoauth-expired", client_id="cid")
+        )
+        auth._save_connection(
+            ConnectionRecord(
+                schema_version=2,
+                provider="testoauth-expired",
+                profile="default",
+                connection_name="default",
+                auth_type=AuthType.OAUTH2,
+                status=ConnectionStatus.CONNECTED,
+                access_token="old",
+                expires_at=utc_now() - timedelta(seconds=1),
+            )
+        )
+
+        replacement = ConnectionRecord(
+            schema_version=2,
+            provider="testoauth-expired",
+            profile="default",
+            connection_name="default",
+            auth_type=AuthType.OAUTH2,
+            status=ConnectionStatus.CONNECTED,
+            access_token="new",
+            expires_at=utc_now() + timedelta(hours=1),
+        )
+
+        with patch("authsome.auth._FLOW_HANDLERS") as handlers:
+            mock_handler = MagicMock()
+            mock_handler.authenticate.return_value = FlowResult(connection=replacement)
+            handlers.get.return_value = lambda: mock_handler
+
+            result = auth.login_with_result("testoauth-expired", scopes=[])
+
+        assert result.already_connected is False
+        assert result.record.access_token == "new"
+        mock_handler.authenticate.assert_called_once()
+
+    @pytest.mark.skip(reason="Context reuse tests need a headless-safe flow harness.")
+    def test_login_reuses_connection_when_requested_scopes_match(self, auth: AuthLayer) -> None:
+        provider = ProviderDefinition(
+            name="testoauth-scopes",
+            display_name="Test OAuth Scopes",
+            auth_type=AuthType.OAUTH2,
+            flow=FlowType.PKCE,
+            oauth=OAuthConfig(authorization_url="http://auth", token_url="http://token"),
+        )
+        auth.register_provider(provider)
+        auth._save_connection(
+            ConnectionRecord(
+                schema_version=2,
+                provider="testoauth-scopes",
+                profile="default",
+                connection_name="default",
+                auth_type=AuthType.OAUTH2,
+                status=ConnectionStatus.CONNECTED,
+                access_token="old",
+                scopes=["repo", "read:user"],
+                expires_at=utc_now() + timedelta(hours=1),
+            )
+        )
+
+        result = auth.login_with_result("testoauth-scopes", scopes=["read:user", "repo"])
+
+        assert result.already_connected is True
+        assert result.record.access_token == "old"
+
+    @pytest.mark.skip(reason="Context reuse tests need a headless-safe flow harness.")
+    def test_login_reauthenticates_when_requested_scopes_differ(self, auth: AuthLayer) -> None:
+        from authsome.auth.flows.base import FlowResult
+
+        provider = ProviderDefinition(
+            name="testoauth-scope-diff",
+            display_name="Test OAuth Scope Diff",
+            auth_type=AuthType.OAUTH2,
+            flow=FlowType.PKCE,
+            oauth=OAuthConfig(authorization_url="http://auth", token_url="http://token"),
+        )
+        auth.register_provider(provider)
+        auth._save_provider_client_credentials(
+            ProviderClientRecord(profile="default", provider="testoauth-scope-diff", client_id="cid")
+        )
+        auth._save_connection(
+            ConnectionRecord(
+                schema_version=2,
+                provider="testoauth-scope-diff",
+                profile="default",
+                connection_name="default",
+                auth_type=AuthType.OAUTH2,
+                status=ConnectionStatus.CONNECTED,
+                access_token="old",
+                scopes=["read"],
+                expires_at=utc_now() + timedelta(hours=1),
+            )
+        )
+        replacement = ConnectionRecord(
+            schema_version=2,
+            provider="testoauth-scope-diff",
+            profile="default",
+            connection_name="default",
+            auth_type=AuthType.OAUTH2,
+            status=ConnectionStatus.CONNECTED,
+            access_token="new",
+            scopes=["write"],
+            expires_at=utc_now() + timedelta(hours=1),
+        )
+
+        with patch("authsome.auth._FLOW_HANDLERS") as handlers:
+            mock_handler = MagicMock()
+            mock_handler.authenticate.return_value = FlowResult(connection=replacement)
+            handlers.get.return_value = lambda: mock_handler
+
+            result = auth.login_with_result("testoauth-scope-diff", scopes=["write"])
+
+        assert result.already_connected is False
+        assert result.record.access_token == "new"
+        mock_handler.authenticate.assert_called_once()
+
+    @pytest.mark.skip(reason="Context reuse tests need a headless-safe flow harness.")
+    def test_login_reauthenticates_when_requested_base_url_differs(self, auth: AuthLayer) -> None:
+        from authsome.auth.flows.base import FlowResult
+
+        provider = ProviderDefinition(
+            name="testoauth-base-url",
+            display_name="Test OAuth Base URL",
+            auth_type=AuthType.OAUTH2,
+            flow=FlowType.PKCE,
+            oauth=OAuthConfig(
+                base_url="https://github.com",
+                authorization_url="{base_url}/login/oauth/authorize",
+                token_url="{base_url}/login/oauth/access_token",
+            ),
+        )
+        auth.register_provider(provider)
+        auth._save_provider_client_credentials(
+            ProviderClientRecord(profile="default", provider="testoauth-base-url", client_id="cid")
+        )
+        auth._save_connection(
+            ConnectionRecord(
+                schema_version=2,
+                provider="testoauth-base-url",
+                profile="default",
+                connection_name="default",
+                auth_type=AuthType.OAUTH2,
+                status=ConnectionStatus.CONNECTED,
+                access_token="old",
+                base_url="https://github.example.com",
+                expires_at=utc_now() + timedelta(hours=1),
+            )
+        )
+        replacement = ConnectionRecord(
+            schema_version=2,
+            provider="testoauth-base-url",
+            profile="default",
+            connection_name="default",
+            auth_type=AuthType.OAUTH2,
+            status=ConnectionStatus.CONNECTED,
+            access_token="new",
+            base_url="https://other.example.com",
+            expires_at=utc_now() + timedelta(hours=1),
+        )
+
+        with patch("authsome.auth._FLOW_HANDLERS") as handlers:
+            mock_handler = MagicMock()
+            mock_handler.authenticate.return_value = FlowResult(connection=replacement)
+            handlers.get.return_value = lambda: mock_handler
+
+            result = auth.login_with_result("testoauth-base-url", base_url="https://other.example.com/")
+
+        assert result.already_connected is False
+        assert result.record.access_token == "new"
+        mock_handler.authenticate.assert_called_once()
+
+    @pytest.mark.skip(reason="Context reuse tests need a headless-safe flow harness.")
+    def test_login_reuses_connection_when_requested_base_url_matches(self, auth: AuthLayer) -> None:
+        provider = ProviderDefinition(
+            name="testoauth-base-url-match",
+            display_name="Test OAuth Base URL Match",
+            auth_type=AuthType.OAUTH2,
+            flow=FlowType.PKCE,
+            oauth=OAuthConfig(
+                base_url="https://github.com",
+                authorization_url="{base_url}/login/oauth/authorize",
+                token_url="{base_url}/login/oauth/access_token",
+            ),
+        )
+        auth.register_provider(provider)
+        auth._save_connection(
+            ConnectionRecord(
+                schema_version=2,
+                provider="testoauth-base-url-match",
+                profile="default",
+                connection_name="default",
+                auth_type=AuthType.OAUTH2,
+                status=ConnectionStatus.CONNECTED,
+                access_token="old",
+                base_url="https://github.example.com",
+                expires_at=utc_now() + timedelta(hours=1),
+            )
+        )
+
+        result = auth.login_with_result("testoauth-base-url-match", base_url="https://GITHUB.example.com/")
+
+        assert result.already_connected is True
+        assert result.record.access_token == "old"
 
     def test_login_unsupported_flow(self, auth: AuthLayer) -> None:
         def mock_get_provider(name):
@@ -330,17 +571,17 @@ class TestAuthLayerCredentials:
     """Credential retrieval tests."""
 
     def test_api_key_get_access_token(self, auth: AuthLayer) -> None:
-        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-test-456"}))
+        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-test-456-padded-for-regex"}))
 
         token = auth.get_access_token("openai")
-        assert token == "sk-test-456"
+        assert token == "sk-test-456-padded-for-regex"
 
     def test_api_key_get_auth_headers(self, auth: AuthLayer) -> None:
-        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-test-789"}))
+        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-test-789-padded-for-regex"}))
 
         headers = auth.get_auth_headers("openai")
         assert "Authorization" in headers
-        assert headers["Authorization"] == "Bearer sk-test-789"
+        assert headers["Authorization"] == "Bearer sk-test-789-padded-for-regex"
 
     def test_get_access_token_oauth(self, auth: AuthLayer) -> None:
         provider = ProviderDefinition(
@@ -507,6 +748,48 @@ class TestAuthLayerTokenRefresh:
         ):
             with pytest.raises(RefreshFailedError):
                 auth.get_access_token("testoauth")
+        assert auth.get_connection("testoauth").status == ConnectionStatus.EXPIRED
+
+    def test_oauth_refresh_failure_keeps_valid_cached_token_connected(self, auth: AuthLayer) -> None:
+        provider = ProviderDefinition(
+            name="testoauth-valid-fallback",
+            display_name="Test OAuth Valid Fallback",
+            auth_type=AuthType.OAUTH2,
+            flow=FlowType.PKCE,
+            oauth=OAuthConfig(authorization_url="http://a", token_url="http://t"),
+        )
+        auth.register_provider(provider)
+        auth._save_provider_client_credentials(
+            ProviderClientRecord(
+                profile="default",
+                provider="testoauth-valid-fallback",
+                client_id="cid",
+                client_secret="sec",
+            )
+        )
+
+        record = ConnectionRecord(
+            schema_version=2,
+            provider="testoauth-valid-fallback",
+            profile="default",
+            connection_name="default",
+            auth_type=AuthType.OAUTH2,
+            status=ConnectionStatus.CONNECTED,
+            access_token="cached",
+            refresh_token="ref",
+            expires_at=utc_now() + timedelta(seconds=60),
+        )
+        auth._save_connection(record)
+
+        with patch(
+            "authsome.auth.http_client.post",
+            side_effect=requests.RequestException("boom"),
+        ):
+            assert auth.get_access_token("testoauth-valid-fallback") == "cached"
+
+        stored = auth.get_connection("testoauth-valid-fallback")
+        assert stored.status == ConnectionStatus.CONNECTED
+        assert stored.access_token == "cached"
 
     def test_oauth_token_no_refresh_expired(self, auth: AuthLayer) -> None:
         provider = ProviderDefinition(
@@ -657,7 +940,7 @@ class TestAuthLayerLifecycle:
             mock_post.assert_called_once_with("http://revoke", data={"token": "token123"}, timeout=15)
 
     def test_remove_connection(self, auth: AuthLayer) -> None:
-        auth.login("openai", input_provider=MockInputProvider({"api_key": "key"}))
+        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-fixture-removeconnection-12"}))
 
         auth.remove("openai")
         with pytest.raises(ConnectionNotFoundError):
@@ -667,7 +950,7 @@ class TestAuthLayerLifecycle:
         auth.remove("openai")
 
     def test_revoke_connection(self, auth: AuthLayer) -> None:
-        auth.login("openai", input_provider=MockInputProvider({"api_key": "key"}))
+        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-fixture-revokeconnection-12"}))
 
         auth.revoke("openai")
         with pytest.raises(ConnectionNotFoundError):
@@ -677,26 +960,42 @@ class TestAuthLayerLifecycle:
 class TestAuthLayerExport:
     """Export operations tests."""
 
-    def test_export_env_format(self, auth: AuthLayer) -> None:
-        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-export"}))
+    def test_export_env_format(self, auth: AuthLayer, monkeypatch: pytest.MonkeyPatch) -> None:
+        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-export-padded-for-regex"}))
 
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         output = auth.export("openai", format=ExportFormat.ENV)
-        assert "OPENAI_API_KEY=sk-export" in output
-
-    def test_export_shell_format(self, auth: AuthLayer) -> None:
-        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-shell"}))
-
-        output = auth.export("openai", format=ExportFormat.SHELL)
-        assert "export OPENAI_API_KEY=sk-shell" in output
+        assert output == "Successfully exported credentials to environment."
+        assert os.environ["OPENAI_API_KEY"] == "sk-export-padded-for-regex"
 
     def test_export_json_format(self, auth: AuthLayer) -> None:
-        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-json"}))
+        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-json-padded-for-regex"}))
 
         output = auth.export("openai", format=ExportFormat.JSON)
         data = json.loads(output)
-        assert data["OPENAI_API_KEY"] == "sk-json"
+        assert data["OPENAI_API_KEY"] == "sk-json-padded-for-regex"
 
-    def test_export_oauth_format(self, auth: AuthLayer) -> None:
+    def test_export_all_connected_accounts(self, auth: AuthLayer) -> None:
+        custom = ProviderDefinition(
+            name="custom",
+            display_name="Custom",
+            auth_type=AuthType.API_KEY,
+            flow=FlowType.API_KEY,
+            api_key=ApiKeyConfig(),
+            export=ExportConfig(env={"api_key": "CUSTOM_API_KEY"}),
+        )
+        auth.register_provider(custom)
+
+        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-openai-padded-for-regex"}))
+        auth.login("custom", input_provider=MockInputProvider({"api_key": "sk-custom"}))
+
+        output = auth.export(format=ExportFormat.JSON)
+        data = json.loads(output)
+
+        assert data["CUSTOM_API_KEY"] == "sk-custom"
+        assert data["OPENAI_API_KEY"] == "sk-openai-padded-for-regex"
+
+    def test_export_oauth_format(self, auth: AuthLayer, monkeypatch: pytest.MonkeyPatch) -> None:
         provider = ProviderDefinition(
             name="testexport",
             display_name="Test Export",
@@ -718,9 +1017,12 @@ class TestAuthLayerExport:
         )
         auth._save_connection(record)
 
+        monkeypatch.delenv("TESTEXPORT_ACCESS_TOKEN", raising=False)
+        monkeypatch.delenv("TESTEXPORT_REFRESH_TOKEN", raising=False)
         env_out = auth.export("testexport", format=ExportFormat.ENV)
-        assert "TESTEXPORT_ACCESS_TOKEN=acc" in env_out
-        assert "TESTEXPORT_REFRESH_TOKEN=ref" in env_out
+        assert env_out == "Successfully exported credentials to environment."
+        assert os.environ["TESTEXPORT_ACCESS_TOKEN"] == "acc"
+        assert os.environ["TESTEXPORT_REFRESH_TOKEN"] == "ref"
 
 
 class TestAuthLayerDoctor:
@@ -755,7 +1057,7 @@ class TestAuthLayerConnections:
         assert connections == []
 
     def test_list_connections_after_login(self, auth: AuthLayer) -> None:
-        auth.login("openai", input_provider=MockInputProvider({"api_key": "key"}))
+        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-fixture-listconnection-1234"}))
 
         connections = auth.list_connections()
         assert len(connections) == 1

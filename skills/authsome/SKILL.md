@@ -9,33 +9,18 @@ description: |
 
 # Authsome Skill
 
-Authsome connects your agent to external services with zero secret handling. The workflow is: **setup** → **list** → **login** → **run**.
+Authsome connects your agent to external services with zero secret handling. The workflow is: **list** → **login** → **run**.
 
 ---
 
 ## Step 0 — Setup
 
-Prefer `uvx authsome@latest` — it runs in an isolated environment and always picks up the latest version without a separate install step. Fall back to pipx (also isolated), then pip as a last resort:
+Use `uvx` for the fastest, isolated setup. In your commands, `authsome` refers to the executable (e.g., `uvx authsome@latest` or `pipx run authsome`).
 
 ```bash
-if command -v uvx &>/dev/null; then
-  AUTHSOME="uvx authsome@latest"
-elif command -v pipx &>/dev/null; then
-  AUTHSOME="pipx run authsome"
-elif command -v authsome &>/dev/null; then
-  AUTHSOME="authsome"
-elif command -v pip &>/dev/null; then
-  pip install --user authsome
-  AUTHSOME="authsome"
-else
-  echo "No Python package manager found. Install uv (https://docs.astral.sh/uv/) then re-run."
-  exit 1
-fi
-
-$AUTHSOME init
+# Recommended
+alias authsome="uvx authsome@latest"
 ```
-
-> `uvx` and `pipx` are preferred because they isolate authsome from the system Python. `pip install --user` is a fallback and does not provide isolation.
 
 ---
 
@@ -44,7 +29,7 @@ $AUTHSOME init
 Check what's available and whether you're already connected:
 
 ```bash
-$AUTHSOME list
+authsome list
 ```
 
 - If the provider you need is listed and already **connected** → skip to Step 3.
@@ -58,7 +43,13 @@ $AUTHSOME list
 Authsome opens a browser window and handles all credential capture securely — you do not need to pass any secrets:
 
 ```bash
-$AUTHSOME login <provider>
+authsome login <provider>
+```
+
+If the provider requires specific permissions, use the `--scopes` flag. **CRITICAL:** Do NOT register a new provider just to add scopes; always use `--scopes` with the existing provider:
+
+```bash
+authsome login <provider> --scopes repo,user,gist
 ```
 
 If the provider requires you to register an OAuth app manually (standard PKCE without DCR), set the redirect URI in the provider's developer console to exactly `http://127.0.0.1:7999/callback`.
@@ -66,12 +57,12 @@ If the provider requires you to register an OAuth app manually (standard PKCE wi
 After login, verify the connection before proceeding:
 
 ```bash
-$AUTHSOME list
+authsome list
 ```
 
-If the provider does not show as **connected**, check the error output and re-run `$AUTHSOME login <provider>`. Use `--flow device_code` if the browser flow is unavailable.
+If the provider does not show as **connected**, check the error output and re-run `authsome login <provider>`. Use `--flow device_code` if the browser flow is unavailable.
 
-For additional login options, run `$AUTHSOME login --help` or see [cli.md](https://raw.githubusercontent.com/manojbajaj95/authsome/main/docs/cli.md).
+For additional login options, run `authsome login --help` or see [cli.md](https://raw.githubusercontent.com/manojbajaj95/authsome/main/docs/cli.md).
 
 ---
 
@@ -100,19 +91,19 @@ python my_agent.py   # script calls api.openai.com internally
 Wrap your command with `authsome run` to launch it behind the local auth proxy. The proxy matches outbound requests to known providers (e.g. `api.openai.com`) using the `host_url` in their definitions and injects auth headers at request time. Credentials are never placed in the child environment:
 
 ```bash
-$AUTHSOME run -- <your command>
+authsome run <your command>
 ```
 
 **Examples:**
 ```bash
 # Call the GitHub API (proxy matches api.github.com)
-$AUTHSOME run -- curl https://api.github.com/user
+authsome run curl https://api.github.com/user
 
 # Run a script that calls multiple providers — proxy handles all of them
-$AUTHSOME run -- python my_agent.py
+authsome run python my_agent.py
 
 # Legacy/Explicit export (if proxy is not supported by your tool)
-$AUTHSOME export github --format shell
+authsome export github --format env
 ```
 
 ---
@@ -132,7 +123,7 @@ When the provider isn't in the bundled list, do this before writing any config:
 
 3. **Write and register the provider JSON** — follow the [provider registration guide](https://raw.githubusercontent.com/manojbajaj95/authsome/main/docs/register-provider.md) to write the provider JSON. Save the file to a local path (e.g. `/tmp/<provider>.json`), then register it:
    ```bash
-   $AUTHSOME register /tmp/<provider>.json
+   authsome register /tmp/<provider>.json
    ```
 
 4. Return to **Step 2 — Login**.
@@ -144,8 +135,8 @@ When the provider isn't in the bundled list, do this before writing any config:
 For anything beyond the basics (multiple connections, profiles, custom scopes, exporting credentials), run:
 
 ```bash
-$AUTHSOME --help
-$AUTHSOME <command> --help
+authsome --help
+authsome <command> --help
 ```
 
 Or see the full reference at [cli.md](https://raw.githubusercontent.com/manojbajaj95/authsome/main/docs/cli.md).
@@ -158,4 +149,4 @@ If you hit a bug, missing provider, or unexpected behaviour, open an issue at:
 
 **https://github.com/manojbajaj95/authsome/issues**
 
-Include the authsome version (`$AUTHSOME --version`), the command you ran, and the error output. Do not include secrets or tokens in the report.
+Include the authsome version (`authsome --version`), the command you ran, and the error output. Do not include secrets or tokens in the report.

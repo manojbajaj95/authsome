@@ -8,9 +8,13 @@ Does not touch encryption directly — all persistence goes through the Vault.
 from __future__ import annotations
 
 import json
+import os
+import re
+from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 import requests as http_client
 from loguru import logger
@@ -50,6 +54,14 @@ _FLOW_HANDLERS: dict[FlowType, type[AuthFlow]] = {
     FlowType.DCR_PKCE: DcrPkceFlow,
     FlowType.API_KEY: ApiKeyFlow,
 }
+
+
+@dataclass(frozen=True)
+class LoginResult:
+    """Result of a login attempt."""
+
+    record: ConnectionRecord
+    already_connected: bool = False
 
 
 class AuthLayer:
@@ -158,15 +170,35 @@ class AuthLayer:
         input_provider: InputProvider | None = None,
         base_url: str | None = None,
     ) -> ConnectionRecord:
+        return self.login_with_result(
+            provider=provider,
+            connection_name=connection_name,
+            scopes=scopes,
+            flow_override=flow_override,
+            force=force,
+            input_provider=input_provider,
+            base_url=base_url,
+        ).record
+
+    def login_with_result(
+        self,
+        provider: str,
+        connection_name: str = "default",
+        scopes: list[str] | None = None,
+        flow_override: FlowType | None = None,
+        force: bool = False,
+        input_provider: InputProvider | None = None,
+        base_url: str | None = None,
+    ) -> LoginResult:
         definition = self.get_provider(provider)
 
         try:
             existing = self.get_connection(provider, connection_name)
             if existing and not force:
-                raise AuthsomeError(
-                    f"Connection '{connection_name}' for provider '{provider}' already exists. "
-                    "Use --force to overwrite."
-                )
+                if self._connection_is_valid(existing) and self._requested_context_matches(
+                    existing, scopes=scopes, base_url=base_url
+                ):
+                    return LoginResult(record=existing, already_connected=True)
         except ConnectionNotFoundError:
             pass
 
@@ -236,7 +268,11 @@ class AuthLayer:
                 )
 
         if flow_type == FlowType.API_KEY:
-            fields_to_collect.append(InputField(name="api_key", label="API Key", secret=True))
+            api_key_field = InputField(name="api_key", label="API Key", secret=True)
+            if definition.api_key and definition.api_key.key_pattern:
+                api_key_field.pattern = definition.api_key.key_pattern
+                api_key_field.pattern_hint = definition.api_key.key_pattern_hint
+            fields_to_collect.append(api_key_field)
 
         static_hints.extend(self._build_docs_hints(definition, flow_type))
 
@@ -303,7 +339,51 @@ class AuthLayer:
         self._update_provider_metadata(provider, connection_name)
 
         logger.info("Login successful: provider={} connection={} profile={}", provider, connection_name, self._identity)
-        return result.connection
+        return LoginResult(record=result.connection)
+
+    @staticmethod
+    def _connection_is_valid(record: ConnectionRecord) -> bool:
+        if record.status != ConnectionStatus.CONNECTED:
+            return False
+        if record.expires_at is None:
+            return True
+        return utc_now() < record.expires_at
+
+    @classmethod
+    def _requested_context_matches(
+        cls,
+        record: ConnectionRecord,
+        *,
+        scopes: list[str] | None,
+        base_url: str | None,
+    ) -> bool:
+        if scopes is not None and cls._normalize_scopes(scopes) != cls._normalize_scopes(record.scopes):
+            return False
+        if base_url is not None and cls._normalize_base_url(base_url) != cls._normalize_base_url(record.base_url):
+            return False
+        return True
+
+    @staticmethod
+    def _normalize_scopes(scopes: list[str] | None) -> set[str]:
+        return {scope.strip() for scope in scopes or [] if scope.strip()}
+
+    @staticmethod
+    def _normalize_base_url(base_url: str | None) -> str | None:
+        if not base_url:
+            return None
+        raw = base_url.strip().rstrip("/")
+        parsed = urlsplit(raw)
+        if not parsed.scheme or not parsed.netloc:
+            return raw
+        return urlunsplit(
+            (
+                parsed.scheme.lower(),
+                parsed.netloc.lower(),
+                parsed.path.rstrip("/"),
+                parsed.query,
+                "",
+            )
+        )
 
     @staticmethod
     def _build_docs_hints(definition: ProviderDefinition, flow_type: FlowType) -> list[dict[str, Any]]:
@@ -398,7 +478,25 @@ class AuthLayer:
 
     # ── Export operations ─────────────────────────────────────────────────
 
-    def export(self, provider: str, connection: str = "default", format: ExportFormat = ExportFormat.ENV) -> str:
+    def export(
+        self, provider: str | None = None, connection: str = "default", format: ExportFormat = ExportFormat.ENV
+    ) -> str:
+        if provider is None:
+            values: dict[str, str] = {}
+            for provider_record in self.list_connections():
+                provider_name = provider_record["name"]
+                for connection_record in provider_record["connections"]:
+                    connection_name = connection_record["connection_name"]
+                    for env_name, env_value in self._export_connection_values(provider_name, connection_name).items():
+                        if env_name in values:
+                            env_name = self._disambiguate_export_name(env_name, provider_name, connection_name, values)
+                        values[env_name] = env_value
+            return self._format_export_values(values, format)
+
+        values = self._export_connection_values(provider, connection)
+        return self._format_export_values(values, format)
+
+    def _export_connection_values(self, provider: str, connection: str) -> dict[str, str]:
         definition = self.get_provider(provider)
         record = self.get_connection(provider, connection)
         values: dict[str, str] = {}
@@ -416,13 +514,36 @@ class AuthLayer:
                 env_name = export_map.get("api_key", f"{provider.upper()}_API_KEY")
                 values[env_name] = record.api_key
 
+        return values
+
+    def _format_export_values(self, values: dict[str, str], format: ExportFormat) -> str:
         if format == ExportFormat.ENV:
-            return "\n".join(f"{k}={v}" for k, v in values.items())
-        elif format == ExportFormat.SHELL:
-            return "\n".join(f"export {k}={v}" for k, v in values.items())
+            os.environ.update(values)
+            return "Successfully exported credentials to environment."
         elif format == ExportFormat.JSON:
             return json.dumps(values, indent=2)
         return ""
+
+    def _disambiguate_export_name(
+        self, env_name: str, provider: str, connection: str, existing_values: dict[str, str]
+    ) -> str:
+        suffix = "_".join(
+            part
+            for part in (
+                self._export_name_part(provider),
+                self._export_name_part(connection),
+            )
+            if part
+        )
+        candidate = f"{env_name}_{suffix}" if suffix else env_name
+        counter = 2
+        while candidate in existing_values:
+            candidate = f"{env_name}_{suffix}_{counter}" if suffix else f"{env_name}_{counter}"
+            counter += 1
+        return candidate
+
+    def _export_name_part(self, value: str) -> str:
+        return re.sub(r"[^A-Z0-9]+", "_", value.upper()).strip("_")
 
     # ── Profile operations ────────────────────────────────────────────────
 
@@ -551,9 +672,21 @@ class AuthLayer:
                     if refreshed.access_token is None:
                         raise RefreshFailedError("Refreshed record missing access token", provider=provider)
                     return refreshed.access_token
-                except RefreshFailedError:
+                except RefreshFailedError as exc:
                     if now < record.expires_at:
+                        logger.warning(
+                            "Token refresh failed for provider={} connection={} profile={}: {}; "
+                            "using cached token until {}. Re-authenticate with: authsome login {}",
+                            provider,
+                            connection,
+                            self._identity,
+                            exc,
+                            record.expires_at.isoformat(),
+                            provider,
+                        )
                         return record.access_token
+                    record.status = ConnectionStatus.EXPIRED
+                    self._save_connection(record)
                     raise
             else:
                 if now >= record.expires_at:
@@ -605,8 +738,6 @@ class AuthLayer:
             state_record.last_refresh_at = utc_now()
             state_record.last_refresh_error = str(exc)
             self._save_provider_state(state_record)
-            record.status = ConnectionStatus.EXPIRED
-            self._save_connection(record)
             raise RefreshFailedError(str(exc), provider=provider_name) from exc
 
         now = utc_now()
