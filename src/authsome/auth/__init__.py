@@ -638,6 +638,8 @@ class AuthLayer:
                             provider,
                         )
                         return record.access_token
+                    record.status = ConnectionStatus.EXPIRED
+                    self._save_connection(record)
                     raise
             else:
                 if now >= record.expires_at:
@@ -689,8 +691,6 @@ class AuthLayer:
             state_record.last_refresh_at = utc_now()
             state_record.last_refresh_error = str(exc)
             self._save_provider_state(state_record)
-            record.status = ConnectionStatus.EXPIRED
-            self._save_connection(record)
             raise RefreshFailedError(str(exc), provider=provider_name) from exc
 
         now = utc_now()

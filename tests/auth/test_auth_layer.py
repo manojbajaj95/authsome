@@ -734,6 +734,48 @@ class TestAuthLayerTokenRefresh:
         ):
             with pytest.raises(RefreshFailedError):
                 auth.get_access_token("testoauth")
+        assert auth.get_connection("testoauth").status == ConnectionStatus.EXPIRED
+
+    def test_oauth_refresh_failure_keeps_valid_cached_token_connected(self, auth: AuthLayer) -> None:
+        provider = ProviderDefinition(
+            name="testoauth-valid-fallback",
+            display_name="Test OAuth Valid Fallback",
+            auth_type=AuthType.OAUTH2,
+            flow=FlowType.PKCE,
+            oauth=OAuthConfig(authorization_url="http://a", token_url="http://t"),
+        )
+        auth.register_provider(provider)
+        auth._save_provider_client_credentials(
+            ProviderClientRecord(
+                profile="default",
+                provider="testoauth-valid-fallback",
+                client_id="cid",
+                client_secret="sec",
+            )
+        )
+
+        record = ConnectionRecord(
+            schema_version=2,
+            provider="testoauth-valid-fallback",
+            profile="default",
+            connection_name="default",
+            auth_type=AuthType.OAUTH2,
+            status=ConnectionStatus.CONNECTED,
+            access_token="cached",
+            refresh_token="ref",
+            expires_at=utc_now() + timedelta(seconds=60),
+        )
+        auth._save_connection(record)
+
+        with patch(
+            "authsome.auth.http_client.post",
+            side_effect=requests.RequestException("boom"),
+        ):
+            assert auth.get_access_token("testoauth-valid-fallback") == "cached"
+
+        stored = auth.get_connection("testoauth-valid-fallback")
+        assert stored.status == ConnectionStatus.CONNECTED
+        assert stored.access_token == "cached"
 
     def test_oauth_token_no_refresh_expired(self, auth: AuthLayer) -> None:
         provider = ProviderDefinition(
