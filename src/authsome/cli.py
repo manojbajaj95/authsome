@@ -139,6 +139,23 @@ def format_expires_at(expires_at: str | None) -> str | None:
     return f"expires in {label}"
 
 
+def connection_is_active(connection: dict[str, Any]) -> bool:
+    """Return whether a connection should count as actively connected."""
+    if connection.get("status") != "connected":
+        return False
+
+    expires_at = connection.get("expires_at")
+    if not expires_at:
+        return True
+    try:
+        expiry = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=UTC)
+    return datetime.now(UTC) < expiry
+
+
 def _format_duration(total_seconds: int) -> str:
     if total_seconds < 60:
         return f"{total_seconds}s"
@@ -213,29 +230,33 @@ def list_cmd(ctx_obj: ContextObj) -> None:
         ctx_obj.print_json({"bundled": bundled_out, "custom": custom_out})
         return
 
-    rows: list[dict[str, str]] = []
+    rows: list[dict[str, Any]] = []
     for p in bundled_out + custom_out:
         provider_label = f"{p['display_name']} [{p['name']}]"
         if p["connections"]:
             for conn in p["connections"]:
                 rows.append(
                     {
+                        "provider_id": p["name"],
                         "provider": provider_label,
                         "source": p["source"],
                         "auth": p["auth_type"],
                         "connection": conn["connection_name"],
                         "status": conn["status"],
+                        "expires_at": conn.get("expires_at"),
                         "expires": format_expires_at(conn.get("expires_at")) or "-",
                     }
                 )
         else:
             rows.append(
                 {
+                    "provider_id": p["name"],
                     "provider": provider_label,
                     "source": p["source"],
                     "auth": p["auth_type"],
                     "connection": "-",
                     "status": "not_connected",
+                    "expires_at": None,
                     "expires": "-",
                 }
             )
@@ -244,7 +265,8 @@ def list_cmd(ctx_obj: ContextObj) -> None:
         ctx_obj.echo("No providers configured.")
         return
 
-    connected_count = sum(1 for row in rows if row["status"] != "not_connected")
+    connected_provider_ids = {row["provider_id"] for row in rows if connection_is_active(row)}
+    connected_count = len(connected_provider_ids)
     ctx_obj.echo(f"Providers: {len(bundled_out) + len(custom_out)} total, {connected_count} connected")
 
     headers = {
@@ -260,7 +282,7 @@ def list_cmd(ctx_obj: ContextObj) -> None:
         for key in ("provider", "source", "auth", "connection", "status", "expires")
     }
 
-    def render_row(row: dict[str, str]) -> str:
+    def render_row(row: dict[str, Any]) -> str:
         return (
             f"{row['provider']:<{widths['provider']}}  "
             f"{row['source']:<{widths['source']}}  "
@@ -525,7 +547,11 @@ def whoami(ctx_obj: ContextObj) -> None:
         "connected_providers": [],
     }
     connected_providers = sorted(
-        provider_group["name"] for provider_group in actx.auth.list_connections() if provider_group["connections"]
+        {
+            provider_group["name"]
+            for provider_group in actx.auth.list_connections()
+            if any(connection_is_active(connection) for connection in provider_group["connections"])
+        }
     )
     data["connected_providers_count"] = len(connected_providers)
     data["connected_providers"] = connected_providers

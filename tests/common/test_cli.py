@@ -92,9 +92,62 @@ def test_list_command_expired_connection(runner, mock_ctx):
 
     result = runner.invoke(cli, ["list"])
     assert result.exit_code == 0
+    assert "Providers: 1 total, 0 connected" in result.output
     assert "GitHub [github]" in result.output
     assert "expired" in result.output
     assert "expired 5m ago" in result.output
+
+
+def test_list_command_counts_unique_active_providers(runner, mock_ctx):
+    active_expiry = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+    expired_at = (datetime.now(UTC) - timedelta(minutes=5)).isoformat()
+    mock_ctx.auth.list_connections.return_value = [
+        {
+            "name": "github",
+            "connections": [
+                {
+                    "connection_name": "default",
+                    "status": "connected",
+                    "auth_type": "oauth2",
+                    "expires_at": active_expiry,
+                },
+                {
+                    "connection_name": "expired",
+                    "status": "connected",
+                    "auth_type": "oauth2",
+                    "expires_at": expired_at,
+                },
+            ],
+        },
+        {
+            "name": "openai",
+            "connections": [
+                {
+                    "connection_name": "expired",
+                    "status": "expired",
+                    "auth_type": "api_key",
+                    "expires_at": expired_at,
+                }
+            ],
+        },
+    ]
+
+    github_provider = MagicMock()
+    github_provider.name = "github"
+    github_provider.display_name = "GitHub"
+    github_provider.auth_type.value = "oauth2"
+    openai_provider = MagicMock()
+    openai_provider.name = "openai"
+    openai_provider.display_name = "OpenAI"
+    openai_provider.auth_type.value = "api_key"
+    mock_ctx.auth.list_providers_by_source.return_value = {
+        "bundled": [github_provider, openai_provider],
+        "custom": [],
+    }
+
+    result = runner.invoke(cli, ["list"])
+    assert result.exit_code == 0
+    assert "Providers: 2 total, 1 connected" in result.output
 
 
 def test_list_command_no_connections(runner, mock_ctx):
@@ -475,8 +528,8 @@ def test_whoami(runner, mock_ctx, tmp_path):
     mock_ctx.home = tmp_path
     mock_ctx.auth.identity = "default"
     mock_ctx.auth.list_connections.return_value = [
-        {"name": "openai", "connections": [{"connection_name": "default"}]},
-        {"name": "github", "connections": [{"connection_name": "default"}]},
+        {"name": "openai", "connections": [{"connection_name": "default", "status": "connected"}]},
+        {"name": "github", "connections": [{"connection_name": "default", "status": "connected"}]},
         {"name": "empty", "connections": []},
     ]
 
@@ -494,8 +547,20 @@ def test_whoami(runner, mock_ctx, tmp_path):
 def test_whoami_with_config(runner, mock_ctx, tmp_path):
     mock_ctx.home = tmp_path
     mock_ctx.auth.identity = "work"
+    expired_at = (datetime.now(UTC) - timedelta(minutes=5)).isoformat()
     mock_ctx.auth.list_connections.return_value = [
-        {"name": "openai", "connections": [{"connection_name": "default"}]},
+        {"name": "openai", "connections": [{"connection_name": "default", "status": "connected"}]},
+        {
+            "name": "github",
+            "connections": [
+                {
+                    "connection_name": "expired",
+                    "status": "connected",
+                    "expires_at": expired_at,
+                }
+            ],
+        },
+        {"name": "slack", "connections": [{"connection_name": "default", "status": "expired"}]},
     ]
     config_data = {"spec_version": 1, "default_profile": "default", "encryption": {"mode": "keyring"}}
     (tmp_path / "config.json").write_text(json.dumps(config_data))
