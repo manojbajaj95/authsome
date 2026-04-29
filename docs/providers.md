@@ -38,6 +38,8 @@ Drop a JSON file at `~/.authsome/providers/my-service.json`:
 }
 ```
 
+For APIs served from multiple hosts, `host_url` can use an explicit regular expression with the `regex:` prefix, for example `"regex:^api[0-9]+\\.github\\.com$"`.
+
 Then use it like any bundled provider:
 
 ```bash

@@ -46,6 +46,8 @@ uv run authsome list
 
 **Commits and PRs:** Use [Conventional Commits](https://www.conventionalcommits.org/) style — `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`. Mark breaking changes with `!` (e.g., `feat!:`) or a `BREAKING CHANGE:` footer.
 
+**Branches:** Use Gitflow-style branch names with a short kebab-case description. Prefer `feature/<description>` for new capabilities, `bugfix/<description>` for non-urgent fixes, `hotfix/<description>` for urgent production fixes, `release/<version>` for release preparation, and `support/<description>` for maintenance lines.
+
 **Pre-commit:** This repo uses `pre-commit` with ruff for lint and format. Run `pre-commit run --all-files` before finishing any change. The hook runs automatically on `git commit`.
 
 **Available skills:** `ruff`, `uv`, `ty`, `uv-trusted-publish-github-action`, `release-please-changelog` are installed in `.claude/skills/`.

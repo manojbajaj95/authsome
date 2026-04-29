@@ -25,7 +25,12 @@ class ProxyRunner:
         env = os.environ.copy()
         env["HTTP_PROXY"] = proxy_url
         env["HTTPS_PROXY"] = proxy_url
-        env["NO_PROXY"] = self._merge_no_proxy(env.get("NO_PROXY", ""))
+        env["http_proxy"] = proxy_url
+        env["https_proxy"] = proxy_url
+        existing_no_proxy = ",".join(filter(None, [env.get("NO_PROXY", ""), env.get("no_proxy", "")]))
+        no_proxy = self._merge_no_proxy(existing_no_proxy)
+        env["NO_PROXY"] = no_proxy
+        env["no_proxy"] = no_proxy
         env["AUTHSOME_PROXY_MODE"] = "true"
 
         # Set dummy env vars for connected providers so SDKs that require
@@ -101,8 +106,8 @@ class ProxyRunner:
 
     @staticmethod
     def _merge_no_proxy(existing: str) -> str:
-        entries = [item for item in existing.split(",") if item]
-        for host in ["127.0.0.1", "localhost"]:
+        entries = [item.strip() for item in existing.split(",") if item.strip()]
+        for host in ["127.0.0.1", "localhost", "::1"]:
             if host not in entries:
                 entries.append(host)
         return ",".join(entries)

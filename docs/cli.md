@@ -111,7 +111,7 @@ authsome run -- <command> [args...]
 
 Runs `<command>` behind a local auth proxy that injects provider auth headers into matched HTTP(S) requests at request time. This is the most secure way to run agents as it avoids exporting raw secrets into the child process environment.
 
-The proxy automatically matches outbound requests to known provider hosts (e.g. `api.openai.com`, `api.github.com`) using the `host_url` field in provider definitions and injects the appropriate auth headers (OAuth Bearer tokens or API keys). Unmatched traffic is forwarded unchanged.
+The proxy automatically matches outbound requests to known provider hosts (e.g. `api.openai.com`, `api.github.com`) using the `host_url` field in provider definitions and injects the appropriate auth headers from the default connection (OAuth Bearer tokens or API keys). Unmatched traffic is forwarded unchanged.
 
 ```bash
 authsome run -- python my_agent.py
@@ -121,7 +121,7 @@ authsome run -- curl https://api.openai.com/v1/models
 **How it works:**
 
 1. Starts a local proxy on an ephemeral port.
-2. Launches the child command with `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` set.
+2. Launches the child command with uppercase and lowercase proxy environment variables set.
 3. Sets placeholder environment variables (e.g. `OPENAI_API_KEY=authsome-proxy-managed`) so SDKs initialize correctly.
 4. Intercepts matched requests and injects the real auth headers.
 5. Stops the proxy when the child exits.

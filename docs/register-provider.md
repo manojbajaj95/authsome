@@ -92,7 +92,7 @@ Create a `.json` file using one of the templates below.
 | `display_name` | Human-readable name (e.g., `"GitHub"`). |
 | `auth_type` | `"oauth2"` or `"api_key"`. |
 | `flow` | Default flow. See flow selection guide below. |
-| `host_url` | **Recommended.** The API host for proxy routing (e.g., `"api.openai.com"`). Can be a bare host or a full URL. |
+| `host_url` | **Recommended.** The API host for proxy routing (e.g., `"api.openai.com"`). Can be a bare host, a full URL, or a host regex prefixed with `regex:` (e.g., `"regex:^api[0-9]+\\.github\\.com$"`). |
 
 ### OAuth2 fields (`oauth` block)
 
