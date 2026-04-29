@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authsome Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <!-- DATA_INJECTION -->
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <h1>Authsome Console</h1>
+                <p class="subtitle">Local Authentication Management</p>
+            </div>
+            <div class="stats-summary" id="statsSummary">
+                <!-- Stats will be injected here -->
+            </div>
+        </header>
+
+        <main>
+            <!-- Diagnostics -->
+            <section class="dashboard-section">
+                <h2>Diagnostics</h2>
+                <div class="card diagnostics-card" id="diagnosticsCard">
+                    <!-- Diagnostics injected here -->
+                </div>
+            </section>
+
+            <!-- Connected Providers -->
+            <section class="dashboard-section">
+                <div class="section-header">
+                    <h2>Connected Providers</h2>
+                    <span class="badge" id="connectedCount">0</span>
+                </div>
+                <div class="provider-grid" id="connectedProviders"></div>
+            </section>
+
+            <!-- Available Providers -->
+            <section class="dashboard-section">
+                <div class="section-header">
+                    <h2>Available Providers</h2>
+                    <span class="badge" id="availableCount">0</span>
+                </div>
+                <div class="provider-grid" id="availableProviders"></div>
+            </section>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

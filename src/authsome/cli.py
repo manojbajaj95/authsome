@@ -529,5 +529,18 @@ def doctor(ctx_obj: ContextObj) -> None:
             sys.exit(1)
 
 
+@cli.command()
+@click.option("--port", default=8000, help="Port to run the UI server on.")
+@common_options
+@pass_ctx
+@handle_errors
+def ui(ctx_obj: ContextObj, port: int) -> None:
+    """Open the local read-only dashboard in the browser."""
+    # Ensure context is initialized so doctor runs and vault gets set up if needed
+    ctx_obj.initialize()
+    from authsome.ui.server import serve_dashboard
+    serve_dashboard(port=port)
+
+
 if __name__ == "__main__":
     cli()
