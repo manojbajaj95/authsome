@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import threading
 from pathlib import Path
 from urllib.parse import urlparse
@@ -56,14 +57,10 @@ def _route(auth: AuthLayer, scheme: str, host: str, port: int, path: str) -> Rou
             matches.append(p_name)
 
     if len(matches) == 0:
-        import sys
-
         sys.stderr.write(f"Proxy Miss: {host} (no match)\n")
         audit.log("proxy_miss", host=host, reason="no_match")
         return None
     if len(matches) > 1:
-        import sys
-
         reason_str = f"ambiguous_match: {','.join(matches)}"
         sys.stderr.write(f"Proxy Miss: {host} ({reason_str})\n")
         logger.warning(
