@@ -216,16 +216,29 @@ def log_cmd(ctx_obj: ContextObj, lines: int) -> None:
     actx = ctx_obj.initialize()
     audit_file = actx.home / "audit.log"
     if not audit_file.exists():
-        ctx_obj.echo("No audit log found.", err=True, color="yellow")
+        if ctx_obj.json_output:
+            ctx_obj.print_json([])
+        else:
+            ctx_obj.echo("No audit log found.", err=True, color="yellow")
         sys.exit(0)
 
     try:
         with open(audit_file, encoding="utf-8") as f:
             log_lines = f.readlines()
-        for line in log_lines[-lines:]:
-            ctx_obj.echo(line.strip())
+        
+        target_lines = [line.strip() for line in log_lines[-lines:] if line.strip()]
+        
+        if ctx_obj.json_output:
+            parsed_lines = [json_lib.loads(line) for line in target_lines]
+            ctx_obj.print_json(parsed_lines)
+        else:
+            for line in target_lines:
+                ctx_obj.echo(line)
     except Exception as e:
-        ctx_obj.echo(f"Error reading audit log: {e}", err=True, color="red")
+        if ctx_obj.json_output:
+            ctx_obj.print_json({"error": str(e)})
+        else:
+            ctx_obj.echo(f"Error reading audit log: {e}", err=True, color="red")
         sys.exit(1)
 
 
