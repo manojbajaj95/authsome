@@ -346,13 +346,13 @@ def inspect(ctx_obj: ContextObj, provider: str) -> None:
 
 
 @cli.command()
-@click.argument("provider")
+@click.argument("provider", required=False)
 @click.option("--connection", default="default", help="Connection name.")
 @click.option("--format", "export_format", type=click.Choice(["env", "shell", "json"]), default="env")
 @common_options
 @pass_ctx
 @handle_errors
-def export(ctx_obj: ContextObj, provider: str, connection: str, export_format: str) -> None:
+def export(ctx_obj: ContextObj, provider: str | None, connection: str, export_format: str) -> None:
     """Export credential material in selected format."""
     actx = ctx_obj.initialize()
     fmt = ExportFormat(export_format)

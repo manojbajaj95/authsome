@@ -8,6 +8,7 @@ Does not touch encryption directly — all persistence goes through the Vault.
 from __future__ import annotations
 
 import json
+import re
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -398,7 +399,25 @@ class AuthLayer:
 
     # ── Export operations ─────────────────────────────────────────────────
 
-    def export(self, provider: str, connection: str = "default", format: ExportFormat = ExportFormat.ENV) -> str:
+    def export(
+        self, provider: str | None = None, connection: str = "default", format: ExportFormat = ExportFormat.ENV
+    ) -> str:
+        if provider is None:
+            values: dict[str, str] = {}
+            for provider_record in self.list_connections():
+                provider_name = provider_record["name"]
+                for connection_record in provider_record["connections"]:
+                    connection_name = connection_record["connection_name"]
+                    for env_name, env_value in self._export_connection_values(provider_name, connection_name).items():
+                        if env_name in values:
+                            env_name = self._disambiguate_export_name(env_name, provider_name, connection_name, values)
+                        values[env_name] = env_value
+            return self._format_export_values(values, format)
+
+        values = self._export_connection_values(provider, connection)
+        return self._format_export_values(values, format)
+
+    def _export_connection_values(self, provider: str, connection: str) -> dict[str, str]:
         definition = self.get_provider(provider)
         record = self.get_connection(provider, connection)
         values: dict[str, str] = {}
@@ -416,6 +435,9 @@ class AuthLayer:
                 env_name = export_map.get("api_key", f"{provider.upper()}_API_KEY")
                 values[env_name] = record.api_key
 
+        return values
+
+    def _format_export_values(self, values: dict[str, str], format: ExportFormat) -> str:
         if format == ExportFormat.ENV:
             return "\n".join(f"{k}={v}" for k, v in values.items())
         elif format == ExportFormat.SHELL:
@@ -423,6 +445,27 @@ class AuthLayer:
         elif format == ExportFormat.JSON:
             return json.dumps(values, indent=2)
         return ""
+
+    def _disambiguate_export_name(
+        self, env_name: str, provider: str, connection: str, existing_values: dict[str, str]
+    ) -> str:
+        suffix = "_".join(
+            part
+            for part in (
+                self._export_name_part(provider),
+                self._export_name_part(connection),
+            )
+            if part
+        )
+        candidate = f"{env_name}_{suffix}" if suffix else env_name
+        counter = 2
+        while candidate in existing_values:
+            candidate = f"{env_name}_{suffix}_{counter}" if suffix else f"{env_name}_{counter}"
+            counter += 1
+        return candidate
+
+    def _export_name_part(self, value: str) -> str:
+        return re.sub(r"[^A-Z0-9]+", "_", value.upper()).strip("_")
 
     # ── Profile operations ────────────────────────────────────────────────
 
