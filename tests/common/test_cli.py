@@ -54,8 +54,13 @@ def test_list_command(runner, mock_ctx):
 
     result = runner.invoke(cli, ["list"])
     assert result.exit_code == 0
-    assert "Bundled Providers:" in result.output
-    assert "OpenAI" in result.output
+    assert "Providers: 1 total, 1 connected" in result.output
+    assert "Provider" in result.output
+    assert "Source" in result.output
+    assert "Connection" in result.output
+    assert "OpenAI [openai]" in result.output
+    assert "bundled" in result.output
+    assert "default" in result.output
     assert "connected" in result.output
     assert "expires in 1h" in result.output or "expires in 2h" in result.output
 
@@ -87,6 +92,7 @@ def test_list_command_expired_connection(runner, mock_ctx):
 
     result = runner.invoke(cli, ["list"])
     assert result.exit_code == 0
+    assert "GitHub [github]" in result.output
     assert "expired" in result.output
     assert "expired 5m ago" in result.output
 
@@ -111,7 +117,10 @@ def test_list_command_no_connections(runner, mock_ctx):
 
     result = runner.invoke(cli, ["list"])
     assert result.exit_code == 0
-    assert "(no connections)" in result.output
+    assert "Providers: 2 total, 0 connected" in result.output
+    assert "OpenAI [openai]" in result.output
+    assert "GitHub [github]" in result.output
+    assert "not_connected" in result.output
 
 
 def test_list_json(runner, mock_ctx):

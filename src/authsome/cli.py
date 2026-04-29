@@ -213,28 +213,71 @@ def list_cmd(ctx_obj: ContextObj) -> None:
         ctx_obj.print_json({"bundled": bundled_out, "custom": custom_out})
         return
 
-    def print_provider_section(label: str, providers: list[dict]) -> None:
-        ctx_obj.echo(f"\n{label}:")
-        if not providers:
-            ctx_obj.echo("  (none)")
-            return
-        for p in providers:
-            ctx_obj.echo(f"  {p['display_name']}  [{p['name']}]")
-            conns = p["connections"]
-            if conns:
-                for c in conns:
-                    status = c["status"]
-                    color = "green" if status == "connected" else "yellow"
-                    ctx_obj.echo(f"    {c['connection_name']}  ", nl=False)
-                    ctx_obj.echo(status, color=color)
-                    expiry = format_expires_at(c.get("expires_at"))
-                    if expiry:
-                        ctx_obj.echo(f"      {expiry}")
-            else:
-                ctx_obj.echo("    (no connections)", color="yellow")
+    rows: list[dict[str, str]] = []
+    for p in bundled_out + custom_out:
+        provider_label = f"{p['display_name']} [{p['name']}]"
+        if p["connections"]:
+            for conn in p["connections"]:
+                rows.append(
+                    {
+                        "provider": provider_label,
+                        "source": p["source"],
+                        "auth": p["auth_type"],
+                        "connection": conn["connection_name"],
+                        "status": conn["status"],
+                        "expires": format_expires_at(conn.get("expires_at")) or "-",
+                    }
+                )
+        else:
+            rows.append(
+                {
+                    "provider": provider_label,
+                    "source": p["source"],
+                    "auth": p["auth_type"],
+                    "connection": "-",
+                    "status": "not_connected",
+                    "expires": "-",
+                }
+            )
 
-    print_provider_section("Bundled Providers", bundled_out)
-    print_provider_section("Custom Providers", custom_out)
+    if not rows:
+        ctx_obj.echo("No providers configured.")
+        return
+
+    connected_count = sum(1 for row in rows if row["status"] != "not_connected")
+    ctx_obj.echo(f"Providers: {len(bundled_out) + len(custom_out)} total, {connected_count} connected")
+
+    headers = {
+        "provider": "Provider",
+        "source": "Source",
+        "auth": "Auth",
+        "connection": "Connection",
+        "status": "Status",
+        "expires": "Expires",
+    }
+    widths = {
+        key: max(len(headers[key]), *(len(row[key]) for row in rows))
+        for key in ("provider", "source", "auth", "connection", "status", "expires")
+    }
+
+    def render_row(row: dict[str, str]) -> str:
+        return (
+            f"{row['provider']:<{widths['provider']}}  "
+            f"{row['source']:<{widths['source']}}  "
+            f"{row['auth']:<{widths['auth']}}  "
+            f"{row['connection']:<{widths['connection']}}  "
+            f"{row['status']:<{widths['status']}}  "
+            f"{row['expires']:<{widths['expires']}}"
+        ).rstrip()
+
+    ctx_obj.echo(render_row(headers))
+    ctx_obj.echo(
+        render_row(
+            {key: "-" * widths[key] for key in ("provider", "source", "auth", "connection", "status", "expires")}
+        )
+    )
+    for row in rows:
+        ctx_obj.echo(render_row(row))
 
 
 @cli.command()
