@@ -11,11 +11,6 @@ def test_audit_logger_initialization(tmp_path: Path):
     audit.setup(filepath)
     assert audit._logger_instance is not None
     assert audit._logger_instance.filepath == filepath
-    assert audit._logger_instance.enabled is True
-
-    audit.setup(filepath, enabled=False)
-    assert audit._logger_instance is not None
-    assert audit._logger_instance.enabled is False
 
 
 def test_audit_logger_writes_json_line(tmp_path: Path):
@@ -45,12 +40,7 @@ def test_audit_logger_filters_none_values(tmp_path: Path):
     assert "missing" not in event_data
 
 
-def test_audit_logger_disabled_does_not_write(tmp_path: Path):
-    filepath = tmp_path / "audit.log"
-    audit.setup(filepath, enabled=False)
-    audit.log("test_event")
 
-    assert not filepath.exists()
 
 
 def test_audit_logger_creates_parent_directory(tmp_path: Path):

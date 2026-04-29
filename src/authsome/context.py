@@ -33,7 +33,6 @@ class AuthsomeContext:
         cls,
         home: Path | None = None,
         profile: str | None = None,
-        no_audit: bool = False,
     ) -> AuthsomeContext:
         """Wire up all layers and return a ready-to-use context."""
         from authsome.auth import AuthLayer

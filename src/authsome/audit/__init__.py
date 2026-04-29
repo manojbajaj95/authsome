@@ -12,16 +12,11 @@ from authsome.utils import utc_now
 class AuditLogger:
     """Append-only structured audit logger."""
 
-    def __init__(self, filepath: Path, enabled: bool = True) -> None:
+    def __init__(self, filepath: Path) -> None:
         self.filepath = filepath
-        self.enabled = enabled
-        if not self.enabled:
-            logger.warning("Audit logging is disabled.")
 
     def log(self, event_type: str, **kwargs: Any) -> None:
         """Write an event to the audit log."""
-        if not self.enabled:
-            return
 
         # Ensure directory exists
         if not self.filepath.parent.exists():
@@ -50,10 +45,10 @@ class AuditLogger:
 _logger_instance: AuditLogger | None = None
 
 
-def setup(filepath: Path, enabled: bool = True) -> None:
+def setup(filepath: Path) -> None:
     """Initialize the global audit logger singleton."""
     global _logger_instance
-    _logger_instance = AuditLogger(filepath, enabled=enabled)
+    _logger_instance = AuditLogger(filepath)
 
 
 def log(event_type: str, **kwargs: Any) -> None:

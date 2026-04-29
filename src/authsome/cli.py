@@ -19,17 +19,16 @@ from authsome.utils import redact
 class ContextObj:
     """Context object passed to all commands."""
 
-    def __init__(self, json_output: bool, quiet: bool, no_color: bool, no_audit: bool = False):
+    def __init__(self, json_output: bool, quiet: bool, no_color: bool):
         self.json_output = json_output
         self.quiet = quiet
         self.no_color = no_color
-        self.no_audit = no_audit
         self._ctx: AuthsomeContext | None = None
 
     def initialize(self) -> AuthsomeContext:
         if self._ctx is None:
-            self._ctx = AuthsomeContext.create(no_audit=self.no_audit)
-            audit.setup(self._ctx.home / "audit.log", enabled=not self.no_audit)
+            self._ctx = AuthsomeContext.create()
+            audit.setup(self._ctx.home / "audit.log")
         return self._ctx
 
     def print_json(self, data: Any) -> None:
@@ -50,16 +49,14 @@ def common_options(f):
     @click.option("--json", "json_output", is_flag=True, help="Output in machine-readable JSON format.")
     @click.option("--quiet", is_flag=True, help="Suppress non-essential output.")
     @click.option("--no-color", is_flag=True, help="Disable ANSI colors.")
-    @click.option("--no-audit", is_flag=True, help="Disable audit logging (with warning).")
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         json_output = kwargs.pop("json_output", False)
         quiet = kwargs.pop("quiet", False)
         no_color = kwargs.pop("no_color", False)
-        no_audit = kwargs.pop("no_audit", False)
         ctx = click.get_current_context()
         if getattr(ctx, "obj", None) is None:
-            ctx.obj = ContextObj(json_output, quiet, no_color, no_audit)
+            ctx.obj = ContextObj(json_output, quiet, no_color)
         else:
             if json_output:
                 ctx.obj.json_output = True
@@ -67,8 +64,6 @@ def common_options(f):
                 ctx.obj.quiet = True
             if no_color:
                 ctx.obj.no_color = True
-            if no_audit:
-                ctx.obj.no_audit = True
         return f(*args, **kwargs)
 
     return wrapper
