@@ -6,7 +6,9 @@
   "flow": "api_key",
   "api_key": {
     "header_name": "Authorization",
-    "header_prefix": "Bearer"
+    "header_prefix": "Bearer",
+    "key_pattern": "^sk-[A-Za-z0-9_-]{20,}$",
+    "key_pattern_hint": "OpenAI API keys start with 'sk-' followed by at least 20 letters, digits, '_' or '-'."
   },
   "host_url": "api.openai.com",
   "export": {

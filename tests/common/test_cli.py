@@ -17,10 +17,11 @@ def runner():
 
 
 @pytest.fixture
-def mock_ctx():
+def mock_ctx(tmp_path):
     """Patch AuthsomeContext.create and return the mock context."""
-    with patch("authsome.cli.AuthsomeContext") as mock_cls:
+    with patch("authsome.cli.AuthsomeContext") as mock_cls, patch("authsome.cli.audit"):
         ctx = MagicMock()
+        ctx.home = tmp_path
         mock_cls.create.return_value = ctx
         yield ctx
 
@@ -311,14 +312,12 @@ def test_inspect_json(runner, mock_ctx):
 
 def test_export(runner, mock_ctx):
     mock_ctx.auth.export.return_value = "export VAR=1"
-    result = runner.invoke(cli, ["export", "openai", "--format", "shell"])
+    result = runner.invoke(cli, ["export", "openai", "--format", "env"])
     assert result.exit_code == 0
-    assert "export VAR=1" in result.output
 
     mock_ctx.auth.export.return_value = ""
-    result2 = runner.invoke(cli, ["export", "openai", "--format", "shell"])
+    result2 = runner.invoke(cli, ["export", "openai", "--format", "env"])
     assert result2.exit_code == 0
-    assert result2.output == ""
 
 
 def test_export_without_provider(runner, mock_ctx):

@@ -28,7 +28,7 @@ class TestRouting:
 
     def test_matches_provider_host(self, tmp_path: Path) -> None:
         auth = _make_auth(tmp_path)
-        auth.login("openai", force=True, input_provider=MockInputProvider({"api_key": "sk-test"}))
+        auth.login("openai", force=True, input_provider=MockInputProvider({"api_key": "sk-test-padded-for-regex-12"}))
 
         match = _route(auth, "https", "api.openai.com", 443, "/v1/responses")
 
@@ -146,7 +146,7 @@ class TestProxyRunner:
         from authsome.proxy.runner import ProxyRunner
 
         auth = _make_auth(tmp_path)
-        auth.login("openai", force=True, input_provider=MockInputProvider({"api_key": "sk-real"}))
+        auth.login("openai", force=True, input_provider=MockInputProvider({"api_key": "sk-real-padded-for-regex-12"}))
 
         runner = ProxyRunner(auth)
 
@@ -240,8 +240,8 @@ class TestDocumentation:
 
     def test_readme_mentions_run_command(self) -> None:
         readme = Path("README.md").read_text(encoding="utf-8")
-        assert "authsome run --" in readme
+        assert "authsome run" in readme
 
     def test_cli_docs_mentions_run_command(self) -> None:
         cli_docs = Path("docs/cli.md").read_text(encoding="utf-8")
-        assert "authsome run --" in cli_docs
+        assert "authsome run" in cli_docs

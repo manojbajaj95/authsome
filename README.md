@@ -64,10 +64,10 @@ Then agents get valid credentials on demand:
 authsome get github --field access_token --show-secret
 # → ghu_...
 
-authsome export github --format shell
-# → export GITHUB_TOKEN=ghu_...
+authsome export github --format env
+# → Successfully exported credentials to environment.
 
-authsome run -- python my_agent.py
+authsome run python my_agent.py
 # runs behind a local auth proxy that injects headers at request time
 # without exposing secrets in the child process environment.
 # matched automatically via provider host_url (e.g. api.openai.com)

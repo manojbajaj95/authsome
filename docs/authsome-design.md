@@ -58,7 +58,7 @@ The alpha implementation intentionally covers the first useful slice:
 
 - Auth layer with provider registry, OAuth/API-key acquisition flows, token refresh, and provider metadata.
 - Vault layer with encrypted local storage.
-- CLI commands for init, login, list, get, export, register, revoke/remove, doctor, whoami, and proxy-backed `run`.
+- CLI commands for login, list, get, export, register, revoke/remove, doctor, whoami, and proxy-backed `run`.
 - Host-based proxy injection using provider `host_url`.
 
 Identity, Policy, and Audit are planned layers. They are part of the long-term architecture described in this document, but they are not required to understand the current alpha implementation.
@@ -298,7 +298,7 @@ authsome/
 ├── src/
 │   └── authsome/
 │       ├── __init__.py
-│       ├── cli.py                  # init, login, run, status, audit
+│       ├── cli.py                  # login, run, status, audit
 │       ├── context.py              # dependency injection
 │       ├── errors.py
 │       ├── utils.py
@@ -326,7 +326,7 @@ authsome/
 ## CLI
 
 ```bash
-authsome init              # initialize local config, profile, and vault
+# no explicit init required
 authsome login <provider>  # OAuth acquisition (PKCE / Device Code / DCR+PKCE / API Key)
 authsome run -- <command>  # start sidecar + agent, wire HTTP_PROXY automatically
 authsome doctor            # vault/provider/profile health checks

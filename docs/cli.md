@@ -14,7 +14,7 @@ All commands support `--json` for machine-readable output.
 | `inspect <provider>` | Show the full provider definition schema. |
 | `login <provider>` | Authenticate with a provider using its configured flow. |
 | `get <provider>` | Get connection metadata (secrets redacted by default). |
-| `export <provider>` | Export credentials in `env`, `shell`, or `json` format. |
+| `export <provider>` | Export credentials in `env` or `json` format. |
 | `run -- <cmd>` | Run a subprocess behind the local auth injection proxy. |
 | `logout <provider>` | Log out of a connection and remove local state. |
 | `revoke <provider>` | Complete reset of the provider, removing all connections and client secrets. |
@@ -97,10 +97,10 @@ authsome export <provider> [OPTIONS]
 | Option | Description |
 |--------|-------------|
 | `--connection <name>` | Connection name (default: `default`). |
-| `--format <fmt>` | Output format: `env` (default), `shell`, or `json`. |
+| `--format <fmt>` | Output format: `env` (default) or `json`. |
 
 ```bash
-authsome export github --format shell   # export GITHUB_TOKEN=...
+authsome export github --format env    # inject GITHUB_TOKEN into environment
 ```
 
 ### `run`

@@ -15,6 +15,10 @@ class InputField(BaseModel):
     label: str
     secret: bool = True
     default: str | None = None
+    #: Optional regex (``re.fullmatch``) that the submitted value must satisfy.
+    pattern: str | None = None
+    #: Optional human-readable message shown when the value does not match ``pattern``.
+    pattern_hint: str | None = None
 
 
 class InputProvider(Protocol):
@@ -35,15 +39,18 @@ class BridgeInputProvider:
 
         bridge_fields: list[dict[str, Any]] = list(self._static_fields)
         for field in fields:
-            bridge_fields.append(
-                {
-                    "name": field.name,
-                    "label": field.label,
-                    "type": "password" if field.secret else "text",
-                    "required": field.default is None,
-                    "value": field.default or "",
-                }
-            )
+            entry: dict[str, Any] = {
+                "name": field.name,
+                "label": field.label,
+                "type": "password" if field.secret else "text",
+                "required": field.default is None,
+                "value": field.default or "",
+            }
+            if field.pattern:
+                entry["pattern"] = field.pattern
+                if field.pattern_hint:
+                    entry["pattern_hint"] = field.pattern_hint
+            bridge_fields.append(entry)
         result = secure_input_bridge(self._title, bridge_fields)
         for field in fields:
             if field.name not in result and field.default is not None:

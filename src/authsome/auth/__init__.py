@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import os
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -237,7 +238,11 @@ class AuthLayer:
                 )
 
         if flow_type == FlowType.API_KEY:
-            fields_to_collect.append(InputField(name="api_key", label="API Key", secret=True))
+            api_key_field = InputField(name="api_key", label="API Key", secret=True)
+            if definition.api_key and definition.api_key.key_pattern:
+                api_key_field.pattern = definition.api_key.key_pattern
+                api_key_field.pattern_hint = definition.api_key.key_pattern_hint
+            fields_to_collect.append(api_key_field)
 
         static_hints.extend(self._build_docs_hints(definition, flow_type))
 
@@ -439,9 +444,8 @@ class AuthLayer:
 
     def _format_export_values(self, values: dict[str, str], format: ExportFormat) -> str:
         if format == ExportFormat.ENV:
-            return "\n".join(f"{k}={v}" for k, v in values.items())
-        elif format == ExportFormat.SHELL:
-            return "\n".join(f"export {k}={v}" for k, v in values.items())
+            os.environ.update(values)
+            return "Successfully exported credentials to environment."
         elif format == ExportFormat.JSON:
             return json.dumps(values, indent=2)
         return ""
