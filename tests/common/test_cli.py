@@ -315,19 +315,48 @@ def test_inspect(runner, mock_ctx):
     mock_def = MagicMock()
     mock_def.model_dump.return_value = {"name": "openai"}
     mock_ctx.auth.get_provider.return_value = mock_def
+    mock_ctx.auth.list_connections.return_value = [
+        {
+            "name": "openai",
+            "connections": [
+                {
+                    "connection_name": "default",
+                    "auth_type": "api_key",
+                    "status": "connected",
+                    "expires_at": None,
+                }
+            ],
+        }
+    ]
 
     result = runner.invoke(cli, ["inspect", "openai"])
     assert result.exit_code == 0
     assert '"name": "openai"' in result.output
+    assert '"connections": [' in result.output
+    assert '"connection_name": "default"' in result.output
 
 
 def test_inspect_json(runner, mock_ctx):
     mock_def = MagicMock()
     mock_def.model_dump.return_value = {"name": "openai"}
     mock_ctx.auth.get_provider.return_value = mock_def
+    mock_ctx.auth.list_connections.return_value = [
+        {
+            "name": "other",
+            "connections": [
+                {
+                    "connection_name": "default",
+                    "auth_type": "api_key",
+                    "status": "connected",
+                }
+            ],
+        }
+    ]
 
     result = runner.invoke(cli, ["inspect", "openai", "--json"])
     assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["connections"] == []
 
 
 def test_export(runner, mock_ctx):

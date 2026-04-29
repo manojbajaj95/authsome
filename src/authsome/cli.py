@@ -347,6 +347,12 @@ def inspect(ctx_obj: ContextObj, provider: str) -> None:
     actx = ctx_obj.initialize()
     definition = actx.auth.get_provider(provider)
     data = definition.model_dump(mode="json")
+    data["connections"] = []
+    for provider_group in actx.auth.list_connections():
+        if provider_group["name"] == provider:
+            data["connections"] = provider_group["connections"]
+            break
+
     if ctx_obj.json_output:
         ctx_obj.print_json(data)
     else:
