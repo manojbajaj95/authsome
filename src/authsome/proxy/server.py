@@ -109,9 +109,7 @@ class AuthProxyAddon:
         self._auth = auth
 
     def request(self, flow: http.HTTPFlow) -> None:
-        match = _route(
-            self._auth, flow.request.scheme, flow.request.host, flow.request.port, flow.request.path
-        )
+        match = _route(self._auth, flow.request.scheme, flow.request.host, flow.request.port, flow.request.path)
         if match is None:
             return
 

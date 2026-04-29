@@ -9,8 +9,7 @@ from typing import Any
 import click
 from loguru import logger
 
-from authsome import __version__
-from authsome import audit
+from authsome import __version__, audit
 from authsome.auth.models.enums import ExportFormat, FlowType
 from authsome.context import AuthsomeContext
 from authsome.errors import AuthsomeError
@@ -227,9 +226,9 @@ def log_cmd(ctx_obj: ContextObj, lines: int) -> None:
     try:
         with open(audit_file, encoding="utf-8") as f:
             log_lines = f.readlines()
-        
+
         target_lines = [line.strip() for line in log_lines[-lines:] if line.strip()]
-        
+
         if ctx_obj.json_output:
             parsed_lines = [json_lib.loads(line) for line in target_lines]
             ctx_obj.print_json(parsed_lines)

@@ -60,4 +60,3 @@ def log(event_type: str, **kwargs: Any) -> None:
     """Write an event to the global audit log."""
     if _logger_instance is not None:
         _logger_instance.log(event_type, **kwargs)
-
