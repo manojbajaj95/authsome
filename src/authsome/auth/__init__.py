@@ -8,6 +8,7 @@ Does not touch encryption directly — all persistence goes through the Vault.
 from __future__ import annotations
 
 import json
+import os
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -421,9 +422,8 @@ class AuthLayer:
                 values[env_name] = record.api_key
 
         if format == ExportFormat.ENV:
-            return "\n".join(f"{k}={v}" for k, v in values.items())
-        elif format == ExportFormat.SHELL:
-            return "\n".join(f"export {k}={v}" for k, v in values.items())
+            os.environ.update(values)
+            return "Successfully exported credentials to environment."
         elif format == ExportFormat.JSON:
             return json.dumps(values, indent=2)
         return ""

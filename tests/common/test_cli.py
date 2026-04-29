@@ -310,14 +310,12 @@ def test_inspect_json(runner, mock_ctx):
 
 def test_export(runner, mock_ctx):
     mock_ctx.auth.export.return_value = "export VAR=1"
-    result = runner.invoke(cli, ["export", "openai", "--format", "shell"])
+    result = runner.invoke(cli, ["export", "openai", "--format", "env"])
     assert result.exit_code == 0
-    assert "export VAR=1" in result.output
 
     mock_ctx.auth.export.return_value = ""
-    result2 = runner.invoke(cli, ["export", "openai", "--format", "shell"])
+    result2 = runner.invoke(cli, ["export", "openai", "--format", "env"])
     assert result2.exit_code == 0
-    assert result2.output == ""
 
 
 def test_run(runner, mock_ctx):

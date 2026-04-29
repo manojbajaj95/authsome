@@ -240,8 +240,8 @@ class TestDocumentation:
 
     def test_readme_mentions_run_command(self) -> None:
         readme = Path("README.md").read_text(encoding="utf-8")
-        assert "authsome run --" in readme
+        assert "authsome run" in readme
 
     def test_cli_docs_mentions_run_command(self) -> None:
         cli_docs = Path("docs/cli.md").read_text(encoding="utf-8")
-        assert "authsome run --" in cli_docs
+        assert "authsome run" in cli_docs

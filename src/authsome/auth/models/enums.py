@@ -33,5 +33,4 @@ class ExportFormat(StrEnum):
     """Supported credential export formats."""
 
     ENV = "env"
-    SHELL = "shell"
     JSON = "json"

@@ -1,6 +1,7 @@
 """Tests for the AuthLayer core."""
 
 import json
+import os
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -682,17 +683,13 @@ class TestAuthLayerLifecycle:
 class TestAuthLayerExport:
     """Export operations tests."""
 
-    def test_export_env_format(self, auth: AuthLayer) -> None:
+    def test_export_env_format(self, auth: AuthLayer, monkeypatch: pytest.MonkeyPatch) -> None:
         auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-export-padded-for-regex"}))
 
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         output = auth.export("openai", format=ExportFormat.ENV)
-        assert "OPENAI_API_KEY=sk-export-padded-for-regex" in output
-
-    def test_export_shell_format(self, auth: AuthLayer) -> None:
-        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-shell-padded-for-regex"}))
-
-        output = auth.export("openai", format=ExportFormat.SHELL)
-        assert "export OPENAI_API_KEY=sk-shell-padded-for-regex" in output
+        assert output == "Successfully exported credentials to environment."
+        assert os.environ["OPENAI_API_KEY"] == "sk-export-padded-for-regex"
 
     def test_export_json_format(self, auth: AuthLayer) -> None:
         auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-json-padded-for-regex"}))
@@ -701,7 +698,7 @@ class TestAuthLayerExport:
         data = json.loads(output)
         assert data["OPENAI_API_KEY"] == "sk-json-padded-for-regex"
 
-    def test_export_oauth_format(self, auth: AuthLayer) -> None:
+    def test_export_oauth_format(self, auth: AuthLayer, monkeypatch: pytest.MonkeyPatch) -> None:
         provider = ProviderDefinition(
             name="testexport",
             display_name="Test Export",
@@ -723,9 +720,12 @@ class TestAuthLayerExport:
         )
         auth._save_connection(record)
 
+        monkeypatch.delenv("TESTEXPORT_ACCESS_TOKEN", raising=False)
+        monkeypatch.delenv("TESTEXPORT_REFRESH_TOKEN", raising=False)
         env_out = auth.export("testexport", format=ExportFormat.ENV)
-        assert "TESTEXPORT_ACCESS_TOKEN=acc" in env_out
-        assert "TESTEXPORT_REFRESH_TOKEN=ref" in env_out
+        assert env_out == "Successfully exported credentials to environment."
+        assert os.environ["TESTEXPORT_ACCESS_TOKEN"] == "acc"
+        assert os.environ["TESTEXPORT_REFRESH_TOKEN"] == "ref"
 
 
 class TestAuthLayerDoctor:
