@@ -40,9 +40,6 @@ def test_audit_logger_filters_none_values(tmp_path: Path):
     assert "missing" not in event_data
 
 
-
-
-
 def test_audit_logger_creates_parent_directory(tmp_path: Path):
     filepath = tmp_path / "nested" / "dir" / "audit.log"
     audit.setup(filepath)
