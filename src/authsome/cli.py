@@ -267,13 +267,7 @@ def login(
             force=force,
             base_url=base_url,
         )
-        actx.audit.log(
-            "login",
-            provider=provider,
-            connection=connection,
-            flow=record.auth_type.value,
-            status="success"
-        )
+        actx.audit.log("login", provider=provider, connection=connection, flow=record.auth_type.value, status="success")
     except Exception as e:
         actx.audit.log("login", provider=provider, connection=connection, status="failure")
         raise

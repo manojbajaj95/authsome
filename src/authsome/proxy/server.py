@@ -57,11 +57,13 @@ def _route(auth: AuthLayer, audit: AuditLogger, scheme: str, host: str, port: in
 
     if len(matches) == 0:
         import sys
+
         sys.stderr.write(f"Proxy Miss: {host} (no match)\n")
         audit.log("proxy_miss", host=host, reason="no_match")
         return None
     if len(matches) > 1:
         import sys
+
         reason_str = f"ambiguous_match: {','.join(matches)}"
         sys.stderr.write(f"Proxy Miss: {host} ({reason_str})\n")
         logger.warning(
@@ -108,7 +110,9 @@ class AuthProxyAddon:
         self._audit = audit
 
     def request(self, flow: http.HTTPFlow) -> None:
-        match = _route(self._auth, self._audit, flow.request.scheme, flow.request.host, flow.request.port, flow.request.path)
+        match = _route(
+            self._auth, self._audit, flow.request.scheme, flow.request.host, flow.request.port, flow.request.path
+        )
         if match is None:
             return
 
