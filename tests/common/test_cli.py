@@ -430,14 +430,30 @@ def test_register_bad_json(runner, mock_ctx, tmp_path):
 
 def test_whoami(runner, mock_ctx, tmp_path):
     mock_ctx.home = tmp_path
+    mock_ctx.auth.identity = "default"
+    mock_ctx.auth.list_connections.return_value = [
+        {"name": "openai", "connections": [{"connection_name": "default"}]},
+        {"name": "github", "connections": [{"connection_name": "default"}]},
+        {"name": "empty", "connections": []},
+    ]
+
     result = runner.invoke(cli, ["whoami"])
     assert result.exit_code == 0
     assert str(tmp_path) in result.output
+    assert "Active Profile: default" in result.output
+    assert "Authsome Version:" in result.output
     assert "local_key" in result.output  # default encryption mode
+    assert "Connected Providers: 2" in result.output
+    assert "github" in result.output
+    assert "openai" in result.output
 
 
 def test_whoami_with_config(runner, mock_ctx, tmp_path):
     mock_ctx.home = tmp_path
+    mock_ctx.auth.identity = "work"
+    mock_ctx.auth.list_connections.return_value = [
+        {"name": "openai", "connections": [{"connection_name": "default"}]},
+    ]
     config_data = {"spec_version": 1, "default_profile": "default", "encryption": {"mode": "keyring"}}
     (tmp_path / "config.json").write_text(json.dumps(config_data))
 
@@ -445,6 +461,10 @@ def test_whoami_with_config(runner, mock_ctx, tmp_path):
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert data["encryption_mode"] == "keyring"
+    assert data["active_profile"] == "work"
+    assert data["connected_providers_count"] == 1
+    assert data["connected_providers"] == ["openai"]
+    assert "authsome_version" in data
 
 
 def test_doctor(runner, mock_ctx):

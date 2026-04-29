@@ -439,13 +439,29 @@ def whoami(ctx_obj: ContextObj) -> None:
 
     data = {
         "home_directory": str(home),
+        "active_profile": actx.auth.identity,
+        "authsome_version": __version__,
         "encryption_mode": config.encryption.mode if config.encryption else "local_key",
+        "connected_providers_count": 0,
+        "connected_providers": [],
     }
+    connected_providers = sorted(
+        provider_group["name"] for provider_group in actx.auth.list_connections() if provider_group["connections"]
+    )
+    data["connected_providers_count"] = len(connected_providers)
+    data["connected_providers"] = connected_providers
+
     if ctx_obj.json_output:
         ctx_obj.print_json(data)
     else:
         ctx_obj.echo(f"Home Directory: {data['home_directory']}")
+        ctx_obj.echo(f"Active Profile: {data['active_profile']}")
+        ctx_obj.echo(f"Authsome Version: {data['authsome_version']}")
         ctx_obj.echo(f"Encryption Mode: {data['encryption_mode']}")
+        ctx_obj.echo(f"Connected Providers: {data['connected_providers_count']}")
+        if connected_providers:
+            for provider in connected_providers:
+                ctx_obj.echo(f"  {provider}")
 
 
 @cli.command()
