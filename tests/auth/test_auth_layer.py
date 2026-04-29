@@ -134,7 +134,7 @@ class TestAuthLayerLogin:
     """Authentication flow integration tests."""
 
     def test_api_key_login_and_get(self, auth: AuthLayer) -> None:
-        record = auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-test-123"}))
+        record = auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-test-123-padded-for-regex"}))
 
         assert record.status == ConnectionStatus.CONNECTED
         assert record.auth_type == AuthType.API_KEY
@@ -144,12 +144,17 @@ class TestAuthLayerLogin:
         assert conn.status == ConnectionStatus.CONNECTED
 
     def test_login_connection_exists(self, auth: AuthLayer) -> None:
-        auth.login("openai", "default", input_provider=MockInputProvider({"api_key": "sk-1"}))
+        auth.login("openai", "default", input_provider=MockInputProvider({"api_key": "sk-1-padded-for-regex-checking"}))
 
         with pytest.raises(AuthsomeError, match="already exists"):
             auth.login("openai", "default", force=False)
 
-        auth.login("openai", "default", force=True, input_provider=MockInputProvider({"api_key": "sk-2"}))
+        auth.login(
+            "openai",
+            "default",
+            force=True,
+            input_provider=MockInputProvider({"api_key": "sk-2-padded-for-regex-checking"}),
+        )
 
     def test_login_unsupported_flow(self, auth: AuthLayer) -> None:
         def mock_get_provider(name):
@@ -331,17 +336,17 @@ class TestAuthLayerCredentials:
     """Credential retrieval tests."""
 
     def test_api_key_get_access_token(self, auth: AuthLayer) -> None:
-        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-test-456"}))
+        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-test-456-padded-for-regex"}))
 
         token = auth.get_access_token("openai")
-        assert token == "sk-test-456"
+        assert token == "sk-test-456-padded-for-regex"
 
     def test_api_key_get_auth_headers(self, auth: AuthLayer) -> None:
-        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-test-789"}))
+        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-test-789-padded-for-regex"}))
 
         headers = auth.get_auth_headers("openai")
         assert "Authorization" in headers
-        assert headers["Authorization"] == "Bearer sk-test-789"
+        assert headers["Authorization"] == "Bearer sk-test-789-padded-for-regex"
 
     def test_get_access_token_oauth(self, auth: AuthLayer) -> None:
         provider = ProviderDefinition(
@@ -658,7 +663,7 @@ class TestAuthLayerLifecycle:
             mock_post.assert_called_once_with("http://revoke", data={"token": "token123"}, timeout=15)
 
     def test_remove_connection(self, auth: AuthLayer) -> None:
-        auth.login("openai", input_provider=MockInputProvider({"api_key": "key"}))
+        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-fixture-removeconnection-12"}))
 
         auth.remove("openai")
         with pytest.raises(ConnectionNotFoundError):
@@ -668,7 +673,7 @@ class TestAuthLayerLifecycle:
         auth.remove("openai")
 
     def test_revoke_connection(self, auth: AuthLayer) -> None:
-        auth.login("openai", input_provider=MockInputProvider({"api_key": "key"}))
+        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-fixture-revokeconnection-12"}))
 
         auth.revoke("openai")
         with pytest.raises(ConnectionNotFoundError):
@@ -678,8 +683,8 @@ class TestAuthLayerLifecycle:
 class TestAuthLayerExport:
     """Export operations tests."""
 
-    def test_export_env_format(self, auth: AuthLayer, monkeypatch: pytest.MonkeyPatch) -> None:
-        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-export"}))
+    def test_export_env_format(self, auth: AuthLayer) -> None:
+        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-export-padded-for-regex"}))
 
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         output = auth.export("openai", format=ExportFormat.ENV)
@@ -687,11 +692,11 @@ class TestAuthLayerExport:
         assert os.environ["OPENAI_API_KEY"] == "sk-export"
 
     def test_export_json_format(self, auth: AuthLayer) -> None:
-        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-json"}))
+        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-json-padded-for-regex"}))
 
         output = auth.export("openai", format=ExportFormat.JSON)
         data = json.loads(output)
-        assert data["OPENAI_API_KEY"] == "sk-json"
+        assert data["OPENAI_API_KEY"] == "sk-json-padded-for-regex"
 
     def test_export_oauth_format(self, auth: AuthLayer, monkeypatch: pytest.MonkeyPatch) -> None:
         provider = ProviderDefinition(
@@ -755,7 +760,7 @@ class TestAuthLayerConnections:
         assert connections == []
 
     def test_list_connections_after_login(self, auth: AuthLayer) -> None:
-        auth.login("openai", input_provider=MockInputProvider({"api_key": "key"}))
+        auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-fixture-listconnection-1234"}))
 
         connections = auth.list_connections()
         assert len(connections) == 1
