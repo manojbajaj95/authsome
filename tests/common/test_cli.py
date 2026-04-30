@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 from click.testing import CliRunner
 
 from authsome.auth.models.enums import ExportFormat
@@ -506,7 +507,7 @@ def test_register_success(runner, mock_ctx, tmp_path):
         )
     )
 
-    result = runner.invoke(cli, ["register", str(f)])
+    result = runner.invoke(cli, ["register", str(f)], input="y\n")
     assert result.exit_code == 0
     mock_ctx.auth.register_provider.assert_called_once()
 
@@ -640,3 +641,94 @@ def test_echo_quiet(runner, mock_ctx):
     result = runner.invoke(cli, ["logout", "openai", "--quiet"])
     assert result.exit_code == 0
     assert "Logged out" not in result.output
+
+
+@pytest.mark.parametrize(
+    "provider_data, expected_exit_code, expected_output",
+    [
+        (
+            {
+                "schema_version": 1,
+                "name": "test_http",
+                "display_name": "Test HTTP",
+                "auth_type": "oauth2",
+                "flow": "pkce",
+                "host_url": "api.github.com",
+                "oauth": {
+                    "authorization_url": "http://github.com/login",
+                    "token_url": "https://github.com/token",
+                    "scopes": [],
+                    "pkce": True,
+                    "supports_device_flow": False,
+                    "supports_dcr": False,
+                },
+            },
+            1,
+            "must use HTTPS scheme",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "name": "test_localhost",
+                "display_name": "Test Localhost",
+                "auth_type": "oauth2",
+                "flow": "pkce",
+                "host_url": "api.github.com",
+                "oauth": {
+                    "authorization_url": "https://localhost:8080/login",
+                    "token_url": "https://github.com/token",
+                    "scopes": [],
+                    "pkce": True,
+                    "supports_device_flow": False,
+                    "supports_dcr": False,
+                },
+            },
+            1,
+            "cannot be localhost",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "name": "test_unreachable",
+                "display_name": "Test Unreachable",
+                "auth_type": "api_key",
+                "flow": "api_key",
+                "api_key": {"header_name": "Authorization"},
+                "host_url": "this-domain-does-not-exist.example.com",
+            },
+            0,
+            "is unreachable:",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "name": "test_valid",
+                "display_name": "Test Valid",
+                "auth_type": "api_key",
+                "flow": "api_key",
+                "api_key": {"header_name": "Authorization"},
+                "host_url": "api.github.com",
+            },
+            0,
+            "Provider test_valid registered",
+        ),
+    ],
+)
+@patch("requests.head")
+def test_register_scenarios(mock_head, runner, mock_ctx, tmp_path, provider_data, expected_exit_code, expected_output):
+    if provider_data["name"] == "test_valid":
+        mock_head.return_value.status_code = 200
+    else:
+        mock_head.side_effect = requests.RequestException("Mocked timeout")
+
+    f = tmp_path / "test_provider.json"
+    f.write_text(json.dumps(provider_data))
+
+    result = runner.invoke(cli, ["register", str(f)], input="y\n")
+    assert result.exit_code == expected_exit_code
+    assert expected_output in result.output
+
+    if expected_exit_code == 0:
+        mock_ctx.auth.register_provider.assert_called_once()
+        if provider_data["name"] == "test_valid":
+            assert "is unreachable:" not in result.output
