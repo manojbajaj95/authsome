@@ -105,7 +105,7 @@ authsome list                          # all connections + token status
 
 ## Docs
 
-The full documentation site lives in [`docs/site/`](docs/site/) and is built with [Mintlify](https://mintlify.com).
+The full documentation site lives in [`docs/site/`](docs/site/)
 
 - [Quickstart](docs/site/quickstart.mdx)
 - [CLI reference](docs/site/reference/cli.mdx)
@@ -121,7 +121,7 @@ npm i -g mint   # requires Node.js >= 20.17.0
 mint dev
 ```
 
-Markdown notes at the repo root under [`docs/`](docs/) (for example [`docs/architecture.md`](docs/architecture.md)) are kept alongside the Mintlify site in [`docs/site/`](docs/site/).
+
 
 ## Specs
 
