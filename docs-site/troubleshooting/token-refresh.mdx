@@ -1,0 +1,127 @@
+---
+title: "Token refresh failures"
+description: "Diagnose why a stored OAuth2 token failed to refresh and recover the connection."
+---
+
+Authsome refreshes OAuth2 access tokens automatically. When you ask for a token (via `authsome get`, `export`, `run`, or the library `AuthLayer`), authsome checks the stored expiry. If the token is within ~5 minutes of expiring, it calls the provider's token endpoint with the stored refresh token, writes the fresh credentials back to the vault, and returns the new access token.
+
+When refresh fails, the connection moves into one of two states.
+
+| Symptom | Connection status |
+|---------|-------------------|
+| Network blip, retried later | `expired` |
+| Refresh token rejected by provider | `invalid` |
+
+## Common failure modes
+
+### `refresh token has been revoked`
+
+```text
+Error: refresh failed for github (default): invalid_grant
+```
+
+Causes:
+
+- You revoked the OAuth app's authorization at the provider.
+- The provider rotated refresh tokens and your stored token is stale.
+- Long inactivity expired the refresh token (some providers have a sliding window).
+
+Recover:
+
+```bash
+authsome revoke <provider>     # clear local state + remote (if supported)
+authsome login <provider>      # re-run the flow
+```
+
+### `client authentication failed`
+
+```text
+Error: refresh failed for <provider>: invalid_client
+```
+
+The OAuth client credentials stored under your profile no longer match the provider. This usually means the OAuth app's client secret was rotated.
+
+```bash
+authsome revoke <provider>
+authsome login <provider>      # re-collect client_id and client_secret via browser bridge
+```
+
+### `expired_token` after long downtime
+
+```text
+Error: refresh failed for <provider>: expired_token
+```
+
+Some providers expire refresh tokens after extended inactivity (Google for free-tier OAuth apps, for example). Re-run the full login:
+
+```bash
+authsome login <provider> --force
+```
+
+### Network errors during refresh
+
+```text
+Error: refresh failed for <provider>: connection timed out
+```
+
+The provider's token endpoint was unreachable. The connection stays at `expired` — it's recoverable. Retry once your network is back:
+
+```bash
+authsome get <provider> --field status
+```
+
+If the next access call succeeds, authsome refreshes and the status returns to `connected`.
+
+## Inspect refresh state
+
+The CLI exposes per-provider refresh state for debugging:
+
+```bash
+authsome get <provider> --field expires_at
+authsome get <provider> --field status
+```
+
+The audit log records every login, refresh attempt, and failure reason:
+
+```bash
+authsome log -n 50 --json | python3 -c "
+import sys, json
+for line in sys.stdin:
+    e = json.loads(line)
+    if 'refresh' in e.get('event', '') or e.get('status') == 'failure':
+        print(e)
+"
+```
+
+For deeper diagnostics, run any command with `--verbose`:
+
+```bash
+authsome --verbose get <provider>
+```
+
+DEBUG logs go to `~/.authsome/logs/authsome.log` and include the token endpoint URL, request body (with secrets redacted), and the full response body on failure.
+
+## API keys never refresh
+
+API-key providers don't have a refresh mechanism — there's nothing to refresh. If the stored key is rejected at runtime, the provider invalidated it externally (the user rotated it, the team revoked it, etc.). Replace it:
+
+```bash
+authsome login <provider> --force      # paste the new key
+```
+
+## Refresh window
+
+By default, authsome refreshes within 300 seconds of the stored `expires_at`. If a token has just expired, the next access call triggers a refresh. If the access token still has more than 5 minutes left, authsome returns it as-is.
+
+This window is the spec's recommended default and is not currently configurable through the CLI.
+
+## What's next
+
+<Columns cols={2}>
+  <Card title="OAuth callbacks" icon="link" href="/troubleshooting/oauth-callbacks">
+    Diagnose login flow problems before refresh becomes the issue.
+  </Card>
+  <Card title="Doctor" icon="stethoscope" href="/troubleshooting/doctor">
+    Verify the rest of the install is healthy.
+  </Card>
+</Columns>

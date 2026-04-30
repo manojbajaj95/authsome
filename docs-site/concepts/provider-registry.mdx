@@ -1,0 +1,130 @@
+---
+title: "Provider registry"
+description: "How authsome resolves provider definitions from bundled JSON, user overrides, and registered custom providers."
+---
+
+A provider is an external service authsome can authenticate against — `github`, `google`, `openai`, and so on. Each provider is described by a JSON definition that tells authsome which authentication flow to run, where the OAuth endpoints live, and how to inject credentials into outbound requests.
+
+The provider registry is the system that resolves a provider name to its definition.
+
+## Resolution order
+
+When authsome looks up a provider by name, it checks two sources in this order:
+
+1. **User overrides** at `~/.authsome/providers/<name>.json`. These always win.
+2. **Bundled providers** shipped inside the `authsome` package (`src/authsome/auth/bundled_providers/`).
+
+This means you can override any bundled provider — for example, to point GitHub at a GitHub Enterprise instance, or to add custom scopes — by dropping a JSON file with the same name into `~/.authsome/providers/`.
+
+## Provider sources
+
+`authsome list` shows whether each provider came from the bundled set or from a user-registered file.
+
+```text
+$ authsome list
+Providers: 35 total, 2 connected
+
+Provider                     Source    Auth      Connection  Status
+GitHub [github]              bundled   oauth2    default     connected
+OpenAI [openai]              bundled   api_key   default     connected
+Acme CRM [acmecrm]           custom    oauth2    -           not_connected
+```
+
+The `--json` output exposes the same split as `bundled` and `custom` arrays.
+
+## What a provider definition contains
+
+Every provider definition declares:
+
+- An identity (`name`, `display_name`).
+- An auth type (`oauth2` or `api_key`) and a default flow (`pkce`, `device_code`, `dcr_pkce`, or `api_key`).
+- A flow-specific config block (`oauth` or `api_key`).
+- An optional `host_url` for proxy routing.
+- An optional `export.env` map describing which environment variables hold which credential fields.
+
+A minimal OAuth2 provider:
+
+```json
+{
+  "schema_version": 1,
+  "name": "github",
+  "display_name": "GitHub",
+  "auth_type": "oauth2",
+  "flow": "pkce",
+  "oauth": {
+    "authorization_url": "https://github.com/login/oauth/authorize",
+    "token_url": "https://github.com/login/oauth/access_token",
+    "scopes": ["repo", "read:user"],
+    "pkce": true,
+    "supports_device_flow": true,
+    "supports_dcr": false
+  },
+  "host_url": "api.github.com",
+  "export": {
+    "env": { "access_token": "GITHUB_ACCESS_TOKEN" }
+  }
+}
+```
+
+A minimal API-key provider:
+
+```json
+{
+  "schema_version": 1,
+  "name": "openai",
+  "display_name": "OpenAI",
+  "auth_type": "api_key",
+  "flow": "api_key",
+  "api_key": {
+    "header_name": "Authorization",
+    "header_prefix": "Bearer"
+  },
+  "host_url": "api.openai.com",
+  "export": {
+    "env": { "api_key": "OPENAI_API_KEY" }
+  }
+}
+```
+
+For the full schema with every field, see the [Provider schema reference](/reference/provider-schema).
+
+## Bundled providers do not imply bundled credentials
+
+A bundled provider definition only describes how to talk to a service. It does not include OAuth client credentials. The first time you log in to an OAuth2 provider, authsome collects your `client_id` and `client_secret` through a secure browser bridge and stores them encrypted in your profile.
+
+For services that support Dynamic Client Registration (DCR), the `dcr_pkce` flow registers a fresh OAuth client automatically — no `client_id` collection needed.
+
+## Multi-tenant and self-hosted providers
+
+For services where the base URL varies per deployment (GitHub Enterprise, Okta, GitLab self-managed), the provider definition uses `oauth.base_url` as a default and `{base_url}` as a placeholder in URL fields:
+
+```json
+{
+  "oauth": {
+    "base_url": "https://github.com",
+    "authorization_url": "{base_url}/login/oauth/authorize",
+    "token_url": "{base_url}/login/oauth/access_token"
+  }
+}
+```
+
+During `authsome login`, the user is prompted for the base URL with the JSON value as the default. A custom base URL is saved to the profile and used for all future token refreshes on that connection.
+
+## Adding your own providers
+
+Two ways:
+
+1. **Drop a file at `~/.authsome/providers/<name>.json`.** Authsome picks it up on the next CLI invocation.
+2. **Register through the CLI.** `authsome register ./acmecrm.json` validates the JSON, copies it into `~/.authsome/providers/`, and confirms the new provider appears in `authsome list`.
+
+See [Custom providers](/guides/custom-providers) for a full walkthrough.
+
+## Override a bundled provider
+
+To override a bundled provider — for example, to add a scope to GitHub — copy the bundled JSON, edit it, and place it under `~/.authsome/providers/github.json`. Authsome resolves your file first.
+
+```bash
+authsome inspect github > ~/.authsome/providers/github.json
+# edit the file
+authsome list   # source now shows "custom" for github
+```

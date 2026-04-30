@@ -1,0 +1,134 @@
+---
+title: "Diagnose with `doctor`"
+description: "Run health checks on directory layout, encryption, and provider parsing — and read the output."
+---
+
+`authsome doctor` is the first command to run when something looks wrong. It walks the home directory layout, verifies encryption is available, and parses every provider definition.
+
+```bash
+authsome doctor
+```
+
+A healthy machine prints `OK` for each check and exits with code `0`.
+
+## Checks performed
+
+| Check | What it verifies |
+|-------|------------------|
+| Home directory | `~/.authsome` (or `AUTHSOME_HOME`) exists and is readable. |
+| Master key | `master.key` exists with mode `0600`, or the OS keyring is reachable. |
+| Profile store | `profiles/<active>/store.db` opens and is writable. |
+| Lock file | `profiles/<active>/lock` is acquirable. |
+| Provider parsing | Every JSON in `bundled_providers/` and `~/.authsome/providers/` validates against the schema. |
+| Audit log | `audit.log` is writable. |
+
+## Common failures
+
+### `master.key not found`
+
+```text
+[FAIL] Master key not found at ~/.authsome/master.key
+```
+
+Causes:
+
+- You haven't run authsome on this machine before. The first CLI invocation auto-initializes the home directory. Re-run any command (for example, `authsome whoami`) to trigger initialization.
+- You moved or deleted `~/.authsome`. If you have a backup, restore it. Without the master key, encrypted records cannot be decrypted.
+
+### `master.key has insecure permissions`
+
+```text
+[FAIL] ~/.authsome/master.key has mode 0644 (expected 0600)
+```
+
+Fix:
+
+```bash
+chmod 0600 ~/.authsome/master.key
+```
+
+### `provider <name> failed to parse`
+
+```text
+[FAIL] Provider 'acmecrm' failed to parse: missing required field 'token_url'
+```
+
+A custom provider JSON in `~/.authsome/providers/` is malformed. Open the file, fix the indicated field, and re-run. See the [Provider schema](/reference/provider-schema) for required fields per auth type.
+
+### `keyring not available`
+
+```text
+[FAIL] Encryption mode is 'keyring' but no keyring backend is available
+```
+
+Causes:
+
+- On Linux without a graphical session, the `keyring` library can't reach a backend. Switch to `local_key` mode by editing `~/.authsome/config.json`:
+
+  ```json
+  { "encryption": { "mode": "local_key" } }
+  ```
+
+- A required system package is missing. On Debian/Ubuntu: `sudo apt install gnome-keyring`.
+
+### `profile store locked`
+
+```text
+[FAIL] Could not acquire lock on profiles/default/lock
+```
+
+Another authsome process is mid-write. Wait a few seconds and retry. If a stale lock persists (the previous process crashed):
+
+```bash
+rm ~/.authsome/profiles/default/lock
+```
+
+Only do this when you are certain no other authsome process is running.
+
+## Inspect specific state
+
+For more detail than `doctor` shows, use these:
+
+```bash
+authsome whoami                              # home directory + encryption mode
+authsome list --json                         # all providers + connection states
+authsome get <provider> --json               # connection record metadata
+authsome inspect <provider>                  # provider definition
+authsome log -n 100                          # recent audit events
+```
+
+## Verbose logging
+
+For deeper inspection of any command, enable verbose logging:
+
+```bash
+authsome --verbose login github
+```
+
+DEBUG logs go to stderr and to the rotating log file at `~/.authsome/logs/authsome.log`. Inspect the log:
+
+```bash
+tail -f ~/.authsome/logs/authsome.log
+```
+
+## Reset to a clean slate
+
+If your install is irrecoverably broken and you don't have any credentials to preserve:
+
+```bash
+rm -rf ~/.authsome
+authsome whoami     # triggers re-initialization
+```
+
+This destroys every stored credential. You will need to log in to every provider again.
+
+## What's next
+
+<Columns cols={2}>
+  <Card title="OAuth callbacks" icon="link" href="/troubleshooting/oauth-callbacks">
+    Diagnose `redirect_uri_mismatch`, port-in-use, and timeout errors.
+  </Card>
+  <Card title="Token refresh" icon="rotate" href="/troubleshooting/token-refresh">
+    Why a token failed to refresh and what to do.
+  </Card>
+</Columns>

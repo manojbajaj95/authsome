@@ -1,0 +1,107 @@
+---
+title: "Use API keys"
+description: "Authenticate with OpenAI, Anthropic, and other API-key providers through a secure browser bridge."
+---
+
+API-key providers like OpenAI, Anthropic, and SendGrid don't run an OAuth flow — you have one long-lived secret. Authsome captures it through a local browser form so it never appears in shell history or process listings, then stores it encrypted in your profile.
+
+## Log in
+
+```bash
+authsome login openai
+```
+
+A browser window opens to a local form at `http://127.0.0.1:7999`. Paste the API key into the masked input and submit. The terminal prints `Successfully logged in to openai (default).`
+
+<Warning>
+  API keys are never accepted as command-line arguments and never read from shell prompts. The browser bridge form is the only path. On a headless machine (no `DISPLAY`), authsome falls back to masked terminal input via `getpass`.
+</Warning>
+
+## Confirm the connection
+
+```bash
+authsome list
+authsome get openai                         # metadata, key redacted
+authsome get openai --field status          # → connected
+authsome get openai --field api_key --show-secret
+```
+
+`--show-secret` reveals the stored value. Use it sparingly — the safer pattern is `authsome run` (see below).
+
+## Multiple keys for the same provider
+
+Use the `--connection` flag to keep multiple keys side by side. For example, a personal OpenAI key and a team key:
+
+```bash
+authsome login openai --connection personal
+authsome login openai --connection team
+```
+
+Read commands target a specific connection:
+
+```bash
+authsome get openai --connection team
+authsome export openai --connection personal --format env
+```
+
+## Pattern validation
+
+Some bundled providers ship a `key_pattern` regex in their definition. Authsome rejects keys that fail the regex with a hint:
+
+```text
+Error: This does not look like a valid OpenAI API key.
+Hint: OpenAI API keys start with 'sk-' followed by at least 20 letters, digits, '_' or '-'.
+```
+
+This catches obvious paste errors early, before authsome stores the key and tries to use it.
+
+## Use the key in an agent
+
+Two common patterns.
+
+### Through the proxy
+
+```bash
+authsome run -- python my_agent.py
+```
+
+Authsome sets `OPENAI_API_KEY=authsome-proxy-managed` in the child's environment so the SDK initializes, then injects the real key into outbound requests to `api.openai.com`. The child process never sees the actual key.
+
+### As an environment variable
+
+```bash
+authsome export openai --format env
+python my_agent.py
+```
+
+`export` prints `KEY=value` lines on stdout. Source the output in your shell to load the variable, or pipe it into a script that needs it.
+
+## Rotate a key
+
+To replace the stored key with a new one:
+
+```bash
+authsome login openai --force
+```
+
+The `--force` flag overwrites the existing connection. Pass `--connection <name>` to target a non-default connection.
+
+## Remove a key
+
+```bash
+authsome logout openai             # remove local credential, leave provider untouched
+authsome remove openai             # delete all local state for the provider
+```
+
+For OAuth2 providers, `authsome revoke <provider>` also calls the provider's revocation endpoint. API-key providers have no revocation endpoint, so `revoke` and `remove` are equivalent for them.
+
+## What's next
+
+<Columns cols={2}>
+  <Card title="Run agents with the proxy" icon="shield-halved" href="/guides/run-agents-with-proxy">
+    Keep the key out of the agent's environment entirely.
+  </Card>
+  <Card title="Custom providers" icon="puzzle-piece" href="/guides/custom-providers">
+    Add an API-key provider that authsome doesn't ship.
+  </Card>
+</Columns>

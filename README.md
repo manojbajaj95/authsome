@@ -105,9 +105,23 @@ authsome list                          # all connections + token status
 
 ## Docs
 
-- [CLI reference](docs/cli.md)
-- [Providers](docs/providers.md)
-- [Architecture](docs/architecture.md)
+The full documentation site lives in [`docs-site/`](docs-site/) and is built with [Mintlify](https://mintlify.com).
+
+- [Quickstart](docs-site/quickstart.mdx)
+- [CLI reference](docs-site/reference/cli.mdx)
+- [Architecture](docs-site/concepts/architecture.mdx)
+- [Custom providers](docs-site/guides/custom-providers.mdx)
+- [Troubleshooting](docs-site/troubleshooting/doctor.mdx)
+
+To preview locally:
+
+```bash
+cd docs-site
+npm i -g mint   # requires Node.js >= 20.17.0
+mint dev
+```
+
+The original repo-flavored docs in [`docs/`](docs/) are kept as source material during the migration to the Mintlify site.
 
 ## Specs
 

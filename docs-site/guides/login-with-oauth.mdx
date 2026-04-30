@@ -1,0 +1,146 @@
+---
+title: "Log in with OAuth"
+description: "Use the PKCE browser flow to authenticate with GitHub, Google, Linear, and other OAuth2 providers."
+---
+
+OAuth2 providers — GitHub, Google, Linear, Slack, Notion, and many of the bundled providers — use a browser-based PKCE flow by default. You authenticate once, and authsome takes over token refresh from there.
+
+## When to use this flow
+
+Use the PKCE browser flow when:
+
+- Your machine has a graphical browser available.
+- You can register an OAuth app with the provider (or the provider supports Dynamic Client Registration — see the note below).
+
+If you are on a remote SSH session, in CI, or on a server without a browser, use the [Device Code flow](/guides/headless-device-code) instead.
+
+## Register an OAuth app
+
+For services that don't support Dynamic Client Registration, you need to register an OAuth app with the provider once. The redirect URI must be:
+
+```text
+http://127.0.0.1:7999/callback
+```
+
+This is the only redirect URI authsome listens on for PKCE flows.
+
+GitHub example:
+
+<Steps>
+  <Step title="Create a new OAuth app">
+    Visit [github.com/settings/developers](https://github.com/settings/developers) and click **New OAuth App**.
+  </Step>
+  <Step title="Set the redirect URI">
+    Set **Authorization callback URL** to `http://127.0.0.1:7999/callback`.
+  </Step>
+  <Step title="Save the client ID and secret">
+    Keep the **Client ID** and **Client Secret** at hand. Authsome will prompt for them on first login through a secure local browser form. You will not paste them into a terminal.
+  </Step>
+</Steps>
+
+<Tip>
+  For services that support Dynamic Client Registration (DCR) — for example, some MCP servers and modern OAuth providers — authsome's `dcr_pkce` flow registers an OAuth client automatically. You skip the app-registration step entirely.
+</Tip>
+
+## Run the login
+
+```bash
+authsome login github
+```
+
+This is what happens:
+
+<Steps>
+  <Step title="Client credential collection (first time only)">
+    Authsome opens a local form at `http://127.0.0.1:7999`. Paste your `client_id` and `client_secret`. They are encrypted and stored under your profile, then reused on every subsequent login.
+  </Step>
+  <Step title="Authorization redirect">
+    A second browser window opens to the provider's authorization page. Approve the requested scopes.
+  </Step>
+  <Step title="Token exchange">
+    The provider redirects back to `http://127.0.0.1:7999/callback` with an authorization code. Authsome exchanges it for an access token (and a refresh token, if the provider supports them) and stores the encrypted record.
+  </Step>
+  <Step title="Confirmation">
+    The terminal prints `Successfully logged in to github (default).`
+  </Step>
+</Steps>
+
+<Warning>
+  Sensitive values — `client_secret`, access tokens, refresh tokens — are never accepted as command-line arguments. They never appear in shell history or process listings. Authsome collects them through the secure browser bridge or, on headless machines, through masked terminal input.
+</Warning>
+
+## Override the flow
+
+The default flow lives in the provider definition. Override it on the command line:
+
+```bash
+authsome login github --flow device_code
+authsome login github --flow pkce
+```
+
+Valid values: `pkce`, `device_code`, `dcr_pkce`, `api_key`.
+
+## Custom scopes
+
+Request specific scopes instead of the provider's default set:
+
+```bash
+authsome login github --scopes "repo,read:user,workflow"
+```
+
+The granted scopes are stored on the connection record and visible in `authsome get github`.
+
+## Multi-tenant / self-hosted (Enterprise)
+
+Providers like GitHub Enterprise, Okta, and GitLab self-managed run on per-deployment URLs. Pass `--base-url`:
+
+```bash
+authsome login github --base-url https://github.acme.com
+```
+
+The base URL is saved on the connection and reused for every refresh.
+
+## Multiple connections per provider
+
+The default connection name is `default`. To log in to a second account on the same provider — for example, a personal and a work GitHub — pass `--connection`:
+
+```bash
+authsome login github --connection personal
+authsome login github --connection work
+```
+
+Each connection is independent. Switch between them on read commands:
+
+```bash
+authsome get github --connection work
+authsome export github --connection personal --format env
+```
+
+## Verify the login
+
+```bash
+authsome list
+authsome get github                  # metadata, secrets redacted
+authsome get github --field status   # → connected
+```
+
+## Re-login
+
+If a provider is already `connected`, `authsome login <provider>` exits with an error. To overwrite an existing connection:
+
+```bash
+authsome login github --force
+```
+
+This skips the "already connected" guard and runs the flow again, replacing the stored credentials. Use `authsome revoke github` first if you want to invalidate the old token at the provider as well.
+
+## What's next
+
+<Columns cols={2}>
+  <Card title="Run agents with the proxy" icon="shield-halved" href="/guides/run-agents-with-proxy">
+    Inject the access token into outbound requests without exposing it.
+  </Card>
+  <Card title="Headless device code" icon="server" href="/guides/headless-device-code">
+    Authenticate over SSH or in CI when no local browser is available.
+  </Card>
+</Columns>
