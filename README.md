@@ -8,8 +8,8 @@
 [![codecov](https://codecov.io/gh/manojbajaj95/authsome/branch/main/graph/badge.svg)](https://codecov.io/gh/manojbajaj95/authsome)
 
 ```text
-              __  __
-  ____ ___  _/ /_/ /_  _________  ____ ___  ___
+               __  __
+  ____ ___  __/ /_/ /_  _________  ____ ___  ___
  / __ `/ / / / __/ __ \/ ___/ __ \/ __ `__ \/ _ \
 / /_/ / /_/ / /_/ / / (__  ) /_/ / / / / / /  __/
 \__,_/\__,_/\__/_/ /_/____/\____/_/ /_/ /_/\___/

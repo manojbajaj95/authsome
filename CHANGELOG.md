@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.2.2](https://github.com/manojbajaj95/authsome/compare/authsome-v0.2.1...authsome-v0.2.2) (2026-04-29)
+
+
+### Features
+
+* add audit logging ([e130f30](https://github.com/manojbajaj95/authsome/commit/e130f309adfa8474671e9a4d2d00464e0ae1b225))
+* add JSON output support to audit log command ([5ca2cd7](https://github.com/manojbajaj95/authsome/commit/5ca2cd78eee1c01b4510a42b33e56d1c11ccc942))
+* expand whoami context ([2dead00](https://github.com/manojbajaj95/authsome/commit/2dead00b959f0f7b14958eede370d673792236ec))
+* implement structured audit logging for CLI actions and proxy events ([e33b2d5](https://github.com/manojbajaj95/authsome/commit/e33b2d5834543fea75557efcfdf49ee6ce8297af))
+* migrate --no-audit option from root command to common CLI options decorator ([93f4913](https://github.com/manojbajaj95/authsome/commit/93f4913c85c1815a649dedf8b991488ccfdac63b))
+* render list output as table ([9ac6750](https://github.com/manojbajaj95/authsome/commit/9ac6750809133598b7e625a626f43f145201046d))
+* show connections in inspect ([3c25b10](https://github.com/manojbajaj95/authsome/commit/3c25b10e2195835b2e9e664898b05dc4f8084063))
+* show expiry in list output ([55aa376](https://github.com/manojbajaj95/authsome/commit/55aa3764f5aa0e334d278d09c697e29ade47bfe4))
+* support regex proxy host urls ([a57a7de](https://github.com/manojbajaj95/authsome/commit/a57a7de0093c28fafa3805ef444f548e82e34d4c))
+
+
+### Bug Fixes
+
+* added support for regex check for API keys ([1da9d36](https://github.com/manojbajaj95/authsome/commit/1da9d36cd20cf3e85b6ec9098c9aea8b51b5e7bd))
+* added support for regex check for API keys ([2d8022e](https://github.com/manojbajaj95/authsome/commit/2d8022eb112226e15d31ff50079d1975b25afe79))
+* count active providers once ([8faf814](https://github.com/manojbajaj95/authsome/commit/8faf814800793ddc23911058fea5e52df4afd4b9))
+* export all connections when provider omitted ([2b5ec34](https://github.com/manojbajaj95/authsome/commit/2b5ec34bf57c0b2990145bef43fce53a16d5ac08))
+* export all connections when provider omitted ([622992f](https://github.com/manojbajaj95/authsome/commit/622992ffa7d1e53f877cf1b380fa9dfaa31333a8))
+* harden auth proxy routing ([3c3a7ad](https://github.com/manojbajaj95/authsome/commit/3c3a7adcc9e578aaa37dde7c0fa683b5a0483022))
+* harden auth proxy routing ([0fd02c6](https://github.com/manojbajaj95/authsome/commit/0fd02c6530c2d83cd35d65d41e1e2155fa60214c))
+* keep proxy routing on default connections ([946576a](https://github.com/manojbajaj95/authsome/commit/946576a65229dd1252a8d1ed099349973ab65178))
+* make login idempotent ([cb327fa](https://github.com/manojbajaj95/authsome/commit/cb327fa389853e71c06792db8896c2f31c96de94))
+* prefer specific proxy route prefixes ([679fa77](https://github.com/manojbajaj95/authsome/commit/679fa77762d6a1293fd0d87f1d84bced59cfe471))
+* preserve connected state on refresh fallback ([7c8ff9f](https://github.com/manojbajaj95/authsome/commit/7c8ff9fb5ba9f93ccca1d0454a91808dd4f5d4ce))
+* respect requested login context ([2902059](https://github.com/manojbajaj95/authsome/commit/29020591e7f4fc851178371b0ea5243f8d2b2678))
+* update audit log event type and add comprehensive unit tests for AuditLogger ([96b6999](https://github.com/manojbajaj95/authsome/commit/96b6999e2f162d88c7a10a006896bd7377564ebe))
+* update openai export test fixture ([05bd00d](https://github.com/manojbajaj95/authsome/commit/05bd00dd7fcd864a6cd9c3b8b6c33ae27c8e6704))
+* warn when refresh falls back to cached token ([7b1af48](https://github.com/manojbajaj95/authsome/commit/7b1af483583f4bf3c35b8a7010b2c2c63853bc82))
+
 ## [0.2.1](https://github.com/manojbajaj95/authsome/compare/authsome-v0.2.0...authsome-v0.2.1) (2026-04-28)
 
 
