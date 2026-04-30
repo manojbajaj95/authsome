@@ -465,6 +465,7 @@ def get(ctx_obj: ContextObj, provider: str, connection: str, field: str | None, 
 
     if show_secret:
         from authsome.utils import require_os_auth
+
         if not require_os_auth("reveal secrets"):
             ctx_obj.echo("Authentication failed or cancelled.", err=True, color="red")
             sys.exit(1)
@@ -475,7 +476,11 @@ def get(ctx_obj: ContextObj, provider: str, connection: str, field: str | None, 
     if field:
         if field in data:
             if show_secret:
-                ctx_obj.echo("WARNING: Secret printed to stdout. Run: history -d <n> to remove from shell history.", err=True, color="yellow")
+                ctx_obj.echo(
+                    "WARNING: Secret printed to stdout. Run: history -d <n> to remove from shell history.",
+                    err=True,
+                    color="yellow",
+                )
             if ctx_obj.json_output:
                 ctx_obj.print_json({field: data[field]})
             else:
@@ -486,7 +491,11 @@ def get(ctx_obj: ContextObj, provider: str, connection: str, field: str | None, 
         return
 
     if show_secret:
-        ctx_obj.echo("WARNING: Secret printed to stdout. Run: history -d <n> to remove from shell history.", err=True, color="yellow")
+        ctx_obj.echo(
+            "WARNING: Secret printed to stdout. Run: history -d <n> to remove from shell history.",
+            err=True,
+            color="yellow",
+        )
 
     if ctx_obj.json_output:
         ctx_obj.print_json(data)
