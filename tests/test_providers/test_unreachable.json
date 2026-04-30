@@ -1,9 +1,0 @@
-{
-  "schema_version": 1,
-  "name": "test_unreachable",
-  "display_name": "Test Unreachable",
-  "auth_type": "api_key",
-  "flow": "api_key",
-  "api_key": {"header_name": "Authorization"},
-  "host_url": "this-domain-does-not-exist.example.com"
-}
