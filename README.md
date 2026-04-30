@@ -105,27 +105,27 @@ authsome list                          # all connections + token status
 
 ## Docs
 
-The full documentation site lives in [`docs-site/`](docs-site/) and is built with [Mintlify](https://mintlify.com).
+The full documentation site lives in [`docs/site/`](docs/site/) and is built with [Mintlify](https://mintlify.com).
 
-- [Quickstart](docs-site/quickstart.mdx)
-- [CLI reference](docs-site/reference/cli.mdx)
-- [Architecture](docs-site/concepts/architecture.mdx)
-- [Custom providers](docs-site/guides/custom-providers.mdx)
-- [Troubleshooting](docs-site/troubleshooting/doctor.mdx)
+- [Quickstart](docs/site/quickstart.mdx)
+- [CLI reference](docs/site/reference/cli.mdx)
+- [Architecture](docs/site/concepts/architecture.mdx)
+- [Custom providers](docs/site/guides/custom-providers.mdx)
+- [Troubleshooting](docs/site/troubleshooting/doctor.mdx)
 
 To preview locally:
 
 ```bash
-cd docs-site
+cd docs/site
 npm i -g mint   # requires Node.js >= 20.17.0
 mint dev
 ```
 
-The original repo-flavored docs in [`docs/`](docs/) are kept as source material during the migration to the Mintlify site.
+Markdown notes at the repo root under [`docs/`](docs/) (for example [`docs/architecture.md`](docs/architecture.md)) are kept alongside the Mintlify site in [`docs/site/`](docs/site/).
 
 ## Specs
 
-- [Authsome v1](specs/authsome-v1.md)
+- [Authsome v1](docs/specs/authsome-v1.md)
 
 ## License
 

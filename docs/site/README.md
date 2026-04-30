@@ -24,7 +24,7 @@ mint validate         # run schema + content validation
 ## Structure
 
 ```
-docs-site/
+docs/site/
   docs.json                    Mintlify config: theme, navigation, navbar
   index.mdx                    Landing page
   quickstart.mdx               First-run walkthrough
