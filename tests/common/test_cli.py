@@ -353,7 +353,9 @@ def test_get_show_secret(runner, mock_ctx):
     )
     mock_ctx.auth.get_connection.return_value = record
 
-    result = runner.invoke(cli, ["get", "openai", "--show-secret"])
+    with patch("authsome.utils.require_os_auth", return_value=True):
+        result = runner.invoke(cli, ["get", "openai", "--show-secret"])
+        
     assert result.exit_code == 0
     assert "sk-super-secret" in result.output
 
