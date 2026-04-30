@@ -108,6 +108,7 @@ authsome list                          # all connections + token status
 - [CLI reference](docs/cli.md)
 - [Providers](docs/providers.md)
 - [Architecture](docs/architecture.md)
+- [Manual testing guide](docs/manual-testing.md)
 
 ## Specs
 
