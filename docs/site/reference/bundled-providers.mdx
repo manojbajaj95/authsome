@@ -1,0 +1,93 @@
+---
+title: "Bundled providers"
+description: "Every provider that ships with authsome out of the box."
+---
+
+Authsome ships with definitions for the providers below. They are loaded lazily from JSON files inside the package and can be overridden by dropping a file with the same name into `~/.authsome/providers/`.
+
+For anything not listed here, see [Custom providers](/guides/custom-providers).
+
+## OAuth2 providers
+
+| Provider | Display name | Default flow | Host |
+|----------|--------------|--------------|------|
+| `atlassian` | Atlassian | `pkce` | `api.atlassian.com` |
+| `discord` | Discord | `pkce` | `discord.com` |
+| `github` | GitHub | `pkce` | `api.github.com` |
+| `gitlab` | GitLab | `pkce` | `gitlab.com` |
+| `google` | Google | `pkce` | `regex:.*googleapis.*` |
+| `hubspot` | HubSpot | `pkce` | `api.hubapi.com` |
+| `klaviyo-oauth` | Klaviyo (OAuth) | `pkce` | `a.klaviyo.com` |
+| `linear` | Linear | `dcr_pkce` | `api.linear.app` |
+| `microsoft` | Microsoft | `pkce` | `graph.microsoft.com` |
+| `notion` | Notion | `pkce` | `api.notion.com` |
+| `postiz` | Postiz | `device_code` | `api.postiz.com` |
+| `slack` | Slack | `pkce` | `slack.com` |
+| `x` | X (Twitter) | `pkce` | `api.twitter.com` |
+
+## API-key providers
+
+| Provider | Display name | Host |
+|----------|--------------|------|
+| `ahrefs` | Ahrefs | `api.ahrefs.com` |
+| `apollo` | Apollo | `api.apollo.io` |
+| `ashby` | Ashby | `api.ashbyhq.com` |
+| `beehiiv` | Beehiiv | `api.beehiiv.com` |
+| `brevo` | Brevo | `api.brevo.com` |
+| `buffer` | Buffer | `api.bufferapp.com` |
+| `calendly` | Calendly | `api.calendly.com` |
+| `clearbit` | Clearbit | `api.clearbit.com` |
+| `dub` | Dub.co | `api.dub.co` |
+| `g2` | G2 | `api.g2.com` |
+| `hunter` | Hunter | `api.hunter.io` |
+| `instantly` | Instantly | `api.instantly.ai` |
+| `intercom` | Intercom | `api.intercom.io` |
+| `keywords-everywhere` | Keywords Everywhere | `api.keywordseverywhere.com` |
+| `klaviyo` | Klaviyo | `a.klaviyo.com` |
+| `lemlist` | Lemlist | `api.lemlist.com` |
+| `livestorm` | Livestorm | `api.livestorm.co` |
+| `mailchimp` | Mailchimp | `api.mailchimp.com` |
+| `mention-me` | Mention Me | `mention-me.com` |
+| `openai` | OpenAI | `api.openai.com` |
+| `optimizely` | Optimizely | `api.optimizely.com` |
+| `postmark` | Postmark | `api.postmarkapp.com` |
+| `resend` | Resend | `api.resend.com` |
+| `rewardful` | Rewardful | `api.getrewardful.com` |
+| `savvycal` | SavvyCal | `api.savvycal.com` |
+| `semrush` | SEMrush | `api.semrush.com` |
+| `sendgrid` | SendGrid | `api.sendgrid.com` |
+| `tolt` | Tolt | `api.tolt.com` |
+| `typeform` | Typeform | `api.typeform.com` |
+| `wistia` | Wistia | `api.wistia.com` |
+| `zapier` | Zapier | `api.zapier.com` |
+
+## Inspect a definition
+
+To see the full JSON for any bundled provider, including endpoints, scopes, and export map:
+
+```bash
+authsome inspect github
+authsome inspect openai --json
+```
+
+## Override a bundled provider
+
+To change a bundled definition — add scopes, point at a self-hosted instance, swap the host URL — copy the JSON to `~/.authsome/providers/<name>.json` and edit it. Custom providers always win over bundled ones with the same name.
+
+```bash
+authsome inspect github > ~/.authsome/providers/github.json
+# edit the file
+authsome list   # github now shows source=custom
+```
+
+See [Provider registry](/concepts/provider-registry) for the resolution rules.
+
+## Add a new bundled provider
+
+Bundled providers live in `src/authsome/auth/bundled_providers/` inside the authsome source tree. To add one upstream, open a pull request against [`manojbajaj95/authsome`](https://github.com/manojbajaj95/authsome) with:
+
+- The provider JSON in `src/authsome/auth/bundled_providers/<name>.json`.
+- A test in `tests/auth/providers/` confirming the JSON parses against the schema.
+- An update to this page.
+
+For a one-off provider you just need locally, register it as a custom provider — no source tree change required. See [Custom providers](/guides/custom-providers).

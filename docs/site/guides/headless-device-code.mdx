@@ -1,0 +1,98 @@
+---
+title: "Headless setup with device code"
+description: "Authenticate over SSH or in CI without a local browser by using the OAuth2 Device Authorization Grant."
+---
+
+The PKCE flow needs a local browser to receive the OAuth callback. On a remote SSH session, in CI, or on a headless server there's no browser to open. Use the **Device Code flow** instead — you log in on a separate device and authsome polls the token endpoint until you authorize.
+
+## Prerequisites
+
+The provider must support the device authorization grant. In a provider definition, that means:
+
+```json
+{
+  "oauth": {
+    "supports_device_flow": true,
+    "device_authorization_url": "https://github.com/login/device/code"
+  }
+}
+```
+
+GitHub, Google, Microsoft, and many others support it. Check `authsome inspect <provider>` for `supports_device_flow: true`.
+
+## Run the login
+
+```bash
+authsome login github --flow device_code
+```
+
+The terminal prints something like:
+
+```text
+Visit https://github.com/login/device on any device with a browser
+and enter the user code: WDJB-MJHT
+
+Waiting for authorization...
+```
+
+<Steps>
+  <Step title="Open the URL on any device">
+    On your laptop, phone, or any machine with a browser, visit the URL printed in the terminal.
+  </Step>
+  <Step title="Enter the user code">
+    Type or paste the user code (`WDJB-MJHT` in the example above) into the form.
+  </Step>
+  <Step title="Approve">
+    Authorize the app and approve the requested scopes.
+  </Step>
+  <Step title="Wait for the poll to complete">
+    Authsome polls the token endpoint at the provider's recommended interval. Once you approve, the next poll succeeds and the terminal prints `Successfully logged in to github (default).`
+  </Step>
+</Steps>
+
+## When to choose device code
+
+Use the device code flow when:
+
+- You are SSHed into a remote server and don't want to set up X11 forwarding.
+- You are running setup in a CI pipeline that has terminal output but no browser.
+- You are inside a Docker container with no exposed ports back to your laptop.
+
+For GitHub specifically, even when a local browser is available, the device code flow can be useful — it avoids registering an OAuth app entirely (GitHub's device flow uses the public GitHub OAuth client by default).
+
+## Use it in CI
+
+In CI, you can capture the authorization URL and code from the command output and surface them in the build log so a human can complete the authorization:
+
+```bash
+authsome login github --flow device_code 2>&1 | tee login.log
+```
+
+The login command waits until the device flow either completes, expires, or is cancelled. For unattended CI you typically log in once on a developer machine and then commit the encrypted profile (or, more often, run the agent only on machines that already have an authenticated profile).
+
+## API key providers
+
+API-key providers don't have a device flow. On a headless machine without `DISPLAY`, authsome's API-key flow falls back to **masked terminal input** through `getpass`:
+
+```bash
+ssh server.example.com
+authsome login openai
+# OpenAI API key: ********  (typed input is not echoed)
+```
+
+The browser bridge is skipped automatically when no display is available.
+
+## Override the default flow per provider
+
+To make `device_code` the default for a provider — for example, you always log in to GitHub from servers — drop a custom JSON file at `~/.authsome/providers/github.json` with `"flow": "device_code"`. See [Provider registry](/concepts/provider-registry) for how overrides work.
+
+## What's next
+
+<Columns cols={2}>
+  <Card title="Log in with OAuth" icon="right-to-bracket" href="/guides/login-with-oauth">
+    The full OAuth login guide, including PKCE and DCR.
+  </Card>
+  <Card title="Run agents with the proxy" icon="shield-halved" href="/guides/run-agents-with-proxy">
+    What to do once you're authenticated.
+  </Card>
+</Columns>

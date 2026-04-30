@@ -1,0 +1,125 @@
+---
+title: "Quickstart"
+description: "Install authsome, log in to a provider, and run an agent with injected credentials."
+---
+
+This walkthrough takes you from a fresh install to running an agent with valid GitHub and OpenAI credentials in about five minutes.
+
+## Prerequisites
+
+- Python 3.13 or newer
+- A graphical browser on the same machine (for the initial login). For SSH or CI, see [Headless setup](/guides/headless-device-code).
+
+## Install
+
+<CodeGroup>
+```bash pip
+pip install authsome
+```
+
+```bash uv
+uv tool install authsome
+```
+
+```bash pipx
+pipx install authsome
+```
+</CodeGroup>
+
+Verify the install:
+
+```bash
+authsome --version
+authsome doctor
+```
+
+`doctor` runs health checks on the home directory layout, encryption availability, and provider parsing. All checks should pass.
+
+## Log in to your first provider
+
+<Steps>
+  <Step title="Run the login command">
+    ```bash
+    authsome login github
+    ```
+
+    A browser window opens to GitHub's authorization page. Authsome runs the PKCE flow with a callback on `http://127.0.0.1:7999/callback`.
+  </Step>
+  <Step title="Approve access">
+    Click **Authorize** in the browser. The terminal prints `Successfully logged in to github (default).`
+  </Step>
+  <Step title="Confirm the connection">
+    ```bash
+    authsome list
+    ```
+
+    GitHub should show as `connected`.
+  </Step>
+</Steps>
+
+<Tip>
+  The first time you log in to an OAuth2 provider, authsome collects your `client_id` and `client_secret` through a secure local browser form. They are encrypted and stored under your profile, then reused on every subsequent login. They are never accepted as command-line arguments.
+</Tip>
+
+## Add an API-key provider
+
+API-key providers like OpenAI use the same login command, but the flow is different — authsome opens a local form so you can paste the key without it appearing in shell history or process listings.
+
+```bash
+authsome login openai
+```
+
+Verify the key was captured:
+
+```bash
+authsome get openai --field status
+# → connected
+```
+
+## Run an agent with injected credentials
+
+You have two ways to give credentials to an agent.
+
+### Option 1: Export to environment variables
+
+Best for quick scripts and existing tooling that reads from environment variables.
+
+```bash
+authsome export openai --format env
+authsome export github --format env
+
+python my_agent.py
+```
+
+`export` prints valid `KEY=value` lines and writes them into the calling shell when sourced.
+
+### Option 2: Run behind the auth proxy
+
+Best for production-style agents. Authsome starts a local HTTP proxy that intercepts outbound requests to known provider hosts and injects the auth headers — the child process never sees the raw secret.
+
+```bash
+authsome run -- python my_agent.py
+```
+
+Inside the child process, `OPENAI_API_KEY` is set to the placeholder `authsome-proxy-managed`. The real key is added to outbound requests at the proxy layer.
+
+<Note>
+  HTTPS interception requires the mitmproxy CA certificate to be trusted on your machine. See [Proxy networking](/troubleshooting/proxy-networking) if you see TLS errors.
+</Note>
+
+## Next steps
+
+<Columns cols={2}>
+  <Card title="Login flows" icon="right-to-bracket" href="/guides/login-with-oauth">
+    Pick the right flow for each provider: PKCE, device code, DCR.
+  </Card>
+  <Card title="Custom providers" icon="puzzle-piece" href="/guides/custom-providers">
+    Add any service that authsome doesn't ship as a bundled provider.
+  </Card>
+  <Card title="CLI reference" icon="terminal" href="/reference/cli">
+    Every command, every flag.
+  </Card>
+  <Card title="Troubleshooting" icon="stethoscope" href="/troubleshooting/doctor">
+    Diagnose login failures, refresh errors, and proxy issues.
+  </Card>
+</Columns>

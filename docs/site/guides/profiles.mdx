@@ -1,0 +1,103 @@
+---
+title: "Profiles"
+description: "Isolate credential sets per identity context — personal, work, or per-agent."
+---
+
+A profile is a named credential namespace. Connections in one profile are completely isolated from another. Use profiles to keep work credentials separate from personal, to scope a profile to a specific agent, or to test against different OAuth clients without losing the originals.
+
+The default profile is always called `default`. You don't need to create it — authsome initializes it on first run.
+
+## When to use a profile
+
+| Use case | Approach |
+|----------|----------|
+| Two GitHub accounts on the same machine | One profile, two **connections** (`--connection personal`, `--connection work`). |
+| Personal vs employer's tooling | Separate **profiles** so credential sets don't mix at all. |
+| Testing a different OAuth client | A separate profile so the canonical one stays clean. |
+| Per-agent credential scoping | A profile per agent (`agent-cold-email`, `agent-pr-bot`). |
+
+The rule of thumb: if you want the credentials to never see each other, use profiles. If you want both available in the same context, use connections within one profile.
+
+## On-disk layout
+
+```text
+~/.authsome/
+  config.json
+  master.key
+  profiles/
+    default/
+      store.db
+      lock
+    work/
+      store.db
+      lock
+```
+
+Each profile has its own SQLite store. Encryption is shared (the master key sits at the top level), but credential records are completely partitioned.
+
+<Note>
+  CLI-level profile switching is not yet wired up to a `--profile` flag. The active profile is whichever `default_profile` is set to in `~/.authsome/config.json`. Profile creation and selection are done programmatically today; CLI-level support is planned.
+</Note>
+
+## Inspect the active profile
+
+```bash
+authsome whoami
+```
+
+Output includes the home directory and the active encryption mode. The active profile is whatever appears as `default_profile` in `~/.authsome/config.json`.
+
+## Programmatic profile management
+
+The `AuthLayer` exposes profile operations directly. From a Python session:
+
+```python
+from pathlib import Path
+from authsome.context import AuthsomeContext
+
+ctx = AuthsomeContext.create()
+
+ctx.auth.create_profile("work", description="Work GitHub + Linear")
+```
+
+Switch the global default by editing `~/.authsome/config.json`:
+
+```json
+{
+  "spec_version": 1,
+  "default_profile": "work",
+  "encryption": { "mode": "local_key" }
+}
+```
+
+Subsequent `authsome` invocations operate against the `work` profile.
+
+## Connections vs profiles
+
+It's worth being precise about the two namespaces.
+
+```text
+profile:<profile_name>:<provider_name>:connection:<connection_name>
+```
+
+- **Profile** scopes the entire credential set. Different vault, different lock file.
+- **Connection** scopes a credential record within a provider. Same vault, different key.
+
+Examples:
+
+| Path | Meaning |
+|------|---------|
+| `default / github / default` | The default GitHub login on the default profile. |
+| `default / github / work` | A second GitHub login on the same profile. |
+| `work / github / default` | A separate GitHub login on the `work` profile. Invisible to `default`. |
+
+## What's next
+
+<Columns cols={2}>
+  <Card title="Credential storage" icon="database" href="/concepts/credential-storage">
+    The full storage model and key namespace.
+  </Card>
+  <Card title="CLI reference" icon="terminal" href="/reference/cli">
+    Every command and flag.
+  </Card>
+</Columns>

@@ -1,0 +1,193 @@
+---
+title: "CLI reference"
+description: "Every authsome command, flag, and exit code."
+---
+
+All commands support `--json` for machine-readable output, `--quiet` to suppress non-essential output, and `--no-color` to disable ANSI colors.
+
+## Commands at a glance
+
+| Command | Description |
+|---------|-------------|
+| `whoami` | Show home directory and encryption mode. |
+| `doctor` | Run health checks on directory layout and encryption. |
+| `list` | List all providers (bundled and custom) and their connection states. |
+| `inspect <provider>` | Show the full provider definition and any connections. |
+| `login <provider>` | Authenticate with a provider using its configured flow. |
+| `get <provider>` | Get connection metadata (secrets redacted by default). |
+| `export <provider>` | Export credentials in `env` or `json` format. |
+| `run -- <cmd>` | Run a subprocess behind the local auth proxy. |
+| `logout <provider>` | Log out of a connection and remove local state. |
+| `revoke <provider>` | Reset all connections and client secrets for the provider. |
+| `remove <provider>` | Uninstall a custom provider or reset a bundled one. |
+| `register <path>` | Register a custom provider from a JSON file. |
+| `log` | View the audit log. |
+
+## Global flags
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output in machine-readable JSON. |
+| `--quiet` | Suppress non-essential output. |
+| `--no-color` | Disable ANSI colors. |
+| `-v`, `--version` | Print the authsome version. |
+| `--verbose` | Enable DEBUG logging to stderr. |
+| `--log-file <path>` | Path for the rotating log file. Pass `""` to disable. Default: `~/.authsome/logs/authsome.log`. |
+
+## Command details
+
+### `whoami` / `doctor`
+
+```bash
+authsome whoami           # show home directory and encryption mode
+authsome doctor           # run health checks
+```
+
+`doctor` exits with `0` if all checks pass and a non-zero code otherwise. Use `--json` for structured output suitable for monitoring.
+
+### `list` / `inspect`
+
+```bash
+authsome list                      # all providers + connection states
+authsome inspect github            # full provider definition
+authsome inspect github --json     # same, as JSON
+```
+
+`list` shows three states per provider — `available`, `configured`, `connected`. See [Credential storage](/concepts/credential-storage#the-three-states) for the state model.
+
+### `login`
+
+```bash
+authsome login <provider> [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--flow <type>` | Override the auth flow. Valid values: `pkce`, `device_code`, `dcr_pkce`, `api_key`. |
+| `--connection <name>` | Connection name. Default: `default`. |
+| `--scopes <s1,s2>` | Comma-separated scopes to request. |
+| `--base-url <url>` | Override the base URL for multi-tenant providers. |
+| `--force` | Overwrite an existing connection. |
+
+Examples:
+
+```bash
+authsome login github                       # OAuth2 PKCE flow
+authsome login github --flow device_code    # headless OAuth2
+authsome login openai                       # API-key flow via browser bridge
+authsome login github --connection work     # second connection on the same provider
+authsome login okta --base-url https://acme.okta.com
+```
+
+<Warning>
+  Sensitive values — `client_secret`, API keys — are never accepted as command-line arguments. Authsome collects them through the secure browser bridge or, on headless machines, through masked terminal input.
+</Warning>
+
+### `get`
+
+```bash
+authsome get <provider> [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--connection <name>` | Connection name. Default: `default`. |
+| `--field <field>` | Return only a specific field. |
+| `--show-secret` | Reveal encrypted secret values in output. |
+
+```bash
+authsome get github                                  # metadata, secrets redacted
+authsome get github --field status                   # → connected
+authsome get github --field access_token --show-secret
+```
+
+### `export`
+
+```bash
+authsome export <provider> [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--connection <name>` | Connection name. Default: `default`. |
+| `--format <fmt>` | Output format: `env` (default) or `json`. |
+
+```bash
+authsome export github --format env       # KEY=value lines
+authsome export openai --format json      # JSON object
+```
+
+Only the `access_token` (OAuth2) or `api_key` (API-key) is exported. Refresh tokens are never exposed — authsome handles refresh transparently.
+
+### `run`
+
+```bash
+authsome run -- <command> [args...]
+```
+
+Runs `<command>` behind a local HTTP proxy that injects auth headers into matched outbound requests. The child process never sees the raw secret.
+
+```bash
+authsome run -- python my_agent.py
+authsome run -- curl https://api.openai.com/v1/models
+```
+
+How it works:
+
+1. Starts a local proxy on an ephemeral port.
+2. Launches the child with `HTTP_PROXY` / `HTTPS_PROXY` set.
+3. Sets placeholder env vars (e.g. `OPENAI_API_KEY=authsome-proxy-managed`) so SDKs initialize.
+4. Intercepts matched requests and injects the real auth headers.
+5. Stops the proxy on child exit.
+6. Returns the child's exit code.
+
+See [Proxy injection](/concepts/proxy-injection) for the routing contract.
+
+### `logout` / `revoke` / `remove`
+
+| Command | Local state | Remote provider |
+|---------|-------------|-----------------|
+| `logout` | Removes the connection record | Not contacted |
+| `revoke` | Removes all connections + client credentials | Calls revocation endpoint where supported |
+| `remove` | Removes the provider entirely (custom) or resets to bundled (bundled) | Not contacted |
+
+```bash
+authsome logout github --connection work
+authsome revoke github
+authsome remove acmecrm
+```
+
+### `register`
+
+```bash
+authsome register <path/to/provider.json> [--force]
+```
+
+Validates the JSON, copies it into `~/.authsome/providers/`, and confirms the new provider appears in `authsome list`. Use `--force` to overwrite an existing provider with the same name.
+
+See [Custom providers](/guides/custom-providers) for full templates.
+
+### `log`
+
+```bash
+authsome log              # last 50 audit entries
+authsome log -n 200       # last 200
+authsome log --json       # one JSON object per line, parsed
+```
+
+Reads from `~/.authsome/audit.log`. Each entry records actions like `login`, `logout`, `revoke`, `export`, and `get --show-secret`.
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Generic failure |
+| `2` | Invalid usage |
+| `3` | Provider not found |
+| `4` | Authentication failed |
+| `5` | Credential missing |
+| `6` | Refresh failed |
+| `7` | Store unavailable |
+
+When `--json` is passed and a command fails, the structured output includes an `error` and `message` key on stderr-friendly format.

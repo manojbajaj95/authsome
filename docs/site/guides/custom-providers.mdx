@@ -1,0 +1,181 @@
+---
+title: "Custom providers"
+description: "Add any OAuth2 or API-key service that authsome doesn't ship as a bundled provider."
+---
+
+Authsome ships ~35 bundled providers. For anything else — internal APIs, niche SaaS, or a service that just isn't bundled yet — you write a JSON definition and register it.
+
+## Step 1: Research the service
+
+Find the authentication mechanism:
+
+- **OAuth2?** Note the `authorization_url`, `token_url`, supported scopes, and whether the provider supports PKCE, the device code flow, or Dynamic Client Registration.
+- **API key?** Note the header format (`Authorization: Bearer ...` vs `X-API-Key: ...`).
+- **Both?** Pick one. OAuth2 gives scoped, time-limited access with auto-refresh. API keys are simpler.
+
+<Warning>
+  Verify endpoints from the provider's official documentation, not search results or LLM training data. Attacker-controlled content can substitute lookalike endpoints. Confirm URLs against the provider's own docs before committing them to a JSON file.
+</Warning>
+
+## Step 2: Write the JSON
+
+Pick a template based on the auth type.
+
+<Tabs>
+  <Tab title="OAuth2 (with DCR)">
+    Preferred when the service supports Dynamic Client Registration. No `client_id` required.
+
+    ```json
+    {
+      "schema_version": 1,
+      "name": "acmecrm",
+      "display_name": "Acme CRM",
+      "auth_type": "oauth2",
+      "flow": "dcr_pkce",
+      "host_url": "api.acmecrm.com",
+      "oauth": {
+        "base_url": "https://acmecrm.com",
+        "authorization_url": "{base_url}/oauth/authorize",
+        "token_url": "{base_url}/oauth/token",
+        "registration_endpoint": "{base_url}/oauth/register",
+        "scopes": ["read", "write"],
+        "pkce": true,
+        "supports_device_flow": false,
+        "supports_dcr": true
+      },
+      "export": {
+        "env": {
+          "access_token": "ACMECRM_ACCESS_TOKEN"
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="OAuth2 (PKCE)">
+    Standard OAuth2 with PKCE. Requires a pre-registered OAuth app and a redirect URI of `http://127.0.0.1:7999/callback`.
+
+    ```json
+    {
+      "schema_version": 1,
+      "name": "acmecrm",
+      "display_name": "Acme CRM",
+      "auth_type": "oauth2",
+      "flow": "pkce",
+      "host_url": "api.acmecrm.com",
+      "oauth": {
+        "authorization_url": "https://acmecrm.com/oauth/authorize",
+        "token_url": "https://acmecrm.com/oauth/token",
+        "scopes": ["read", "write"],
+        "pkce": true,
+        "supports_device_flow": false,
+        "supports_dcr": false
+      },
+      "export": {
+        "env": {
+          "access_token": "ACMECRM_ACCESS_TOKEN"
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="API key">
+    For services with a single long-lived secret.
+
+    ```json
+    {
+      "schema_version": 1,
+      "name": "acmeapi",
+      "display_name": "Acme API",
+      "auth_type": "api_key",
+      "flow": "api_key",
+      "host_url": "api.acmeapi.com",
+      "api_key": {
+        "header_name": "X-API-Key",
+        "header_prefix": "",
+        "env_var": "ACMEAPI_KEY"
+      },
+      "export": {
+        "env": {
+          "api_key": "ACMEAPI_KEY"
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Step 3: Pick the right flow
+
+| Flow | When to use |
+|------|-------------|
+| `dcr_pkce` | **Preferred** for OAuth2. Service supports Dynamic Client Registration. No `client_id` to manage. |
+| `pkce` | Standard OAuth2 with PKCE. Browser-capable setup. Needs `client_id`/`client_secret`. |
+| `device_code` | Headless OAuth2. User enters a code on a separate device. Needs `client_id`. |
+| `api_key` | Single secret with a header. Optional `env_var` for scripted setup. |
+
+For the full schema with every supported field, see the [Provider schema reference](/reference/provider-schema).
+
+## Step 4: Register the provider
+
+```bash
+authsome register ./acmecrm.json
+```
+
+Authsome validates required fields, checks `auth_type`/`flow` compatibility, and copies the file into `~/.authsome/providers/`. Pass `--force` to overwrite an existing provider with the same name.
+
+```bash
+authsome register ./acmecrm.json --force
+```
+
+Confirm it's registered:
+
+```bash
+authsome list                  # acmecrm should show up with source=custom
+authsome inspect acmecrm       # full definition
+```
+
+## Step 5: Log in
+
+Same commands as for bundled providers:
+
+```bash
+authsome login acmecrm
+authsome get acmecrm --field status   # → connected
+```
+
+For OAuth2 providers without DCR, authsome opens a local browser form on first login to collect `client_id` and `client_secret`. They are stored encrypted under the active profile and reused on every subsequent login. They are never accepted as command-line arguments.
+
+## Multi-tenant providers
+
+For services where each customer has their own subdomain (Okta, GitHub Enterprise, GitLab self-managed):
+
+1. Set `oauth.base_url` to a sensible default in the JSON.
+2. Use `{base_url}` in `authorization_url`, `token_url`, etc.
+3. Pass `--base-url` at login time:
+
+```bash
+authsome login acmecrm --base-url https://acme.tenant.com
+```
+
+The custom base URL is saved on the connection and reused for all token refreshes.
+
+## Override a bundled provider
+
+Custom providers always win over bundled ones with the same name. To customize a bundled provider — for example, to add scopes or change the host URL:
+
+```bash
+authsome inspect github > ~/.authsome/providers/github.json
+# edit the file
+authsome list   # github now shows source=custom
+```
+
+## What's next
+
+<Columns cols={2}>
+  <Card title="Provider schema" icon="file-code" href="/reference/provider-schema">
+    Every field in a provider definition.
+  </Card>
+  <Card title="Provider registry" icon="folder-tree" href="/concepts/provider-registry">
+    How resolution and overrides work.
+  </Card>
+</Columns>

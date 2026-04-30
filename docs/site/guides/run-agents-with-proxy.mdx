@@ -1,0 +1,122 @@
+---
+title: "Run agents with the proxy"
+description: "Use `authsome run` to inject auth headers into outbound requests without exposing secrets to the child process."
+---
+
+`authsome run` is the most secure way to run an agent. Authsome starts a local HTTP proxy, points the child process at it through `HTTP_PROXY`, and injects auth headers into outbound requests at the proxy layer. The child process never sees the real credentials.
+
+## Prerequisites
+
+Make sure you are logged in to every provider the agent will hit:
+
+```bash
+authsome login github
+authsome login openai
+authsome list
+```
+
+For an overview of how the proxy works, see [Proxy injection](/concepts/proxy-injection).
+
+## Run a command
+
+```bash
+authsome run -- python my_agent.py
+```
+
+Everything after `--` is the command and its arguments. Authsome:
+
+1. Starts a local HTTP proxy on an ephemeral port.
+2. Spawns the child with `HTTP_PROXY` and `HTTPS_PROXY` pointing at the proxy.
+3. Sets placeholder environment variables for SDKs that check at startup (for example, `OPENAI_API_KEY=authsome-proxy-managed`).
+4. Intercepts outbound requests and injects auth headers based on the destination host.
+5. Stops the proxy when the child exits.
+6. Returns the child's exit code.
+
+## Verify it's working
+
+Check the environment authsome injects:
+
+```bash
+authsome run -- env | grep -E 'PROXY|OPENAI|GITHUB'
+```
+
+You should see:
+
+- `HTTP_PROXY` and `HTTPS_PROXY` pointing at `http://127.0.0.1:<port>` (lowercase variants too).
+- `OPENAI_API_KEY=authsome-proxy-managed` (the real key is never in the environment).
+
+Make a real call through the proxy:
+
+```bash
+authsome run -- curl -s https://api.openai.com/v1/models | head -5
+```
+
+You should get a JSON response from OpenAI rather than an authentication error.
+
+## How matching works
+
+Authsome routes requests to providers using each provider's `host_url` field.
+
+| Request host | Matches | Header injected |
+|--------------|---------|-----------------|
+| `api.openai.com` | `openai` provider | `Authorization: Bearer sk-...` |
+| `api.github.com` | `github` provider | `Authorization: Bearer ghu_...` |
+| `example.com` | nothing | request passes through unchanged |
+
+The first provider whose `host_url` matches the request host wins. Ambiguous matches (two providers claim the same host) are not injected — the request is forwarded unchanged.
+
+For the regex form (`"host_url": "regex:^api[0-9]+\\.github\\.com$"`), see [Provider registry](/concepts/provider-registry).
+
+## TLS certificate
+
+<Warning>
+  HTTPS interception requires the mitmproxy CA certificate to be trusted on your machine. Without it, the child sees TLS verification errors on every HTTPS call.
+</Warning>
+
+On macOS:
+
+```bash
+# Install the cert into the system trust store
+sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/.mitmproxy/mitmproxy-ca-cert.pem
+```
+
+On Linux (Debian/Ubuntu):
+
+```bash
+sudo cp ~/.mitmproxy/mitmproxy-ca-cert.pem /usr/local/share/ca-certificates/mitmproxy.crt
+sudo update-ca-certificates
+```
+
+For Python tooling that uses its own CA bundle (`requests`, `httpx`), you may also need:
+
+```bash
+export REQUESTS_CA_BUNDLE=~/.mitmproxy/mitmproxy-ca-cert.pem
+export SSL_CERT_FILE=~/.mitmproxy/mitmproxy-ca-cert.pem
+```
+
+See [Proxy networking](/troubleshooting/proxy-networking) for more.
+
+## Limitations
+
+- **HTTP(S) only.** WebSockets, gRPC, raw TCP, and database connections bypass the proxy.
+- **Pinned TLS** in some SDKs ignores `HTTP_PROXY` or rejects custom CAs.
+- **Default connection only.** The proxy uses each provider's default connection. Per-request connection selection is future work.
+- **Refresh tokens are never injected.** Only access tokens (OAuth2) and API keys leave the proxy.
+
+## When to choose `run` over `export`
+
+| Pattern | Use when |
+|---------|----------|
+| `authsome run -- ...` | The agent calls APIs over HTTP(S), you can install the mitmproxy CA, you want secrets out of the child's environment. |
+| `authsome export <provider> --format env` | The tool can't use an HTTP proxy, TLS interception isn't possible, or you need credentials in a long-lived shell. |
+
+## What's next
+
+<Columns cols={2}>
+  <Card title="Proxy injection" icon="route" href="/concepts/proxy-injection">
+    The full routing contract and known limitations.
+  </Card>
+  <Card title="Proxy networking" icon="wrench" href="/troubleshooting/proxy-networking">
+    Diagnose TLS errors, certificate trust, and pinned-cert SDKs.
+  </Card>
+</Columns>

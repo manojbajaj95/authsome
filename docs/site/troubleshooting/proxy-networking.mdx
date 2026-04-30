@@ -1,0 +1,168 @@
+---
+title: "Proxy networking"
+description: "Diagnose TLS errors, certificate trust, pinned-cert SDKs, and corporate proxy interactions."
+---
+
+`authsome run` starts a local mitmproxy-based HTTP proxy. Most issues come down to TLS certificate trust or interactions with corporate proxies.
+
+For background, see [Proxy injection](/concepts/proxy-injection).
+
+## TLS verification fails
+
+```text
+SSLError: [SSL: CERTIFICATE_VERIFY_FAILED]
+SSL_ERROR_BAD_CERT_DOMAIN
+unable to get local issuer certificate
+```
+
+The child process is making HTTPS calls but the mitmproxy CA isn't trusted on this machine.
+
+mitmproxy generates a CA on first run and stores it at `~/.mitmproxy/mitmproxy-ca-cert.pem`. There are two ways to trust it.
+
+### Quick install with `mitm.it` (recommended)
+
+mitmproxy ships a built-in cert installer at the magic domain `mitm.it`. While `authsome run` is active, open a browser on the same machine and visit:
+
+```text
+http://mitm.it
+```
+
+The page detects your OS and offers a one-click install for macOS, Windows, Linux, iOS, and Android. This is the path mitmproxy's [own docs](https://docs.mitmproxy.org/stable/concepts-certificates/) recommend.
+
+### Manual install per OS
+
+If the `mitm.it` quick install isn't an option (server with no browser, automated provisioning), install the CA manually:
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    sudo security add-trusted-cert \
+      -d -r trustRoot \
+      -k /Library/Keychains/System.keychain \
+      ~/.mitmproxy/mitmproxy-ca-cert.pem
+    ```
+    Trusts system-wide for every user. Confirm in **Keychain Access → System → Certificates**.
+
+    For a user-only install (no sudo):
+
+    ```bash
+    security add-trusted-cert -r trustRoot \
+      -k ~/Library/Keychains/login.keychain-db \
+      ~/.mitmproxy/mitmproxy-ca-cert.pem
+    ```
+  </Tab>
+  <Tab title="Debian / Ubuntu">
+    ```bash
+    sudo cp ~/.mitmproxy/mitmproxy-ca-cert.pem \
+      /usr/local/share/ca-certificates/mitmproxy.crt
+    sudo update-ca-certificates
+    ```
+    Note the destination uses `.crt` — `update-ca-certificates` requires that extension.
+  </Tab>
+  <Tab title="Fedora / RHEL">
+    ```bash
+    sudo cp ~/.mitmproxy/mitmproxy-ca-cert.pem \
+      /etc/pki/ca-trust/source/anchors/mitmproxy.crt
+    sudo update-ca-trust
+    ```
+  </Tab>
+  <Tab title="Windows">
+    Use the `.p12` or `.cer` form mitmproxy generates:
+
+    ```powershell
+    certutil -addstore root %USERPROFILE%\.mitmproxy\mitmproxy-ca-cert.cer
+    ```
+
+    Or import via GUI: **Manage user certificates → Trusted Root Certification Authorities → Certificates → Action → All Tasks → Import**, then select `mitmproxy-ca-cert.cer`.
+  </Tab>
+</Tabs>
+
+### Python tooling needs an explicit CA bundle
+
+The Python `requests` and `httpx` libraries use their own certifi-based CA bundle, not the system store. Point them at the mitmproxy CA:
+
+```bash
+export REQUESTS_CA_BUNDLE=~/.mitmproxy/mitmproxy-ca-cert.pem
+export SSL_CERT_FILE=~/.mitmproxy/mitmproxy-ca-cert.pem
+authsome run -- python my_agent.py
+```
+
+Or set them inside the script before any HTTP client is created.
+
+## Pinned TLS certificates
+
+Some SDKs ship with a pinned certificate or chain (notably mobile SDKs and a few API clients). They reject mitmproxy's CA even when the system trust store accepts it.
+
+There is no way to MITM these connections without bypassing the SDK's pinning. Use `authsome export` instead of `authsome run` for those cases:
+
+```bash
+eval "$(authsome export <provider> --format env)"
+python my_agent.py
+```
+
+The agent reads the credential from the environment directly and does not need the proxy.
+
+## Proxy is not intercepting requests
+
+The agent is making calls but no auth header is being injected.
+
+### Check the env vars in the child
+
+```bash
+authsome run -- env | grep -i proxy
+```
+
+You should see:
+
+```text
+HTTP_PROXY=http://127.0.0.1:<port>
+HTTPS_PROXY=http://127.0.0.1:<port>
+http_proxy=http://127.0.0.1:<port>
+https_proxy=http://127.0.0.1:<port>
+```
+
+If they are missing, the proxy didn't start. Check `authsome --verbose run -- ...` for startup errors.
+
+### The host doesn't match any provider's `host_url`
+
+The proxy only injects auth for requests whose host matches a provider's `host_url`. Confirm the destination host:
+
+```bash
+authsome inspect <provider> | grep host_url
+```
+
+If the API uses a different host than the provider declares, override the bundled provider with a custom JSON that has the correct `host_url`.
+
+### Two providers claim the same host
+
+When two providers' `host_url` patterns match the same request, authsome refuses to inject and forwards unchanged. This shows up in the proxy logs as `ambiguous host match`. Resolve by removing or renaming one of the providers, or by tightening one `host_url` to a more specific regex.
+
+## Corporate / upstream proxy
+
+If you sit behind a corporate proxy, your shell already has `HTTP_PROXY` set. `authsome run` overwrites these variables for the child, so the corporate proxy is bypassed inside the child process. Two ways to handle this:
+
+1. **Use `authsome export` for the agent and let the corporate proxy stay in place.** This skips authsome's proxy entirely.
+2. **Chain proxies.** Set `--upstream` on mitmproxy via the underlying configuration. This is not currently exposed through the authsome CLI; for now, prefer option 1 in corporate-proxy environments.
+
+## Non-HTTP traffic is not intercepted
+
+Authsome only intercepts HTTP(S). The following connections bypass the proxy entirely:
+
+- WebSocket connections (`wss://`)
+- gRPC over HTTP/2 with custom transports
+- Database connections (Postgres, MySQL, Redis)
+- Raw TCP connections
+- SSH
+
+For these, fall back to environment-variable injection with `authsome export`, or design the agent so the credential-bearing calls go over HTTP(S).
+
+## What's next
+
+<Columns cols={2}>
+  <Card title="Proxy injection" icon="route" href="/concepts/proxy-injection">
+    The full proxy routing contract.
+  </Card>
+  <Card title="Run agents with the proxy" icon="shield-halved" href="/guides/run-agents-with-proxy">
+    The end-to-end guide for `authsome run`.
+  </Card>
+</Columns>

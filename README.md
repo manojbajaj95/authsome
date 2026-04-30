@@ -105,13 +105,27 @@ authsome list                          # all connections + token status
 
 ## Docs
 
-- [CLI reference](docs/cli.md)
-- [Providers](docs/providers.md)
-- [Architecture](docs/architecture.md)
+The full documentation site lives in [`docs/site/`](docs/site/)
+
+- [Quickstart](docs/site/quickstart.mdx)
+- [CLI reference](docs/site/reference/cli.mdx)
+- [Architecture](docs/site/concepts/architecture.mdx)
+- [Custom providers](docs/site/guides/custom-providers.mdx)
+- [Troubleshooting](docs/site/troubleshooting/doctor.mdx)
+
+To preview locally:
+
+```bash
+cd docs/site
+npm i -g mint   # requires Node.js >= 20.17.0
+mint dev
+```
+
+
 
 ## Specs
 
-- [Authsome v1](specs/authsome-v1.md)
+- [Authsome v1](docs/specs/authsome-v1.md)
 
 ## License
 

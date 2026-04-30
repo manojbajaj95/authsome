@@ -1,0 +1,120 @@
+---
+title: "Environment variables"
+description: "Variables authsome reads, writes, and injects into subprocesses."
+---
+
+Authsome interacts with environment variables in three roles: **inputs** that change CLI behavior, **outputs** produced by `export`, and **injected variables** set inside processes spawned by `run`.
+
+## Inputs authsome reads
+
+| Variable | Purpose |
+|----------|---------|
+| `AUTHSOME_HOME` | Override the default `~/.authsome` directory. Useful for tests, ephemeral environments, and per-project profiles. |
+| `HTTP_PROXY` / `HTTPS_PROXY` | Honored by authsome's own outbound HTTP requests (token endpoints, device flow polling). The proxy started by `authsome run` is **set** as these variables in the child process; it does not chain through them. |
+
+### Provider-specific input variables
+
+Some bundled provider definitions declare `api_key.env_var` so the API-key flow can pick up an existing key without prompting:
+
+| Provider | Variable checked |
+|----------|------------------|
+| `openai` | `OPENAI_API_KEY` |
+| `anthropic` | `ANTHROPIC_API_KEY` |
+| ... | See each provider's `api_key.env_var` field via `authsome inspect <provider>`. |
+
+If the variable is set and non-empty, `authsome login <provider>` uses its value with no prompt. If unset, the secure browser bridge takes over.
+
+The OAuth2 client config block can declare `client.client_id_env` and `client.client_secret_env` for similar automated collection. Bundled providers do not currently declare these — they rely on the browser bridge — but custom provider definitions can.
+
+## Outputs from `authsome export`
+
+`authsome export <provider> --format env` prints `KEY=value` lines on stdout. The `KEY` names come from the provider's `export.env` map.
+
+```bash
+$ authsome export github --format env
+GITHUB_ACCESS_TOKEN=ghu_...
+```
+
+Source the output to load the variables into your shell:
+
+```bash
+eval "$(authsome export github --format env)"
+```
+
+Only `access_token` (OAuth2) and `api_key` (API-key) are exported. Refresh tokens are never exposed.
+
+For JSON output:
+
+```bash
+authsome export github --format json
+```
+
+```json
+{
+  "access_token": "ghu_..."
+}
+```
+
+## Variables injected by `authsome run`
+
+When you use `authsome run -- <cmd>`, authsome sets several variables inside the child process.
+
+### Always set
+
+| Variable | Value | Purpose |
+|----------|-------|---------|
+| `HTTP_PROXY` | `http://127.0.0.1:<port>` | Routes HTTP traffic through the local proxy. |
+| `HTTPS_PROXY` | `http://127.0.0.1:<port>` | Same, for HTTPS. |
+| `http_proxy` / `https_proxy` | Same as above | Lowercase variants for tools that prefer them. |
+| `NO_PROXY` / `no_proxy` | (preserved if set, otherwise unset) | Hosts to exclude from the proxy. |
+
+### Per-provider placeholders
+
+For every provider with a connected default connection, authsome sets a placeholder under the provider's `export.env` key so SDKs initialize successfully without seeing the real secret:
+
+| Provider | Variable | Placeholder value |
+|----------|----------|-------------------|
+| `openai` | `OPENAI_API_KEY` | `authsome-proxy-managed` |
+| `github` | `GITHUB_ACCESS_TOKEN` | `authsome-proxy-managed` |
+| ... | Per provider definition | `authsome-proxy-managed` |
+
+The real secret is added to outbound requests at the proxy layer, never in the environment.
+
+## Logging variables
+
+| Variable | Purpose |
+|----------|---------|
+| `LOGURU_LEVEL` | Override the loguru log level used by authsome's library code. The CLI also honors `--verbose` (DEBUG) and `--quiet`. |
+
+## Worked example
+
+A typical agent run that pulls credentials from authsome:
+
+```bash
+# One-time setup
+authsome login github
+authsome login openai
+
+# Run the agent through the proxy — secrets stay in the vault
+authsome run -- python my_agent.py
+```
+
+The agent reads `OPENAI_API_KEY` and `GITHUB_ACCESS_TOKEN` as it normally would. They are placeholders. The proxy injects the real values into outbound requests to `api.openai.com` and `api.github.com`.
+
+If the agent needs to run a tool that doesn't honor `HTTP_PROXY`, fall back to `export`:
+
+```bash
+eval "$(authsome export github --format env)"
+my-cli-tool
+```
+
+## What's next
+
+<Columns cols={2}>
+  <Card title="CLI reference" icon="terminal" href="/reference/cli">
+    Every command and flag.
+  </Card>
+  <Card title="Proxy injection" icon="route" href="/concepts/proxy-injection">
+    The full proxy routing contract.
+  </Card>
+</Columns>

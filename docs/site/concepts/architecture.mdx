@@ -1,0 +1,138 @@
+---
+title: "Architecture"
+description: "Five layers — identity, policy, vault, auth, audit — composed by an explicit orchestrator."
+---
+
+Authsome is layered. Each layer has one bounded responsibility. Layers do not reach sideways into other layers — explicit orchestrators compose them. This makes every layer independently testable and independently swappable.
+
+Two deployment modes share the same layered architecture:
+
+- **Sidecar mode** — `authsome run -- python agent.py`. Transparent credential injection through an HTTP proxy. No auth code in the agent.
+- **Library mode** — `from authsome.context import AuthsomeContext`. A direct programmatic API.
+
+```text
+agent
+  ↓  HTTP request via HTTP_PROXY=localhost:<port>
+[ sidecar ]              proxy-mode orchestrator
+  ↓
+identity     →  signed principal chain (actor=agent, subject=user)
+  ↓
+policy       →  allow / deny
+  ↓
+vault        →  encrypted credential record
+  ↓  if expired:
+auth (low)   →  external token endpoint → fresh credential
+  ↓
+sidecar      →  vault.write(fresh credential)
+  ↓
+sidecar injects Authorization header
+  ↓
+external API
+  ↓
+audit        ←  append-only log entry at every step
+```
+
+## The five layers
+
+| Layer | Owns | Does not own |
+|------|------|--------------|
+| Identity | Agent identity, principal chain token | Credentials, access decisions, token expiry |
+| Policy | Access control, allow/deny decisions | Credentials, token refresh, encryption |
+| Vault | Minimal encrypted KV interface (`get`/`put`/`delete`/`list`) | OAuth, providers, expiry, refresh, policy |
+| Auth | Token refresh, OAuth acquisition flows | Persistent storage, access decisions |
+| Audit | Append-only event log | Decisions, credentials, request flow |
+
+<Note>
+  Identity, Policy, and Audit are part of the long-term architecture. The current alpha implementation focuses on Vault and Auth. The CLI emits audit events to `~/.authsome/audit.log` today; identity and policy enforcement are planned.
+</Note>
+
+## Vault: minimal storage
+
+The Vault is intentionally small. It exposes a generic encrypted key-value interface and nothing else.
+
+```python
+vault.get(key)
+vault.put(key, value)
+vault.delete(key)
+vault.list(prefix)
+```
+
+Vault does not know about OAuth, providers, token expiry, refresh, policy, audit, or principal-chain semantics. It stores and retrieves credential records by key. Orchestrators decide which keys to read, whether access is allowed, whether a token must be refreshed, and what should be audited.
+
+The local backend uses encrypted SQLite under `~/.authsome/profiles/<name>/store.db`. Field-level encryption uses AES-256-GCM with a 256-bit data key and a 96-bit nonce per encryption. The data key is wrapped by either a local file (`~/.authsome/master.key`, mode `0600`) or the OS keyring.
+
+See [Credential storage](/concepts/credential-storage) for the storage model and key namespace.
+
+## Auth: two levels
+
+The Auth layer has two intentionally separate surfaces.
+
+**Low level (`auth.flows`).** A pure function. Receives expired credentials and refresh material. Calls the external token endpoint. Returns fresh credentials and updated expiry. No vault access. No side effects. Independently testable.
+
+**High level (`AuthLayer`).** A stateful orchestrator with a vault dependency. Reads the credential from the vault, calls the stateless refresh if expired, writes the result back, returns a usable token. This is what library users call.
+
+```python
+from authsome.context import AuthsomeContext
+
+ctx = AuthsomeContext.create()
+token = ctx.auth.get_access_token("github", connection="default")
+```
+
+Acquisition flows shipped today: PKCE (RFC 7636), Device Authorization Grant (RFC 8628), Dynamic Client Registration + PKCE, and an API-key flow.
+
+## AuthsomeContext: the orchestrator
+
+`AuthsomeContext` is the runtime wiring container assembled once per CLI invocation. It holds `Vault`, `AuthLayer`, and `ProxyRunner` as attributes. No business logic of its own.
+
+```python
+from authsome.context import AuthsomeContext
+
+ctx = AuthsomeContext.create()
+ctx.auth         # AuthLayer
+ctx.vault        # Vault
+ctx.proxy        # ProxyRunner
+ctx.home         # Path to ~/.authsome
+```
+
+Library callers use `AuthsomeContext` directly. The CLI creates one context per invocation.
+
+## Proxy: sidecar orchestrator
+
+In sidecar mode, the proxy runner is the orchestrator.
+
+1. Starts the HTTP proxy on a random local port.
+2. Spawns the agent as a subprocess with `HTTP_PROXY` set to the local proxy address.
+3. Intercepts outbound HTTP requests from the agent.
+4. Looks up the matching provider by `host_url`, asks the AuthLayer for fresh credentials, and injects them into the `Authorization` header.
+5. Writes refreshed credentials back to the vault.
+6. Tears down cleanly when the agent exits.
+
+See [Proxy injection](/concepts/proxy-injection) for the routing contract and known limitations.
+
+## Storage layout
+
+```text
+~/.authsome/
+  config.json         global settings, encryption mode, active profile
+  master.key          encryption key, mode 0600
+  audit.log           append-only audit events
+  providers/          user-defined provider definitions
+  profiles/
+    default/
+      store.db        per-profile credential store (SQLite)
+      lock            advisory write lock
+```
+
+Profiles isolate credential sets — for example `default`, `work`, or a profile per agent.
+
+## Standards
+
+| Concern | v1 |
+|---------|-----|
+| Token refresh | OAuth 2.0 (RFC 6749) |
+| Browser-less OAuth | Device Authorization Grant (RFC 8628) |
+| PKCE | RFC 7636 |
+| Encryption at rest | AES-256-GCM, 256-bit key, 96-bit nonce |
+| Agent identity (planned) | Ed25519, `agent://local/<name>` URIs |
+| Principal chain (planned) | Local signed JWT, RFC 8693 later |
+| Policy (planned) | Cedar |

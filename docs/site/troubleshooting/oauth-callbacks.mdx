@@ -1,0 +1,133 @@
+---
+title: "OAuth callback errors"
+description: "Diagnose `redirect_uri_mismatch`, port-in-use, browser-not-opening, and timeout errors during PKCE login."
+---
+
+The PKCE flow runs a temporary HTTP server on `127.0.0.1:7999` to receive the OAuth callback. Most login failures fall into one of the categories below.
+
+## `redirect_uri_mismatch`
+
+The provider's authorization page returns:
+
+```text
+The redirect_uri MUST match the registered callback URL for this application.
+```
+
+Authsome listens on a single redirect URI:
+
+```text
+http://127.0.0.1:7999/callback
+```
+
+Fix it at the provider:
+
+<Steps>
+  <Step title="Open your OAuth app settings">
+    For GitHub: [github.com/settings/developers](https://github.com/settings/developers). For other providers, find the equivalent OAuth app management page.
+  </Step>
+  <Step title="Edit the callback URL">
+    Set **Authorization callback URL** (or the equivalent field) to `http://127.0.0.1:7999/callback`. The path matters — it must be `/callback`, not `/`.
+  </Step>
+  <Step title="Save and retry login">
+    ```bash
+    authsome login <provider> --force
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  For services that support Dynamic Client Registration, the `dcr_pkce` flow registers a fresh OAuth client with the right redirect URI automatically. Check `authsome inspect <provider>` for `supports_dcr: true`.
+</Tip>
+
+## Port 7999 already in use
+
+```text
+Error: address already in use: 127.0.0.1:7999
+```
+
+Another process is bound to the port. Find and stop it:
+
+```bash
+# macOS / Linux
+lsof -nP -iTCP:7999 -sTCP:LISTEN
+kill <PID>
+```
+
+A common cause is a previous authsome run that did not exit cleanly. Restart your terminal if `lsof` shows nothing yet the bind still fails.
+
+## Browser does not open
+
+The terminal prints the authorization URL but no browser launches.
+
+| Cause | Fix |
+|-------|-----|
+| You're SSHed into a remote machine | Use `--flow device_code` instead. See [Headless setup](/guides/headless-device-code). |
+| `webbrowser` Python module can't find a default browser | Set `BROWSER` env var: `export BROWSER=$(which firefox)`. |
+| Headless Linux without `DISPLAY` | Same as SSH — use the device code flow. |
+
+You can also copy the URL printed in the terminal and open it manually on any device. As long as the redirect lands on `http://127.0.0.1:7999/callback` on the same machine where authsome is waiting, the flow completes.
+
+## Browser opens but never returns to authsome
+
+The browser shows the provider's authorization page, you click **Authorize**, and… nothing. The terminal is still waiting.
+
+| Cause | Fix |
+|-------|-----|
+| The browser landed on `http://127.0.0.1:7999/callback` but authsome timed out | Re-run `authsome login --force`. |
+| A corporate proxy is intercepting `127.0.0.1` traffic | Add `127.0.0.1` and `localhost` to your `NO_PROXY` env var. |
+| You authorized in a different browser profile that can't reach localhost | Use the same browser profile as your authsome shell. |
+
+## `state mismatch` error
+
+```text
+Error: OAuth state parameter does not match
+```
+
+Authsome generates a random `state` parameter and rejects callbacks that don't echo it back. Causes:
+
+- A stale tab from a previous login is hitting the callback. Close it and retry.
+- A man-in-the-middle is replaying old callback URLs. Investigate before retrying.
+
+## `client_id` or `client_secret` rejected
+
+The provider's token endpoint returns `invalid_client`.
+
+```text
+Error: token exchange failed: invalid_client
+```
+
+The stored client credentials don't match what the provider expects.
+
+```bash
+authsome revoke <provider>     # clear stored client + tokens
+authsome login <provider>      # re-enter client_id and client_secret via browser bridge
+```
+
+If you've recently rotated the OAuth app's client secret, this is the expected flow.
+
+## Scopes not granted
+
+The login completes but the agent gets `403 Insufficient scope` on real API calls.
+
+```bash
+authsome get <provider> --field scopes
+```
+
+If the granted scopes don't include what your agent needs:
+
+```bash
+authsome login <provider> --scopes "<scope1>,<scope2>" --force
+```
+
+The provider re-prompts for consent on the additional scopes.
+
+## What's next
+
+<Columns cols={2}>
+  <Card title="Token refresh" icon="rotate" href="/troubleshooting/token-refresh">
+    What to do when a refresh fails.
+  </Card>
+  <Card title="Headless device code" icon="server" href="/guides/headless-device-code">
+    The right flow when you can't run a browser locally.
+  </Card>
+</Columns>
