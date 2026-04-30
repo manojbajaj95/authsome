@@ -80,6 +80,8 @@ def format_error_code(exc: Exception) -> int:
         return 4
     if exc_name == "CredentialMissingError":
         return 5
+    if exc_name == "InputCancelledError":
+        return 4
     if exc_name == "RefreshFailedError":
         return 6
     if exc_name == "StoreUnavailableError":

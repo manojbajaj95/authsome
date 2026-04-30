@@ -47,6 +47,13 @@ class CredentialMissingError(AuthsomeError):
         super().__init__(message, provider=provider)
 
 
+class InputCancelledError(AuthsomeError):
+    """Raised when a user cancels an interactive credential prompt."""
+
+    def __init__(self, message: str = "Credential entry was cancelled") -> None:
+        super().__init__(message, operation="input")
+
+
 class TokenExpiredError(AuthsomeError):
     """Raised when an access token is expired and cannot be refreshed."""
 

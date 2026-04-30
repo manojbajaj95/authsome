@@ -21,6 +21,8 @@ from typing import Any
 
 from loguru import logger
 
+from authsome.errors import InputCancelledError
+
 
 def _find_free_port() -> int:
     """Find a free TCP port on localhost."""
@@ -29,27 +31,229 @@ def _find_free_port() -> int:
         return s.getsockname()[1]
 
 
-_BRIDGE_STYLE = (
-    "body { font-family: system-ui, sans-serif; max-width: 400px; margin: 40px auto; padding: 20px; }"
-    "label { display: block; margin-bottom: 8px; font-weight: bold; }"
-    "input { width: 100%; padding: 8px; margin-bottom: 16px; border: 1px solid #ccc;"
-    " border-radius: 4px; box-sizing: border-box; }"
-    "input.has-error { border-color: #c62828; background: #fff5f5; }"
-    "input.has-error:focus { outline: none; border-color: #c62828; box-shadow: 0 0 0 3px rgba(198,40,40,0.15); }"
-    ".field-error { color: #c62828; font-size: 13px; margin: -12px 0 16px; }"
-    ".form-error { background: #fdecea; color: #b71c1c; border: 1px solid #f5c2c0;"
-    " border-radius: 4px; padding: 10px 12px; margin-bottom: 16px; font-size: 14px; }"
-    ".static-wrap { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }"
-    ".static-wrap input[readonly] { margin-bottom: 0; flex: 1; background: #f5f5f5; cursor: default; }"
-    "button { width: 100%; padding: 10px; background-color: #0066cc; color: white; border: none;"
-    " border-radius: 4px; cursor: pointer; font-size: 16px; }"
-    "button:hover { background-color: #0052a3; }"
-    "button.copybtn { width: auto; padding: 8px 12px; font-size: 14px; flex-shrink: 0; }"
-    ".instructions { margin-bottom: 16px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; }"
-    ".instructions-title { margin: 0 0 8px; font-weight: 600; }"
-    ".instructions-links { margin: 0; padding-left: 20px; }"
-    ".instructions-links li { margin-bottom: 6px; }"
-)
+_BRIDGE_STYLE = """
+:root {
+  color-scheme: light;
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --text: #16181d;
+  --muted: #626a76;
+  --line: #d8dde5;
+  --line-strong: #b8c0cc;
+  --focus: #2f6feb;
+  --danger: #b42318;
+  --danger-bg: #fff4f2;
+  --success-bg: #f0fdf4;
+  --cancel-bg: #f8fafc;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.45;
+}
+.page {
+  width: min(100% - 32px, 520px);
+  margin: 0 auto;
+  padding: 48px 0;
+}
+.brand {
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 18px 45px rgba(22, 24, 29, 0.08);
+  padding: 28px;
+}
+h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+.subtitle {
+  margin: 8px 0 24px;
+  color: var(--muted);
+  font-size: 14px;
+}
+form { margin: 0; }
+.field { margin-bottom: 18px; }
+.label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+}
+label {
+  display: block;
+  font-size: 14px;
+  font-weight: 650;
+}
+.optional-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+}
+input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  padding: 9px 11px;
+}
+input:focus {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px rgba(47, 111, 235, 0.16);
+  outline: none;
+}
+input.has-error {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+}
+input.has-error:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.14);
+}
+.field-error {
+  color: var(--danger);
+  font-size: 13px;
+  margin-top: 7px;
+}
+.form-error {
+  background: var(--danger-bg);
+  border: 1px solid #ffd0cb;
+  border-radius: 6px;
+  color: var(--danger);
+  font-size: 14px;
+  margin-bottom: 18px;
+  padding: 11px 12px;
+}
+.secret-wrap,
+.static-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.secret-wrap input,
+.static-wrap input[readonly] {
+  flex: 1;
+  min-width: 0;
+}
+.static-wrap input[readonly] {
+  background: #f8fafc;
+  color: #303641;
+  cursor: default;
+}
+button,
+.button {
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 9px 13px;
+}
+.primary-button {
+  width: 100%;
+  background: #1f2937;
+  color: #fff;
+}
+.primary-button:hover { background: #111827; }
+.secondary-button {
+  background: #fff;
+  border-color: var(--line-strong);
+  color: #303641;
+  flex: none;
+}
+.secondary-button:hover { background: #f8fafc; }
+.actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+.cancel-button {
+  width: 100%;
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+.cancel-button:hover {
+  background: #f8fafc;
+  color: var(--text);
+}
+.instructions {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-bottom: 18px;
+  padding: 13px 14px;
+}
+.instructions-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.instructions-links {
+  margin: 0;
+  padding-left: 18px;
+}
+.instructions-links li { margin-bottom: 4px; }
+a { color: var(--focus); font-weight: 650; }
+.status-panel {
+  text-align: center;
+}
+.status-mark {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 14px;
+  place-items: center;
+  border-radius: 999px;
+  font-weight: 800;
+}
+.status-mark.success { background: var(--success-bg); color: #15803d; }
+.status-mark.cancelled { background: var(--cancel-bg); color: #475569; }
+@media (max-width: 520px) {
+  .page {
+    width: min(100% - 24px, 520px);
+    padding: 24px 0;
+  }
+  .panel { padding: 22px; }
+}
+"""
+
+_BRIDGE_SCRIPT = """
+<script>
+document.addEventListener("click", function (event) {
+  var button = event.target.closest("[data-toggle-secret]");
+  if (!button) return;
+  var target = document.getElementById(button.getAttribute("data-toggle-secret"));
+  if (!target) return;
+  var revealing = target.type === "password";
+  target.type = revealing ? "text" : "password";
+  button.textContent = revealing ? "Hide" : "Show";
+  button.setAttribute("aria-label", (revealing ? "Hide " : "Show ") + target.getAttribute("data-label"));
+});
+</script>
+"""
 
 
 def _validate_bridge_submission(fields: list[dict[str, Any]], submitted: dict[str, str]) -> dict[str, str]:
@@ -81,18 +285,41 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
     title: str = "Secure Input"
     fields: list[dict[str, Any]] = []
     result: dict[str, str] | None = None
+    cancelled: bool = False
 
     def do_GET(self) -> None:
         """Serve the HTML form."""
         self._render_form(values={}, errors={})
 
+    def _send_html(self, html: str) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(html.encode("utf-8"))
+
+    def _page_shell(self, body: list[str], *, title: str | None = None, include_script: bool = False) -> str:
+        page_title = escape(title or self.title)
+        script = _BRIDGE_SCRIPT if include_script else ""
+        return "\n".join(
+            [
+                "<!DOCTYPE html>",
+                f"<html><head><title>Authsome - {page_title}</title>",
+                f"<style>{_BRIDGE_STYLE}</style>",
+                "</head><body><main class='page'>",
+                "<div class='brand'>Authsome</div>",
+                *body,
+                "</main>",
+                script,
+                "</body></html>",
+            ]
+        )
+
     def _render_form(self, values: dict[str, str], errors: dict[str, str]) -> None:
-        html: list[str] = [
-            "<!DOCTYPE html>",
-            "<html><head><title>Authsome Secure Input</title>",
-            f"<style>{_BRIDGE_STYLE}</style>",
-            "</head><body>",
-            f"<h2>{escape(self.title)}</h2>",
+        html = [
+            "<section class='panel'>",
+            f"<h1>{escape(self.title)}</h1>",
+            "<p class='subtitle'>Enter credentials in this local browser window.</p>",
             "<form method='POST' novalidate>",
         ]
 
@@ -121,18 +348,22 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
             if field.get("type") == "static":
                 val = field.get("value", "")
                 val_esc = escape(val, quote=True)
+                html.append("<div class='field'>")
+                html.append("<div class='label-row'>")
                 html.append(f"<label>{escape(label)}</label>")
+                html.append("</div>")
                 html.append(
                     "<div class='static-wrap'>"
                     f"<input type='text' readonly value='{val_esc}' aria-readonly='true'>"
-                    "<button type='button' class='copybtn' "
+                    "<button type='button' class='secondary-button' "
                     'onclick="navigator.clipboard.writeText(this.previousElementSibling.value)">'
-                    "Copy</button></div>"
+                    "Copy</button></div></div>"
                 )
                 continue
             name = field["name"]
             input_type = field.get("type", "text")
-            required = "required" if field.get("required", True) else ""
+            is_required = field.get("required", True)
+            required = "required" if is_required else ""
             # Don't echo back password values on re-render — force the user to retype.
             display_value = "" if input_type == "password" else values.get(name, field.get("value", ""))
             val_esc = escape(display_value, quote=True) if display_value else ""
@@ -142,21 +373,61 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
             title_attr = f" title='{escape(hint, quote=True)}'" if hint else ""
             error = errors.get(name)
             cls_attr = " class='has-error'" if error else ""
-            html.append(f"<label for='{name}'>{escape(label)}</label>")
-            html.append(
+            label_esc = escape(label)
+            html.append("<div class='field'>")
+            html.append("<div class='label-row'>")
+            html.append(f"<label for='{name}'>{label_esc}</label>")
+            if not is_required:
+                html.append("<span class='optional-chip'>Optional</span>")
+            html.append("</div>")
+            input_html = (
                 f"<input type='{input_type}' id='{name}' name='{name}' value='{val_esc}'"
+                f" data-label='{escape(label, quote=True)}'"
                 f"{pattern_attr}{title_attr}{cls_attr} {required}>"
             )
+            if input_type == "password":
+                html.append(
+                    "<div class='secret-wrap'>"
+                    f"{input_html}"
+                    f"<button type='button' class='secondary-button' data-toggle-secret='{name}' "
+                    f"aria-label='Show {escape(label, quote=True)}'>Show</button></div>"
+                )
+            else:
+                html.append(input_html)
             if error:
                 html.append(f"<div class='field-error' id='{name}-error'>{escape(error)}</div>")
+            html.append("</div>")
 
-        html.append("<button type='submit'>Submit Securely</button>")
-        html.append("</form></body></html>")
+        html.append(
+            "<div class='actions'>"
+            "<button type='submit' class='primary-button' name='_action' value='submit'>Save credentials</button>"
+            "<button type='submit' class='cancel-button' name='_action' value='cancel' formnovalidate>"
+            "Cancel</button>"
+            "</div>"
+        )
+        html.append("</form></section>")
 
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.end_headers()
-        self.wfile.write("\n".join(html).encode("utf-8"))
+        self._send_html(self._page_shell(html, include_script=True))
+
+    def _render_terminal_page(self, *, status: str) -> None:
+        if status == "cancelled":
+            mark = "-"
+            title = "Credential entry cancelled"
+            message = "No credentials were saved. You can close this window and return to the terminal."
+            mark_class = "cancelled"
+        else:
+            mark = "OK"
+            title = "Credentials received"
+            message = "You can close this window and return to the terminal."
+            mark_class = "success"
+        body = [
+            "<section class='panel status-panel'>",
+            f"<div class='status-mark {mark_class}' aria-hidden='true'>{escape(mark)}</div>",
+            f"<h1>{escape(title)}</h1>",
+            f"<p class='subtitle'>{escape(message)}</p>",
+            "</section>",
+        ]
+        self._send_html(self._page_shell(body, title=title))
 
     def do_POST(self) -> None:
         """Process the submitted form data."""
@@ -165,6 +436,18 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.parse_qs(post_data)
 
         submitted = {k: v[0] for k, v in parsed.items() if v}
+        if submitted.get("_action") == "cancel":
+            _BridgeHandler.cancelled = True
+            _BridgeHandler.result = None
+            self._render_terminal_page(status="cancelled")
+
+            def kill_server():
+                self.server.shutdown()
+
+            threading.Thread(target=kill_server, daemon=True).start()
+            return
+
+        submitted.pop("_action", None)
         errors = _validate_bridge_submission(self.fields, submitted)
         if errors:
             # Keep the server running and re-render the form with the inline error banner.
@@ -173,16 +456,7 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
 
         _BridgeHandler.result = submitted
 
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.end_headers()
-        success_html = (
-            "<!DOCTYPE html><html><head><title>Success</title></head>"
-            "<body style='font-family: sans-serif; text-align: center; margin-top: 50px;'>"
-            "<h2>Success!</h2><p>You can close this window and return to the terminal.</p>"
-            "</body></html>"
-        )
-        self.wfile.write(success_html.encode("utf-8"))
+        self._render_terminal_page(status="success")
 
         def kill_server():
             self.server.shutdown()
@@ -211,6 +485,7 @@ def secure_input_bridge(title: str, fields: list[dict[str, Any]]) -> dict[str, s
     _BridgeHandler.title = title
     _BridgeHandler.fields = fields
     _BridgeHandler.result = None
+    _BridgeHandler.cancelled = False
 
     server = http.server.HTTPServer(("127.0.0.1", port), _BridgeHandler)
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -224,8 +499,10 @@ def secure_input_bridge(title: str, fields: list[dict[str, Any]]) -> dict[str, s
     # Wait for the server to shutdown (triggered by do_POST)
     server_thread.join(timeout=300)  # 5 minute timeout
 
+    if _BridgeHandler.cancelled:
+        raise InputCancelledError()
     if _BridgeHandler.result is None:
-        raise RuntimeError("Secure input bridge timed out or was cancelled.")
+        raise RuntimeError("Secure input bridge timed out.")
 
     return _BridgeHandler.result
 
