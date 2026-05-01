@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.3](https://github.com/manojbajaj95/authsome/compare/authsome-v0.2.2...authsome-v0.2.3) (2026-05-01)
+
+
+### Documentation
+
+* add demo video to README ([36a9e18](https://github.com/manojbajaj95/authsome/commit/36a9e18a9a482baad9693f4b906226197866f70f))
+* add demo video to README ([83ed25a](https://github.com/manojbajaj95/authsome/commit/83ed25a750f57e255268cee87e776c7d1d1f7961))
+
 ## [0.2.2](https://github.com/manojbajaj95/authsome/compare/authsome-v0.2.1...authsome-v0.2.2) (2026-04-29)
 
 
