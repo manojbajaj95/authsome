@@ -21,6 +21,12 @@ Log in once via OAuth2/API Key. Authsome keeps the credentials fresh for every A
 
 ---
 
+## Demo
+
+<video src="docs/demo.mp4" controls width="100%"></video>
+
+---
+
 ## Why Agents Are Different
 
 Agents need API access that survives outside an interactive app:
