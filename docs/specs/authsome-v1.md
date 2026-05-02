@@ -1068,6 +1068,7 @@ Recommended exit code semantics:
 - `5` credential missing
 - `6` refresh failed
 - `7` store unavailable
+- `8` user cancelled credential entry
 
 ---
 
