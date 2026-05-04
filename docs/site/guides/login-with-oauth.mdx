@@ -45,7 +45,7 @@ GitHub example:
 ## Run the login
 
 ```bash
-authsome login github
+uvx authsome login github
 ```
 
 This is what happens:
@@ -74,8 +74,8 @@ This is what happens:
 The default flow lives in the provider definition. Override it on the command line:
 
 ```bash
-authsome login github --flow device_code
-authsome login github --flow pkce
+uvx authsome login github --flow device_code
+uvx authsome login github --flow pkce
 ```
 
 Valid values: `pkce`, `device_code`, `dcr_pkce`, `api_key`.
@@ -85,17 +85,17 @@ Valid values: `pkce`, `device_code`, `dcr_pkce`, `api_key`.
 Request specific scopes instead of the provider's default set:
 
 ```bash
-authsome login github --scopes "repo,read:user,workflow"
+uvx authsome login github --scopes "repo,read:user,workflow"
 ```
 
-The granted scopes are stored on the connection record and visible in `authsome get github`.
+The granted scopes are stored on the connection record and visible in `uvx authsome get github`.
 
 ## Multi-tenant / self-hosted (Enterprise)
 
 Providers like GitHub Enterprise, Okta, and GitLab self-managed run on per-deployment URLs. Pass `--base-url`:
 
 ```bash
-authsome login github --base-url https://github.acme.com
+uvx authsome login github --base-url https://github.acme.com
 ```
 
 The base URL is saved on the connection and reused for every refresh.
@@ -105,34 +105,34 @@ The base URL is saved on the connection and reused for every refresh.
 The default connection name is `default`. To log in to a second account on the same provider — for example, a personal and a work GitHub — pass `--connection`:
 
 ```bash
-authsome login github --connection personal
-authsome login github --connection work
+uvx authsome login github --connection personal
+uvx authsome login github --connection work
 ```
 
 Each connection is independent. Switch between them on read commands:
 
 ```bash
-authsome get github --connection work
-authsome export github --connection personal --format env
+uvx authsome get github --connection work
+uvx authsome export github --connection personal --format env
 ```
 
 ## Verify the login
 
 ```bash
-authsome list
-authsome get github                  # metadata, secrets redacted
-authsome get github --field status   # → connected
+uvx authsome list
+uvx authsome get github                  # metadata, secrets redacted
+uvx authsome get github --field status   # → connected
 ```
 
 ## Re-login
 
-If a provider is already `connected`, `authsome login <provider>` exits with an error. To overwrite an existing connection:
+If a provider is already `connected`, `uvx authsome login <provider>` exits with an error. To overwrite an existing connection:
 
 ```bash
-authsome login github --force
+uvx authsome login github --force
 ```
 
-This skips the "already connected" guard and runs the flow again, replacing the stored credentials. Use `authsome revoke github` first if you want to invalidate the old token at the provider as well.
+This skips the "already connected" guard and runs the flow again, replacing the stored credentials. Use `uvx authsome revoke github` first if you want to invalidate the old token at the provider as well.
 
 ## What's next
 

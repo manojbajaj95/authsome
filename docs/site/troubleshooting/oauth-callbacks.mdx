@@ -30,13 +30,13 @@ Fix it at the provider:
   </Step>
   <Step title="Save and retry login">
     ```bash
-    authsome login <provider> --force
+    uvx authsome login <provider> --force
     ```
   </Step>
 </Steps>
 
 <Tip>
-  For services that support Dynamic Client Registration, the `dcr_pkce` flow registers a fresh OAuth client with the right redirect URI automatically. Check `authsome inspect <provider>` for `supports_dcr: true`.
+  For services that support Dynamic Client Registration, the `dcr_pkce` flow registers a fresh OAuth client with the right redirect URI automatically. Check `uvx authsome inspect <provider>` for `supports_dcr: true`.
 </Tip>
 
 ## Port 7999 already in use
@@ -73,7 +73,7 @@ The browser shows the provider's authorization page, you click **Authorize**, an
 
 | Cause | Fix |
 |-------|-----|
-| The browser landed on `http://127.0.0.1:7999/callback` but authsome timed out | Re-run `authsome login --force`. |
+| The browser landed on `http://127.0.0.1:7999/callback` but authsome timed out | Re-run `uvx authsome login --force`. |
 | A corporate proxy is intercepting `127.0.0.1` traffic | Add `127.0.0.1` and `localhost` to your `NO_PROXY` env var. |
 | You authorized in a different browser profile that can't reach localhost | Use the same browser profile as your authsome shell. |
 
@@ -99,8 +99,8 @@ Error: token exchange failed: invalid_client
 The stored client credentials don't match what the provider expects.
 
 ```bash
-authsome revoke <provider>     # clear stored client + tokens
-authsome login <provider>      # re-enter client_id and client_secret via browser bridge
+uvx authsome revoke <provider>     # clear stored client + tokens
+uvx authsome login <provider>      # re-enter client_id and client_secret via browser bridge
 ```
 
 If you've recently rotated the OAuth app's client secret, this is the expected flow.
@@ -110,13 +110,13 @@ If you've recently rotated the OAuth app's client secret, this is the expected f
 The login completes but the agent gets `403 Insufficient scope` on real API calls.
 
 ```bash
-authsome get <provider> --field scopes
+uvx authsome get <provider> --field scopes
 ```
 
 If the granted scopes don't include what your agent needs:
 
 ```bash
-authsome login <provider> --scopes "<scope1>,<scope2>" --force
+uvx authsome login <provider> --scopes "<scope1>,<scope2>" --force
 ```
 
 The provider re-prompts for consent on the additional scopes.

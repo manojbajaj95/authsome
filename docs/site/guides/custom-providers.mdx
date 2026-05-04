@@ -118,20 +118,20 @@ For the full schema with every supported field, see the [Provider schema referen
 ## Step 4: Register the provider
 
 ```bash
-authsome register ./acmecrm.json
+uvx authsome register ./acmecrm.json
 ```
 
 Authsome validates required fields, checks `auth_type`/`flow` compatibility, and copies the file into `~/.authsome/providers/`. Pass `--force` to overwrite an existing provider with the same name.
 
 ```bash
-authsome register ./acmecrm.json --force
+uvx authsome register ./acmecrm.json --force
 ```
 
 Confirm it's registered:
 
 ```bash
-authsome list                  # acmecrm should show up with source=custom
-authsome inspect acmecrm       # full definition
+uvx authsome list                  # acmecrm should show up with source=custom
+uvx authsome inspect acmecrm       # full definition
 ```
 
 ## Step 5: Log in
@@ -139,8 +139,8 @@ authsome inspect acmecrm       # full definition
 Same commands as for bundled providers:
 
 ```bash
-authsome login acmecrm
-authsome get acmecrm --field status   # → connected
+uvx authsome login acmecrm
+uvx authsome get acmecrm --field status   # → connected
 ```
 
 For OAuth2 providers without DCR, authsome opens a local browser form on first login to collect `client_id` and `client_secret`. They are stored encrypted under the active profile and reused on every subsequent login. They are never accepted as command-line arguments.
@@ -154,7 +154,7 @@ For services where each customer has their own subdomain (Okta, GitHub Enterpris
 3. Pass `--base-url` at login time:
 
 ```bash
-authsome login acmecrm --base-url https://acme.tenant.com
+uvx authsome login acmecrm --base-url https://acme.tenant.com
 ```
 
 The custom base URL is saved on the connection and reused for all token refreshes.
@@ -164,9 +164,9 @@ The custom base URL is saved on the connection and reused for all token refreshe
 Custom providers always win over bundled ones with the same name. To customize a bundled provider — for example, to add scopes or change the host URL:
 
 ```bash
-authsome inspect github > ~/.authsome/providers/github.json
+uvx authsome inspect github > ~/.authsome/providers/github.json
 # edit the file
-authsome list   # github now shows source=custom
+uvx authsome list   # github now shows source=custom
 ```
 
 ## What's next

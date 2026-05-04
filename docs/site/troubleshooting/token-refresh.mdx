@@ -3,7 +3,7 @@ title: "Token refresh failures"
 description: "Diagnose why a stored OAuth2 token failed to refresh and recover the connection."
 ---
 
-Authsome refreshes OAuth2 access tokens automatically. When you ask for a token (via `authsome get`, `export`, `run`, or the library `AuthLayer`), authsome checks the stored expiry. If the token is within ~5 minutes of expiring, it calls the provider's token endpoint with the stored refresh token, writes the fresh credentials back to the vault, and returns the new access token.
+Authsome refreshes OAuth2 access tokens automatically. When you ask for a token (via `uvx authsome get`, `export`, `run`, or the library `AuthLayer`), authsome checks the stored expiry. If the token is within ~5 minutes of expiring, it calls the provider's token endpoint with the stored refresh token, writes the fresh credentials back to the vault, and returns the new access token.
 
 When refresh fails, the connection moves into one of two states.
 
@@ -29,8 +29,8 @@ Causes:
 Recover:
 
 ```bash
-authsome revoke <provider>     # clear local state + remote (if supported)
-authsome login <provider>      # re-run the flow
+uvx authsome revoke <provider>     # clear local state + remote (if supported)
+uvx authsome login <provider>      # re-run the flow
 ```
 
 ### `client authentication failed`
@@ -42,8 +42,8 @@ Error: refresh failed for <provider>: invalid_client
 The OAuth client credentials stored under your profile no longer match the provider. This usually means the OAuth app's client secret was rotated.
 
 ```bash
-authsome revoke <provider>
-authsome login <provider>      # re-collect client_id and client_secret via browser bridge
+uvx authsome revoke <provider>
+uvx authsome login <provider>      # re-collect client_id and client_secret via browser bridge
 ```
 
 ### `expired_token` after long downtime
@@ -55,7 +55,7 @@ Error: refresh failed for <provider>: expired_token
 Some providers expire refresh tokens after extended inactivity (Google for free-tier OAuth apps, for example). Re-run the full login:
 
 ```bash
-authsome login <provider> --force
+uvx authsome login <provider> --force
 ```
 
 ### Network errors during refresh
@@ -67,7 +67,7 @@ Error: refresh failed for <provider>: connection timed out
 The provider's token endpoint was unreachable. The connection stays at `expired` — it's recoverable. Retry once your network is back:
 
 ```bash
-authsome get <provider> --field status
+uvx authsome get <provider> --field status
 ```
 
 If the next access call succeeds, authsome refreshes and the status returns to `connected`.
@@ -77,14 +77,14 @@ If the next access call succeeds, authsome refreshes and the status returns to `
 The CLI exposes per-provider refresh state for debugging:
 
 ```bash
-authsome get <provider> --field expires_at
-authsome get <provider> --field status
+uvx authsome get <provider> --field expires_at
+uvx authsome get <provider> --field status
 ```
 
 The audit log records every login, refresh attempt, and failure reason:
 
 ```bash
-authsome log -n 50 --json | python3 -c "
+uvx authsome log -n 50 --json | python3 -c "
 import sys, json
 for line in sys.stdin:
     e = json.loads(line)
@@ -96,7 +96,7 @@ for line in sys.stdin:
 For deeper diagnostics, run any command with `--verbose`:
 
 ```bash
-authsome --verbose get <provider>
+uvx authsome --verbose get <provider>
 ```
 
 DEBUG logs go to `~/.authsome/logs/authsome.log` and include the token endpoint URL, request body (with secrets redacted), and the full response body on failure.
@@ -106,7 +106,7 @@ DEBUG logs go to `~/.authsome/logs/authsome.log` and include the token endpoint 
 API-key providers don't have a refresh mechanism — there's nothing to refresh. If the stored key is rejected at runtime, the provider invalidated it externally (the user rotated it, the team revoked it, etc.). Replace it:
 
 ```bash
-authsome login <provider> --force      # paste the new key
+uvx authsome login <provider> --force      # paste the new key
 ```
 
 ## Refresh window

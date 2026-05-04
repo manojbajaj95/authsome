@@ -3,10 +3,10 @@ title: "Diagnose with `doctor`"
 description: "Run health checks on directory layout, encryption, and provider parsing — and read the output."
 ---
 
-`authsome doctor` is the first command to run when something looks wrong. It walks the home directory layout, verifies encryption is available, and parses every provider definition.
+`uvx authsome doctor` is the first command to run when something looks wrong. It walks the home directory layout, verifies encryption is available, and parses every provider definition.
 
 ```bash
-authsome doctor
+uvx authsome doctor
 ```
 
 A healthy machine prints `OK` for each check and exits with code `0`.
@@ -32,7 +32,7 @@ A healthy machine prints `OK` for each check and exits with code `0`.
 
 Causes:
 
-- You haven't run authsome on this machine before. The first CLI invocation auto-initializes the home directory. Re-run any command (for example, `authsome whoami`) to trigger initialization.
+- You haven't run authsome on this machine before. The first CLI invocation auto-initializes the home directory. Re-run any command (for example, `uvx authsome whoami`) to trigger initialization.
 - You moved or deleted `~/.authsome`. If you have a backup, restore it. Without the master key, encrypted records cannot be decrypted.
 
 ### `master.key has insecure permissions`
@@ -90,11 +90,11 @@ Only do this when you are certain no other authsome process is running.
 For more detail than `doctor` shows, use these:
 
 ```bash
-authsome whoami                              # home directory + encryption mode
-authsome list --json                         # all providers + connection states
-authsome get <provider> --json               # connection record metadata
-authsome inspect <provider>                  # provider definition
-authsome log -n 100                          # recent audit events
+uvx authsome whoami                              # home directory + encryption mode
+uvx authsome list --json                         # all providers + connection states
+uvx authsome get <provider> --json               # connection record metadata
+uvx authsome inspect <provider>                  # provider definition
+uvx authsome log -n 100                          # recent audit events
 ```
 
 ## Verbose logging
@@ -102,7 +102,7 @@ authsome log -n 100                          # recent audit events
 For deeper inspection of any command, enable verbose logging:
 
 ```bash
-authsome --verbose login github
+uvx authsome --verbose login github
 ```
 
 DEBUG logs go to stderr and to the rotating log file at `~/.authsome/logs/authsome.log`. Inspect the log:
@@ -117,7 +117,7 @@ If your install is irrecoverably broken and you don't have any credentials to pr
 
 ```bash
 rm -rf ~/.authsome
-authsome whoami     # triggers re-initialization
+uvx authsome whoami     # triggers re-initialization
 ```
 
 This destroys every stored credential. You will need to log in to every provider again.

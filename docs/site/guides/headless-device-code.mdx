@@ -18,12 +18,12 @@ The provider must support the device authorization grant. In a provider definiti
 }
 ```
 
-GitHub, Google, Microsoft, and many others support it. Check `authsome inspect <provider>` for `supports_device_flow: true`.
+GitHub, Google, Microsoft, and many others support it. Check `uvx authsome inspect <provider>` for `supports_device_flow: true`.
 
 ## Run the login
 
 ```bash
-authsome login github --flow device_code
+uvx authsome login github --flow device_code
 ```
 
 The terminal prints something like:
@@ -65,7 +65,7 @@ For GitHub specifically, even when a local browser is available, the device code
 In CI, you can capture the authorization URL and code from the command output and surface them in the build log so a human can complete the authorization:
 
 ```bash
-authsome login github --flow device_code 2>&1 | tee login.log
+uvx authsome login github --flow device_code 2>&1 | tee login.log
 ```
 
 The login command waits until the device flow either completes, expires, or is cancelled. For unattended CI you typically log in once on a developer machine and then commit the encrypted profile (or, more often, run the agent only on machines that already have an authenticated profile).
@@ -76,7 +76,7 @@ API-key providers don't have a device flow. On a headless machine without `DISPL
 
 ```bash
 ssh server.example.com
-authsome login openai
+uvx authsome login openai
 # OpenAI API key: ********  (typed input is not echoed)
 ```
 
