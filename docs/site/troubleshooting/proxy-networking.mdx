@@ -3,7 +3,7 @@ title: "Proxy networking"
 description: "Diagnose TLS errors, certificate trust, pinned-cert SDKs, and corporate proxy interactions."
 ---
 
-`authsome run` starts a local mitmproxy-based HTTP proxy. Most issues come down to TLS certificate trust or interactions with corporate proxies.
+`uvx authsome run` starts a local mitmproxy-based HTTP proxy. Most issues come down to TLS certificate trust or interactions with corporate proxies.
 
 For background, see [Proxy injection](/concepts/proxy-injection).
 
@@ -21,7 +21,7 @@ mitmproxy generates a CA on first run and stores it at `~/.mitmproxy/mitmproxy-c
 
 ### Quick install with `mitm.it` (recommended)
 
-mitmproxy ships a built-in cert installer at the magic domain `mitm.it`. While `authsome run` is active, open a browser on the same machine and visit:
+mitmproxy ships a built-in cert installer at the magic domain `mitm.it`. While `uvx authsome run` is active, open a browser on the same machine and visit:
 
 ```text
 http://mitm.it
@@ -84,7 +84,7 @@ The Python `requests` and `httpx` libraries use their own certifi-based CA bundl
 ```bash
 export REQUESTS_CA_BUNDLE=~/.mitmproxy/mitmproxy-ca-cert.pem
 export SSL_CERT_FILE=~/.mitmproxy/mitmproxy-ca-cert.pem
-authsome run -- python my_agent.py
+uvx authsome run -- python my_agent.py
 ```
 
 Or set them inside the script before any HTTP client is created.
@@ -96,7 +96,7 @@ Some SDKs ship with a pinned certificate or chain (notably mobile SDKs and a few
 There is no way to MITM these connections without bypassing the SDK's pinning. Use `authsome export` instead of `authsome run` for those cases:
 
 ```bash
-eval "$(authsome export <provider> --format env)"
+eval "$(uvx authsome export <provider> --format env)"
 python my_agent.py
 ```
 
@@ -109,7 +109,7 @@ The agent is making calls but no auth header is being injected.
 ### Check the env vars in the child
 
 ```bash
-authsome run -- env | grep -i proxy
+uvx authsome run -- env | grep -i proxy
 ```
 
 You should see:
@@ -121,14 +121,14 @@ http_proxy=http://127.0.0.1:<port>
 https_proxy=http://127.0.0.1:<port>
 ```
 
-If they are missing, the proxy didn't start. Check `authsome --verbose run -- ...` for startup errors.
+If they are missing, the proxy didn't start. Check `uvx authsome --verbose run -- ...` for startup errors.
 
 ### The host doesn't match any provider's `host_url`
 
 The proxy only injects auth for requests whose host matches a provider's `host_url`. Confirm the destination host:
 
 ```bash
-authsome inspect <provider> | grep host_url
+uvx authsome inspect <provider> | grep host_url
 ```
 
 If the API uses a different host than the provider declares, override the bundled provider with a custom JSON that has the correct `host_url`.

@@ -42,7 +42,7 @@ Each profile has its own SQLite store. Encryption is shared (the master key sits
 ## Inspect the active profile
 
 ```bash
-authsome whoami
+uvx authsome whoami
 ```
 
 Output includes the home directory and the active encryption mode. The active profile is whatever appears as `default_profile` in `~/.authsome/config.json`.
@@ -70,7 +70,7 @@ Switch the global default by editing `~/.authsome/config.json`:
 }
 ```
 
-Subsequent `authsome` invocations operate against the `work` profile.
+Subsequent `uvx authsome` invocations operate against the `work` profile.
 
 ## Connections vs profiles
 

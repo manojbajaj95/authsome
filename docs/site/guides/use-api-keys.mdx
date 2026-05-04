@@ -8,7 +8,7 @@ API-key providers like OpenAI, Anthropic, and SendGrid don't run an OAuth flow �
 ## Log in
 
 ```bash
-authsome login openai
+uvx authsome login openai
 ```
 
 A browser window opens to a local form at `http://127.0.0.1:7999`. Paste the API key into the masked input and submit. The terminal prints `Successfully logged in to openai (default).`
@@ -20,10 +20,10 @@ A browser window opens to a local form at `http://127.0.0.1:7999`. Paste the API
 ## Confirm the connection
 
 ```bash
-authsome list
-authsome get openai                         # metadata, key redacted
-authsome get openai --field status          # → connected
-authsome get openai --field api_key --show-secret
+uvx authsome list
+uvx authsome get openai                         # metadata, key redacted
+uvx authsome get openai --field status          # → connected
+uvx authsome get openai --field api_key --show-secret
 ```
 
 `--show-secret` reveals the stored value. Use it sparingly — the safer pattern is `authsome run` (see below).
@@ -33,15 +33,15 @@ authsome get openai --field api_key --show-secret
 Use the `--connection` flag to keep multiple keys side by side. For example, a personal OpenAI key and a team key:
 
 ```bash
-authsome login openai --connection personal
-authsome login openai --connection team
+uvx authsome login openai --connection personal
+uvx authsome login openai --connection team
 ```
 
 Read commands target a specific connection:
 
 ```bash
-authsome get openai --connection team
-authsome export openai --connection personal --format env
+uvx authsome get openai --connection team
+uvx authsome export openai --connection personal --format env
 ```
 
 ## Pattern validation
@@ -62,7 +62,7 @@ Two common patterns.
 ### Through the proxy
 
 ```bash
-authsome run -- python my_agent.py
+uvx authsome run -- python my_agent.py
 ```
 
 Authsome sets `OPENAI_API_KEY=authsome-proxy-managed` in the child's environment so the SDK initializes, then injects the real key into outbound requests to `api.openai.com`. The child process never sees the actual key.
@@ -70,7 +70,7 @@ Authsome sets `OPENAI_API_KEY=authsome-proxy-managed` in the child's environment
 ### As an environment variable
 
 ```bash
-authsome export openai --format env
+uvx authsome export openai --format env
 python my_agent.py
 ```
 
@@ -81,7 +81,7 @@ python my_agent.py
 To replace the stored key with a new one:
 
 ```bash
-authsome login openai --force
+uvx authsome login openai --force
 ```
 
 The `--force` flag overwrites the existing connection. Pass `--connection <name>` to target a non-default connection.
@@ -89,11 +89,11 @@ The `--force` flag overwrites the existing connection. Pass `--connection <name>
 ## Remove a key
 
 ```bash
-authsome logout openai             # remove local credential, leave provider untouched
-authsome remove openai             # delete all local state for the provider
+uvx authsome logout openai             # remove local credential, leave provider untouched
+uvx authsome remove openai             # delete all local state for the provider
 ```
 
-For OAuth2 providers, `authsome revoke <provider>` also calls the provider's revocation endpoint. API-key providers have no revocation endpoint, so `revoke` and `remove` are equivalent for them.
+For OAuth2 providers, `uvx authsome revoke <provider>` also calls the provider's revocation endpoint. API-key providers have no revocation endpoint, so `revoke` and `remove` are equivalent for them.
 
 ## What's next
 
