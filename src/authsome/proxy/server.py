@@ -15,8 +15,8 @@ from mitmproxy import http
 from mitmproxy.options import Options
 from mitmproxy.tools.dump import DumpMaster
 
-from authsome.auth import AuthLayer
 from authsome.proxy.router import RouteMatch
+from authsome.runtime.client import RuntimeClient
 from authsome.utils import utc_now
 
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
@@ -49,8 +49,8 @@ class _HeaderCacheEntry:
 class ProxyRouter:
     """Cached provider route table for proxy request matching."""
 
-    def __init__(self, auth: AuthLayer) -> None:
-        self._routes_by_host, self._regex_routes = self._build_routes(auth)
+    def __init__(self, client: RuntimeClient) -> None:
+        self._routes_by_host, self._regex_routes = self._build_routes(client)
 
     def route(self, scheme: str, host: str, port: int, path: str) -> RouteMatch | None:
         """Return a route for a request, or None when the request should pass through."""
@@ -91,18 +91,23 @@ class ProxyRouter:
         return best_targets[0].match
 
     @staticmethod
-    def _build_routes(auth: AuthLayer) -> tuple[dict[str, tuple[_RouteTarget, ...]], tuple[_RegexRouteTarget, ...]]:
+    def _build_routes(
+        client: RuntimeClient,
+    ) -> tuple[dict[str, tuple[_RouteTarget, ...]], tuple[_RegexRouteTarget, ...]]:
         routes_by_host: dict[str, list[_RouteTarget]] = {}
         regex_routes: list[_RegexRouteTarget] = []
+        from authsome.auth.models.provider import ProviderDefinition
 
-        for provider_group in auth.list_connections():
+        connections_data = client.list_connections()
+        for provider_group in connections_data["connections"]:
             provider_name = provider_group["name"]
             selected_connections = [
                 conn for conn in provider_group["connections"] if conn["connection_name"] == "default"
             ]
 
             try:
-                definition = auth.get_provider(provider_name)
+                definition_dict = client.get_provider(provider_name)
+                definition = ProviderDefinition.model_validate(definition_dict)
             except Exception as exc:
                 logger.warning("Skipping proxy routes for provider {}: {}", provider_name, exc)
                 continue
@@ -146,12 +151,12 @@ class ProxyRouter:
         return {host: tuple(routes) for host, routes in routes_by_host.items()}, tuple(regex_routes)
 
 
-def _route(auth: AuthLayer, scheme: str, host: str, port: int, path: str) -> RouteMatch | None:
+def _route(client: RuntimeClient, scheme: str, host: str, port: int, path: str) -> RouteMatch | None:
     """Return a RouteMatch when exactly one connected provider matches the request.
 
     Returns None for loopback targets, OAuth endpoints, zero matches, or ambiguous matches.
     """
-    return ProxyRouter(auth).route(scheme, host, port, path)
+    return ProxyRouter(client).route(scheme, host, port, path)
 
 
 def _is_auth_endpoint(provider, host: str, path: str) -> bool:
@@ -252,11 +257,14 @@ def _auth_endpoint_paths_for_regex(provider, host_pattern: re.Pattern[str]) -> f
 
 
 class AuthProxyAddon:
-    """Mitmproxy addon that injects auth headers for matched requests."""
+    """Mitmproxy addon that injects auth headers for matched requests.
 
-    def __init__(self, auth: AuthLayer) -> None:
-        self._auth = auth
-        self._router = ProxyRouter(auth)
+    Credential resolution goes through the runtime client.
+    """
+
+    def __init__(self, client: RuntimeClient) -> None:
+        self._client = client
+        self._router = ProxyRouter(client)
         self._header_cache: dict[tuple[str, str], _HeaderCacheEntry] = {}
         self._header_locks: dict[tuple[str, str], threading.Lock] = {}
 
@@ -292,8 +300,17 @@ class AuthProxyAddon:
             if cached and _header_cache_valid(cached, now):
                 return cached.headers.copy()
 
-            headers = self._auth.get_auth_headers(match.provider, match.connection)
-            record = self._auth.get_connection(match.provider, match.connection)
+            # Resolve through runtime client
+            headers_resp = self._client.resolve_credentials(
+                provider=match.provider,
+                connection_name=match.connection,
+            )
+            headers = headers_resp["headers"]
+
+            record_dict = self._client.get_connection(match.provider, match.connection)
+            from authsome.auth.models.connection import ConnectionRecord
+
+            record = ConnectionRecord.model_validate(record_dict)
             self._header_cache[cache_key] = _HeaderCacheEntry(
                 headers=headers.copy(),
                 expires_at=record.expires_at,
@@ -366,16 +383,15 @@ def _build_proxy_options(host: str, port: int, confdir: Path) -> Options:
 
 
 def start_proxy_server(
-    auth: AuthLayer,
+    client: RuntimeClient,
     host: str = "127.0.0.1",
     port: int = 0,
 ) -> RunningProxy:
     """Start a mitmproxy DumpMaster in a background thread."""
     import asyncio
 
-    # Use the default mitmproxy confdir (~/.mitmproxy) for CA certificates
     confdir = Path.home() / ".mitmproxy"
-    auth_addon = AuthProxyAddon(auth=auth)
+    auth_addon = AuthProxyAddon(client=client)
 
     ready = threading.Event()
     state: dict = {}

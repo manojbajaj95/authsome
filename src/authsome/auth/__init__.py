@@ -9,11 +9,8 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
 from datetime import timedelta
-from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
 
 import requests as http_client
 from loguru import logger
@@ -23,7 +20,7 @@ from authsome.auth.flows.base import AuthFlow
 from authsome.auth.flows.dcr_pkce import DcrPkceFlow
 from authsome.auth.flows.device_code import DeviceCodeFlow
 from authsome.auth.flows.pkce import PkceFlow
-from authsome.auth.input_provider import BridgeInputProvider, InputField, InputProvider
+from authsome.auth.input_provider import InputProvider
 from authsome.auth.models.connection import (
     ConnectionRecord,
     ProviderClientRecord,
@@ -31,8 +28,9 @@ from authsome.auth.models.connection import (
     ProviderStateRecord,
 )
 from authsome.auth.models.enums import AuthType, ConnectionStatus, ExportFormat, FlowType
+from authsome.auth.models.profile import ProfileMetadata
 from authsome.auth.models.provider import ProviderDefinition
-from authsome.auth.providers.registry import ProviderRegistry
+from authsome.auth.providers import ProviderRegistry
 from authsome.errors import (
     AuthsomeError,
     ConnectionNotFoundError,
@@ -42,6 +40,8 @@ from authsome.errors import (
     TokenExpiredError,
     UnsupportedFlowError,
 )
+from authsome.runtime.models import RuntimeSession
+from authsome.store.interfaces import AppStore
 from authsome.utils import build_store_key, utc_now
 from authsome.vault import Vault
 
@@ -53,14 +53,6 @@ _FLOW_HANDLERS: dict[FlowType, type[AuthFlow]] = {
     FlowType.DCR_PKCE: DcrPkceFlow,
     FlowType.API_KEY: ApiKeyFlow,
 }
-
-
-@dataclass(frozen=True)
-class LoginResult:
-    """Result of a login attempt."""
-
-    record: ConnectionRecord
-    already_connected: bool = False
 
 
 class AuthLayer:
@@ -75,13 +67,17 @@ class AuthLayer:
         self,
         vault: Vault,
         registry: ProviderRegistry,
-        identity: str,
-        profiles_dir: Path,
+        app_store: AppStore,
+        identity: str | None = None,
     ) -> None:
         self._vault = vault
         self._registry = registry
-        self._identity = identity  # profile slug
-        self._profiles_dir = profiles_dir
+        self._app_store = app_store
+        self._identity = identity or "default"
+
+    @property
+    def vault(self) -> Vault:
+        return self._vault
 
     @property
     def registry(self) -> ProviderRegistry:
@@ -90,6 +86,10 @@ class AuthLayer:
     @property
     def identity(self) -> str:
         return self._identity
+
+    @property
+    def app_store(self) -> AppStore:
+        return self._app_store
 
     # ── Provider operations ───────────────────────────────────────────────
 
@@ -169,37 +169,57 @@ class AuthLayer:
         input_provider: InputProvider | None = None,
         base_url: str | None = None,
     ) -> ConnectionRecord:
-        return self.login_with_result(
+        """Synchronously perform a login flow (primarily for testing)."""
+        import uuid
+
+        from authsome.runtime.models import RuntimeSession
+
+        definition = self.get_provider(provider)
+        session = RuntimeSession(
+            session_id=f"sess_{uuid.uuid4().hex[:12]}",
             provider=provider,
+            profile=self._identity,
             connection_name=connection_name,
+            flow_type=(flow_override or definition.flow).value,
+        )
+
+        # Execute the flow
+        self.begin_login_flow(
+            session=session,
             scopes=scopes,
             flow_override=flow_override,
             force=force,
-            input_provider=input_provider,
             base_url=base_url,
-        ).record
+            input_provider=input_provider,
+        )
 
-    def login_with_result(
+        # For synchronous flows (API_KEY, mocked OAuth in tests), resume immediately.
+        # We poll briefly for DEVICE_CODE to match old behavior.
+        import time
+
+        start_time = time.time()
+        while time.time() - start_time < 30:  # 30s timeout for sync login
+            record = self.resume_login_flow(session, {})
+            if record is not None:
+                return record
+            if session.flow_type != "device_code":
+                break
+            time.sleep(1)
+
+        raise AuthsomeError(f"Login flow for '{provider}' did not complete synchronously.")
+
+    def begin_login_flow(
         self,
-        provider: str,
-        connection_name: str = "default",
+        session: RuntimeSession,
         scopes: list[str] | None = None,
         flow_override: FlowType | None = None,
         force: bool = False,
-        input_provider: InputProvider | None = None,
         base_url: str | None = None,
-    ) -> LoginResult:
+        input_provider: InputProvider | None = None,
+    ) -> None:
+        provider = session.provider
+        connection_name = session.connection_name
         definition = self.get_provider(provider)
-
-        try:
-            existing = self.get_connection(provider, connection_name)
-            if existing and not force:
-                if self._connection_is_valid(existing) and self._requested_context_matches(
-                    existing, scopes=scopes, base_url=base_url
-                ):
-                    return LoginResult(record=existing, already_connected=True)
-        except ConnectionNotFoundError:
-            pass
 
         flow_type = flow_override or definition.flow
         handler_cls = _FLOW_HANDLERS.get(flow_type)
@@ -214,6 +234,9 @@ class AuthLayer:
         flow_base_url = base_url or (client_record.base_url if client_record else None)
         flow_api_key = None
         persisted_scopes = client_record.scopes if client_record else None
+
+        from authsome.auth.input_provider import BridgeInputProvider, InputField
+        from authsome.auth.models.connection import ProviderClientRecord
 
         # Build list of fields that still need to be collected
         fields_to_collect: list[InputField] = []
@@ -239,7 +262,9 @@ class AuthLayer:
             )
 
         if flow_type == FlowType.PKCE and not flow_client_id:
-            static_hints.append({"type": "static", "label": "Redirect URL", "value": "http://127.0.0.1:7999/callback"})
+            static_hints.append(
+                {"type": "static", "label": "Redirect URL", "value": "http://127.0.0.1:7998/v1/callbacks/pkce"}
+            )
             fields_to_collect.append(InputField(name="client_id", label="Client ID", secret=False))
             fields_to_collect.append(
                 InputField(name="client_secret", label="Client Secret (Optional)", secret=True, default="")
@@ -276,7 +301,7 @@ class AuthLayer:
         static_hints.extend(self._build_docs_hints(definition, flow_type))
 
         if fields_to_collect:
-            ip: InputProvider = input_provider or BridgeInputProvider(
+            ip = input_provider or BridgeInputProvider(
                 title=f"{definition.display_name} Credentials",
                 static_fields=static_hints,
             )
@@ -286,16 +311,16 @@ class AuthLayer:
                 if client_record is None:
                     client_record = ProviderClientRecord(profile=self._identity, provider=provider)
                 if inputs.get("base_url"):
+                    client_record.base_url = inputs["base_url"]
                     flow_base_url = inputs["base_url"]
-                    client_record.base_url = flow_base_url
                 if inputs.get("host_url"):
                     client_record.host_url = inputs["host_url"]
                 if inputs.get("client_id"):
+                    client_record.client_id = inputs["client_id"]
                     flow_client_id = inputs["client_id"]
-                    client_record.client_id = flow_client_id
                 if inputs.get("client_secret"):
-                    flow_client_secret = inputs["client_secret"]
                     client_record.client_secret = inputs["client_secret"]
+                    flow_client_secret = inputs["client_secret"]
                 if "scopes" in inputs:
                     scopes_input = inputs["scopes"].strip()
                     client_record.scopes = (
@@ -304,6 +329,8 @@ class AuthLayer:
                 self._save_provider_client_credentials(client_record)
             elif flow_type == FlowType.API_KEY:
                 flow_api_key = inputs.get("api_key")
+                if flow_api_key:
+                    session.payload["api_key"] = flow_api_key
 
         final_scopes = (
             scopes
@@ -311,20 +338,57 @@ class AuthLayer:
             else (client_record.scopes if client_record and client_record.scopes is not None else None)
         )
 
-        # Resolve URLs if base_url is present
         resolved_definition = definition.resolve_urls(flow_base_url)
 
-        result = handler.authenticate(
+        handler.begin(
             provider=resolved_definition,
             profile=self._identity,
             connection_name=connection_name,
+            runtime_session=session,
             scopes=final_scopes,
             client_id=flow_client_id,
             client_secret=flow_client_secret,
-            api_key=flow_api_key,
+            base_url=flow_base_url,
         )
 
-        # If the flow registered a new OAuth client (DCR), persist it now
+    def resume_login_flow(
+        self,
+        session: RuntimeSession,
+        callback_data: dict[str, Any],
+    ) -> ConnectionRecord | None:
+        provider = session.provider
+        connection_name = session.connection_name
+        definition = self.get_provider(provider)
+
+        from authsome.auth.models.enums import FlowType
+
+        flow_type = FlowType(session.flow_type)
+        handler_cls = _FLOW_HANDLERS.get(flow_type)
+        if handler_cls is None:
+            raise UnsupportedFlowError(flow_type.value, provider=provider)
+
+        handler = handler_cls()
+        client_record = self._get_provider_client_credentials(provider)
+
+        flow_client_id = client_record.client_id if client_record else None
+        flow_client_secret = client_record.client_secret if client_record else None
+
+        flow_base_url = session.payload.get("callback_url")
+        resolved_definition = definition.resolve_urls(flow_base_url)
+
+        result = handler.resume(
+            provider=resolved_definition,
+            profile=self._identity,
+            connection_name=connection_name,
+            runtime_session=session,
+            callback_data=callback_data,
+            client_id=flow_client_id,
+            client_secret=flow_client_secret,
+        )
+
+        if result is None or result.connection is None:
+            return None
+
         if result.client_record is not None:
             if client_record is None:
                 client_record = ProviderClientRecord(profile=self._identity, provider=provider)
@@ -334,11 +398,12 @@ class AuthLayer:
 
         result.connection.base_url = flow_base_url
         result.connection.host_url = resolved_definition.host_url
+
         self._save_connection(result.connection)
         self._update_provider_metadata(provider, connection_name)
 
         logger.info("Login successful: provider={} connection={} profile={}", provider, connection_name, self._identity)
-        return LoginResult(record=result.connection)
+        return result.connection
 
     @staticmethod
     def _connection_is_valid(record: ConnectionRecord) -> bool:
@@ -371,6 +436,8 @@ class AuthLayer:
         if not base_url:
             return None
         raw = base_url.strip().rstrip("/")
+        from urllib.parse import urlsplit, urlunsplit
+
         parsed = urlsplit(raw)
         if not parsed.scheme or not parsed.netloc:
             return raw
@@ -378,9 +445,9 @@ class AuthLayer:
             (
                 parsed.scheme.lower(),
                 parsed.netloc.lower(),
-                parsed.path.rstrip("/"),
+                parsed.path,
                 parsed.query,
-                "",
+                parsed.fragment,
             )
         )
 
@@ -440,15 +507,25 @@ class AuthLayer:
         except ConnectionNotFoundError:
             return
 
-        if record.auth_type == AuthType.OAUTH2 and record.access_token:
+        if record.auth_type == AuthType.OAUTH2 and (record.access_token or record.refresh_token):
             resolved_definition = definition.resolve_urls(record.base_url)
             if resolved_definition.oauth and resolved_definition.oauth.revocation_url:
-                try:
-                    http_client.post(
-                        resolved_definition.oauth.revocation_url, data={"token": record.access_token}, timeout=15
-                    )
-                except Exception as exc:
-                    logger.warning("Remote revocation failed (continuing): {}", exc)
+                # Revoke access token
+                if record.access_token:
+                    try:
+                        http_client.post(
+                            resolved_definition.oauth.revocation_url, data={"token": record.access_token}, timeout=15
+                        )
+                    except Exception as exc:
+                        logger.warning("Access token revocation failed (continuing): {}", exc)
+                # Revoke refresh token
+                if record.refresh_token:
+                    try:
+                        http_client.post(
+                            resolved_definition.oauth.revocation_url, data={"token": record.refresh_token}, timeout=15
+                        )
+                    except Exception as exc:
+                        logger.warning("Refresh token revocation failed (continuing): {}", exc)
 
         key = build_store_key(
             profile=self._identity, provider=provider, record_type="connection", connection=connection
@@ -469,11 +546,13 @@ class AuthLayer:
         self._vault.delete(client_key, profile=self._identity)
 
     def remove(self, provider: str) -> None:
+        """Revoke all tokens and remove the provider definition if it is local."""
         self.revoke(provider)
-        local_path = self._registry.providers_dir / f"{provider}.json"
-        if local_path.exists():
-            local_path.unlink()
-            logger.info("Removed provider definition: {}", local_path)
+        if self._registry.is_local(provider):
+            self._registry._app_store.delete_provider(provider)
+            logger.info("Removed local provider definition: {}", provider)
+        else:
+            logger.info("Revoked bundled provider: {} (definition kept)", provider)
 
     # ── Export operations ─────────────────────────────────────────────────
 
@@ -555,51 +634,34 @@ class AuthLayer:
 
     # ── Profile operations ────────────────────────────────────────────────
 
-    def create_profile(self, name: str, description: str | None = None) -> Any:
-        from authsome.auth.models.profile import ProfileMetadata
+    def list_profiles(self) -> list[ProfileMetadata]:
+        return self._app_store.list_profiles()
 
-        profile_dir = self._profiles_dir / name
-        profile_dir.mkdir(parents=True, exist_ok=True)
+    def get_profile(self, name: str) -> ProfileMetadata:
+        return self._app_store.get_profile(name)
 
-        metadata_path = profile_dir / "metadata.json"
-        if not metadata_path.exists():
-            now = utc_now()
-            metadata = ProfileMetadata(name=name, created_at=now, updated_at=now, description=description)
-            metadata_path.write_text(metadata.model_dump_json(indent=2), encoding="utf-8")
-            return metadata
-
-        return ProfileMetadata.model_validate_json(metadata_path.read_text(encoding="utf-8"))
-
-    def list_profiles(self) -> list[Any]:
-        from authsome.auth.models.profile import ProfileMetadata
-
-        profiles_dir = self._profiles_dir
-        if not profiles_dir.exists():
-            return []
-
-        result = []
-        for profile_dir in sorted(p for p in profiles_dir.iterdir() if p.is_dir()):
-            metadata_path = profile_dir / "metadata.json"
-            if metadata_path.exists():
-                try:
-                    result.append(ProfileMetadata.model_validate_json(metadata_path.read_text(encoding="utf-8")))
-                except Exception:
-                    logger.warning("Skipping invalid profile: {}", profile_dir.name)
-        return result
-
-    def set_default_profile(self, name: str, home_path: Any) -> None:
-        profile_dir = self._profiles_dir / name
-        if not profile_dir.exists():
-            raise ProfileNotFoundError(name)
-
-        from authsome.auth.models.config import GlobalConfig
-
-        config_path = home_path / "config.json"
-        config = GlobalConfig()
-        if config_path.exists():
-            config = GlobalConfig.model_validate_json(config_path.read_text(encoding="utf-8"))
+    def set_default_profile(self, name: str) -> None:
+        self._app_store.get_profile(name)
+        config = self._app_store.get_config()
         config.default_profile = name
-        config_path.write_text(config.model_dump_json(indent=2), encoding="utf-8")
+        self._app_store.save_config(config)
+
+    def create_profile(self, name: str, description: str = "") -> ProfileMetadata:
+        try:
+            self._app_store.get_profile(name)
+            raise ValueError(f"Profile {name} already exists")
+        except ProfileNotFoundError:
+            pass
+
+        now = utc_now()
+        metadata = ProfileMetadata(
+            name=name,
+            created_at=now,
+            updated_at=now,
+            description=description,
+        )
+        self._app_store.save_profile(metadata)
+        return metadata
 
     # ── Internal helpers ──────────────────────────────────────────────────
 

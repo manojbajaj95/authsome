@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 import hashlib
-import http.server
 import json
 import secrets
-import threading
 import urllib.parse
-import webbrowser
 from base64 import urlsafe_b64encode
 from datetime import timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import requests as http_client
-from loguru import logger
 
 from authsome.auth.flows.base import AuthFlow, FlowResult
 from authsome.auth.models.connection import AccountInfo, ConnectionRecord, ProviderClientRecord
@@ -23,36 +19,10 @@ from authsome.auth.models.provider import ProviderDefinition
 from authsome.errors import AuthenticationFailedError, DiscoveryError
 from authsome.utils import utc_now
 
+if TYPE_CHECKING:
+    from authsome.runtime.models import RuntimeSession
+
 _CALLBACK_TIMEOUT_SECONDS = 300
-
-
-class _CallbackHandler(http.server.BaseHTTPRequestHandler):
-    auth_code: str | None = None
-    error: str | None = None
-    state: str | None = None
-
-    def do_GET(self) -> None:
-        parsed = urllib.parse.urlparse(self.path)
-        params = urllib.parse.parse_qs(parsed.query)
-        if "error" in params:
-            _CallbackHandler.error = params["error"][0]
-            error_desc = params.get("error_description", [""])[0]
-            self._send_response(400, f"<h1>Authentication Failed</h1><p>{_CallbackHandler.error}: {error_desc}</p>")
-        elif "code" in params:
-            _CallbackHandler.auth_code = params["code"][0]
-            _CallbackHandler.state = params.get("state", [None])[0]
-            self._send_response(200, "<h1>Authentication Successful</h1><p>You can close this window.</p>")
-        else:
-            self._send_response(400, "<h1>Invalid Callback</h1>")
-
-    def _send_response(self, status: int, body: str) -> None:
-        self.send_response(status)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.end_headers()
-        self.wfile.write(body.encode("utf-8"))
-
-    def log_message(self, format: str, *args: Any) -> None:
-        logger.debug("Callback server: {}", format % args)
 
 
 def _generate_pkce() -> tuple[str, str]:
@@ -67,16 +37,17 @@ class DcrPkceFlow(AuthFlow):
 
     callback_port: int = 7999
 
-    def authenticate(
+    def begin(
         self,
         provider: ProviderDefinition,
         profile: str,
         connection_name: str,
+        runtime_session: RuntimeSession,
         scopes: list[str] | None = None,
         client_id: str | None = None,
         client_secret: str | None = None,
-        api_key: str | None = None,
-    ) -> FlowResult:
+        base_url: str | None = None,
+    ) -> None:
         if provider.oauth is None:
             raise AuthenticationFailedError("Provider missing 'oauth' configuration", provider=provider.name)
 
@@ -89,53 +60,84 @@ class DcrPkceFlow(AuthFlow):
         assert client_id is not None  # guaranteed: either passed in or registered above
 
         code_verifier, code_challenge = _generate_pkce()
-        port = self.callback_port
-        redirect_uri = f"http://127.0.0.1:{port}/callback"
+        redirect_uri = "http://127.0.0.1:7998/v1/callbacks/dcr_pkce"
 
-        _CallbackHandler.auth_code = None
-        _CallbackHandler.error = None
-        _CallbackHandler.state = None
+        state = secrets.token_urlsafe(32)
+        auth_params: dict[str, str] = {
+            "response_type": "code",
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+        }
+        if effective_scopes:
+            auth_params["scope"] = " ".join(effective_scopes)
 
-        server = http.server.HTTPServer(("127.0.0.1", port), _CallbackHandler)
-        server_thread = threading.Thread(target=server.handle_request, daemon=True)
-        server_thread.start()
+        auth_url = f"{provider.oauth.authorization_url}?{urllib.parse.urlencode(auth_params)}"
 
-        try:
-            state = secrets.token_urlsafe(32)
-            auth_params: dict[str, str] = {
-                "response_type": "code",
-                "client_id": client_id,
-                "redirect_uri": redirect_uri,
-                "state": state,
-                "code_challenge": code_challenge,
-                "code_challenge_method": "S256",
-            }
-            if effective_scopes:
-                auth_params["scope"] = " ".join(effective_scopes)
+        runtime_session.state = "waiting_for_user"
+        runtime_session.payload["auth_url"] = auth_url
+        runtime_session.payload["callback_url"] = redirect_uri
+        runtime_session.payload["internal_code_verifier"] = code_verifier
+        runtime_session.payload["internal_state"] = state
+        runtime_session.payload["internal_scopes"] = json.dumps(effective_scopes)
+        if registered_new_client:
+            runtime_session.payload["internal_client_id"] = client_id
+            if client_secret:
+                runtime_session.payload["internal_client_secret"] = client_secret
 
-            auth_url = f"{provider.oauth.authorization_url}?{urllib.parse.urlencode(auth_params)}"
-            print(f"\nOpening browser for {provider.display_name} authorization...")
-            print(f"If the browser doesn't open, visit:\n{auth_url}\n")
-            webbrowser.open(auth_url)
-            server_thread.join(timeout=_CALLBACK_TIMEOUT_SECONDS)
-        finally:
-            server.server_close()
+    def resume(
+        self,
+        provider: ProviderDefinition,
+        profile: str,
+        connection_name: str,
+        runtime_session: RuntimeSession,
+        callback_data: dict[str, Any],
+        client_id: str | None = None,
+        client_secret: str | None = None,
+    ) -> FlowResult:
+        if provider.oauth is None:
+            raise AuthenticationFailedError("Provider missing 'oauth' configuration", provider=provider.name)
 
-        if _CallbackHandler.error:
-            raise AuthenticationFailedError(f"OAuth error: {_CallbackHandler.error}", provider=provider.name)
-        if not _CallbackHandler.auth_code:
+        error = callback_data.get("error")
+        if error:
+            raise AuthenticationFailedError(f"OAuth error: {error}", provider=provider.name)
+
+        auth_code = callback_data.get("code")
+        if not auth_code:
             raise AuthenticationFailedError("Authorization timed out or no code received", provider=provider.name)
-        if _CallbackHandler.state != state:
+
+        returned_state = callback_data.get("state")
+        expected_state = runtime_session.payload.get("internal_state")
+        if returned_state != expected_state:
             raise AuthenticationFailedError("OAuth state mismatch — potential CSRF attack", provider=provider.name)
+
+        # If DCR registered a client, it's stored in payload
+        if "internal_client_id" in runtime_session.payload:
+            client_id = runtime_session.payload["internal_client_id"]
+            client_secret = runtime_session.payload.get("internal_client_secret")
+            registered_new_client = True
+        else:
+            registered_new_client = False
+
+        if not client_id:
+            raise AuthenticationFailedError("DCR PKCE flow requires a client_id.", provider=provider.name)
+
+        code_verifier = runtime_session.payload.get("internal_code_verifier", "")
+        redirect_uri = runtime_session.payload.get("callback_url", "")
+        effective_scopes = json.loads(runtime_session.payload.get("internal_scopes", "[]"))
 
         token_data = self._exchange_code(
             provider=provider,
-            auth_code=_CallbackHandler.auth_code,
+            auth_code=auth_code,
             redirect_uri=redirect_uri,
             client_id=client_id,
             client_secret=client_secret,
             code_verifier=code_verifier,
         )
+
+        runtime_session.state = "processing"
 
         now = utc_now()
         expires_in = token_data.get("expires_in")
@@ -166,7 +168,7 @@ class DcrPkceFlow(AuthFlow):
                 expires_at=now + timedelta(seconds=int(expires_in)) if expires_in else None,
                 obtained_at=now,
                 account=AccountInfo(),
-                metadata={},
+                metadata={"callback_handled_by": "runtime"},
             ),
             client_record=dcr_client,
         )

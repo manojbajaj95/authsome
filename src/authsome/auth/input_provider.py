@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import getpass
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from authsome.runtime.models import RuntimeSession
 
 
 class InputField(BaseModel):
@@ -34,8 +37,12 @@ class BridgeInputProvider:
         self._title = title
         self._static_fields: list[dict[str, Any]] = static_fields or []
 
-    def collect(self, fields: list[InputField]) -> dict[str, str]:
+    def collect(self, fields: list[InputField], runtime_session: RuntimeSession | None = None) -> dict[str, str]:
         from authsome.auth.flows.bridge import secure_input_bridge
+
+        # Update runtime session with the fields being collected
+        if runtime_session is not None:
+            runtime_session.payload["input_fields"] = ",".join(field.name for field in fields)
 
         bridge_fields: list[dict[str, Any]] = list(self._static_fields)
         for field in fields:

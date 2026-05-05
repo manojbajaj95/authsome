@@ -14,8 +14,8 @@ import click
 import requests
 from loguru import logger
 
-from authsome import __version__, audit
-from authsome.auth.models.enums import ExportFormat, FlowType
+from authsome import FlowType, __version__, audit
+from authsome.auth.models.enums import ExportFormat
 from authsome.context import AuthsomeContext
 from authsome.errors import AuthsomeError
 from authsome.utils import redact
@@ -243,8 +243,9 @@ def cli(ctx: click.Context, verbose: bool, log_file: str) -> None:
 def list_cmd(ctx_obj: ContextObj) -> None:
     """List providers and connection states."""
     actx = ctx_obj.initialize()
-    raw_list = actx.auth.list_connections()
-    by_source = actx.auth.list_providers_by_source()
+    data = actx.runtime_client.list_connections()
+    raw_list = data["connections"]
+    by_source = data["by_source"]
 
     connected: dict[str, list[dict]] = {}
     for provider_group in raw_list:
@@ -417,16 +418,58 @@ def login(
         ctx_obj.echo(f"Starting login for {provider}...", color="cyan")
 
     try:
-        login_result = actx.auth.login_with_result(
+        session_info = actx.runtime_client.start_login(
             provider=provider,
             connection_name=connection,
+            flow_type=flow_enum,
             scopes=scope_list,
-            flow_override=flow_enum,
-            force=force,
             base_url=base_url,
+            force=force,
         )
-        record = login_result.record
-        audit.log("login", provider=provider, connection=connection, flow=record.auth_type.value, status="success")
+        session_id = session_info["session_id"]
+        login_result = {"status": "success"}
+
+        auth_url = session_info.get("payload", {}).get("auth_url")
+        if auth_url:
+            if not ctx_obj.quiet:
+                ctx_obj.echo("Opening browser for authorization...", color="cyan")
+                ctx_obj.echo(f"If the browser doesn't open, visit: {auth_url}", color="cyan")
+            import time
+            import webbrowser
+
+            try:
+                webbrowser.open(auth_url)
+            except Exception:
+                pass
+
+            start_time = time.time()
+            completed = False
+            while time.time() - start_time < 60:
+                time.sleep(1)
+                try:
+                    s_state = actx.runtime_client.get_session(session_id)
+                    if s_state.get("state") == "completed":
+                        completed = True
+                        break
+                except Exception:
+                    pass
+
+            if not completed:
+                if not ctx_obj.quiet:
+                    ctx_obj.echo("Timed out waiting for authorization.", color="red")
+                return
+        else:
+            login_result = actx.runtime_client.complete_login_session(
+                session_id=session_id,
+                provider=provider,
+                connection_name=connection,
+                scopes=scope_list,
+                flow_override=flow,
+                force=force,
+                base_url=base_url,
+            )
+
+        audit.log("login", provider=provider, connection=connection, flow=flow or "unknown", status="success")
     except Exception:
         audit.log("login", provider=provider, connection=connection, status="failure")
         raise
@@ -434,13 +477,13 @@ def login(
     if ctx_obj.json_output:
         ctx_obj.print_json(
             {
-                "status": "already_connected" if login_result.already_connected else "success",
+                "status": login_result.get("status", "success"),
                 "provider": provider,
                 "connection": connection,
-                "record_status": record.status.value,
+                "record_status": login_result.get("record_status", "valid"),
             }
         )
-    elif login_result.already_connected:
+    elif login_result.get("status") == "already_connected":
         ctx_obj.echo(f"Already logged in to {provider} ({connection}).", color="green")
     else:
         ctx_obj.echo(f"Successfully logged in to {provider} ({connection}).", color="green")
@@ -455,7 +498,7 @@ def login(
 def logout(ctx_obj: ContextObj, provider: str, connection: str) -> None:
     """Log out of a connection and remove local state."""
     actx = ctx_obj.initialize()
-    actx.auth.logout(provider, connection)
+    actx.runtime_client.logout(provider, connection)
     audit.log("logout", provider=provider, connection=connection)
 
     if ctx_obj.json_output:
@@ -472,7 +515,7 @@ def logout(ctx_obj: ContextObj, provider: str, connection: str) -> None:
 def revoke(ctx_obj: ContextObj, provider: str) -> None:
     """Complete reset of the provider, removing all connections and client secrets."""
     actx = ctx_obj.initialize()
-    actx.auth.revoke(provider)
+    actx.runtime_client.revoke(provider)
     audit.log("revoke", provider=provider, connection="all")
 
     if ctx_obj.json_output:
@@ -489,7 +532,7 @@ def revoke(ctx_obj: ContextObj, provider: str) -> None:
 def remove(ctx_obj: ContextObj, provider: str) -> None:
     """Uninstall a local provider or reset a bundled one."""
     actx = ctx_obj.initialize()
-    actx.auth.remove(provider)
+    actx.runtime_client.remove(provider)
     audit.log("remove", provider=provider, connection="all")
 
     if ctx_obj.json_output:
@@ -509,7 +552,10 @@ def remove(ctx_obj: ContextObj, provider: str) -> None:
 def get(ctx_obj: ContextObj, provider: str, connection: str, field: str | None, show_secret: bool) -> None:
     """Return provider connection metadata by default."""
     actx = ctx_obj.initialize()
-    record = actx.auth.get_connection(provider, connection)
+    record_dict = actx.runtime_client.get_connection(provider, connection)
+    from authsome.auth.models.connection import ConnectionRecord
+
+    record = ConnectionRecord.model_validate(record_dict)
 
     if show_secret:
         from authsome.utils import require_os_auth
@@ -560,10 +606,11 @@ def get(ctx_obj: ContextObj, provider: str, connection: str, field: str | None, 
 def inspect(ctx_obj: ContextObj, provider: str) -> None:
     """Return provider definition and local connection summary."""
     actx = ctx_obj.initialize()
-    definition = actx.auth.get_provider(provider)
-    data = definition.model_dump(mode="json")
+    definition_dict = actx.runtime_client.get_provider(provider)
+    data = definition_dict
     data["connections"] = []
-    for provider_group in actx.auth.list_connections():
+    connections_data = actx.runtime_client.list_connections()
+    for provider_group in connections_data["connections"]:
         if provider_group["name"] == provider:
             data["connections"] = provider_group["connections"]
             break
@@ -590,8 +637,8 @@ def export(ctx_obj: ContextObj, provider: str | None, connection: str, export_fo
     )
     actx = ctx_obj.initialize()
     fmt = ExportFormat(export_format)
-    output = actx.auth.export(provider, connection, format=fmt)
-    audit.log("export", provider=provider, connection=connection, format=export_format)
+    output = actx.runtime_client.export(provider, connection, format=fmt)
+    audit.log("export", provider=provider, connection=connection, format=fmt.value)
     if output:
         click.echo(output)
 
@@ -604,7 +651,7 @@ def export(ctx_obj: ContextObj, provider: str | None, connection: str, export_fo
 def run(ctx_obj: ContextObj, command: tuple[str]) -> None:
     """Run a subprocess behind the local auth proxy."""
     actx = ctx_obj.initialize()
-    result = actx.proxy.run(list(command))
+    result = actx.require_local_proxy().run(list(command))
     sys.exit(result.returncode)
 
 
@@ -649,7 +696,7 @@ def register(ctx_obj: ContextObj, path: str, force: bool) -> None:
                 ctx_obj.echo("Registration aborted.", color="yellow")
                 sys.exit(0)
 
-        actx.auth.register_provider(definition, force=force)
+        actx.runtime_client.register_provider(definition.model_dump(mode="json"), force=force)
 
         endpoints = [ep for _, ep, _ in endpoints_to_check]
         audit.log("register", provider=definition.name, endpoints=endpoints)
@@ -693,33 +740,17 @@ def register(ctx_obj: ContextObj, path: str, force: bool) -> None:
 def whoami(ctx_obj: ContextObj) -> None:
     """Show basic local context."""
     actx = ctx_obj.initialize()
-    from authsome.auth.models.config import GlobalConfig
 
-    home = actx.home
-    config_path = home / "config.json"
-    config = GlobalConfig()
-    if config_path.exists():
-        try:
-            config = GlobalConfig.model_validate_json(config_path.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-
-    # Basic health check
+    # Get info from daemon
+    whoami_data = actx.runtime_client.whoami()
     doctor_results = actx.doctor()
-    vault_status = "OK" if (doctor_results.get("encryption") and doctor_results.get("store")) else "ERROR"
 
-    # Encryption details
-    enc_mode = config.encryption.mode if config.encryption else "local_key"
-    if enc_mode == "local_key":
-        enc_desc = f"Local File ({home / 'master.key'})"
-    elif enc_mode == "keyring":
-        enc_desc = "OS Keyring"
-    else:
-        enc_desc = enc_mode
+    vault_status = "OK" if (doctor_results.get("encryption") and doctor_results.get("store")) else "ERROR"
 
     # Connected providers with counts
     connected_providers = []
-    for provider_group in actx.auth.list_connections():
+    connections_data = actx.runtime_client.list_connections()
+    for provider_group in connections_data["connections"]:
         active_conns = [c["connection_name"] for c in provider_group["connections"] if connection_is_active(c)]
         if active_conns:
             connected_providers.append(
@@ -731,10 +762,10 @@ def whoami(ctx_obj: ContextObj) -> None:
             )
 
     data = {
-        "authsome_version": __version__,
-        "home_directory": str(home),
-        "active_profile": actx.auth.identity,
-        "encryption_backend": enc_desc,
+        "authsome_version": whoami_data["version"],
+        "home_directory": whoami_data["home"],
+        "active_profile": whoami_data["active_profile"],
+        "encryption_backend": whoami_data["encryption_backend"],
         "vault_status": vault_status,
         "connected_providers_count": len(connected_providers),
         "connected_providers": connected_providers,
@@ -790,6 +821,35 @@ def doctor(ctx_obj: ContextObj) -> None:
 
         if not all_ok:
             sys.exit(1)
+
+
+@cli.command()
+@click.option("--host", default="127.0.0.1", help="Host address to bind to.")
+@click.option("--port", type=int, default=7998, help="Port to listen on.")
+@common_options
+@pass_ctx
+@handle_errors
+def daemon(ctx_obj: ContextObj, host: str, port: int) -> None:
+    """Start the daemon server."""
+    actx = ctx_obj.initialize()
+    server = actx.runtime_server
+    if not server:
+        raise AuthsomeError("Runtime server is not available in current context.")
+
+    ctx_obj.echo(f"Starting runtime daemon server on http://{host}:{port}...", color="cyan")
+    running = server.start(host=host, port=port)
+    ctx_obj.echo(f"Daemon listening on: {running.url}", color="green")
+    ctx_obj.echo("Operator UI available at: " + running.url + "/ui", color="green")
+
+    import time
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        ctx_obj.echo("\nStopping daemon...", color="yellow")
+        running.shutdown()
+        ctx_obj.echo("Daemon stopped.", color="green")
 
 
 if __name__ == "__main__":

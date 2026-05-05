@@ -9,15 +9,15 @@ from pathlib import Path
 
 from loguru import logger
 
-from authsome.auth import AuthLayer
 from authsome.proxy.server import RunningProxy, start_proxy_server
+from authsome.runtime.client import RuntimeClient
 
 
 class ProxyRunner:
     """Launch a subprocess behind the Authsome local auth proxy."""
 
-    def __init__(self, auth: AuthLayer) -> None:
-        self._auth = auth
+    def __init__(self, client: RuntimeClient) -> None:
+        self._client = client
 
     def run(self, command: list[str]) -> subprocess.CompletedProcess[str]:
         """Run *command* behind the auth-injecting proxy."""
@@ -59,19 +59,24 @@ class ProxyRunner:
                     pass
 
     def _start_proxy(self) -> tuple[str, RunningProxy]:
-        server = start_proxy_server(self._auth)
+        server = start_proxy_server(self._client)
         return server.url, server
 
     def _inject_dummy_credentials(self, env: dict[str, str]) -> None:
-        connected_names = {entry["name"] for entry in self._auth.list_connections()}
-        for provider in self._auth.list_providers():
-            if provider.name not in connected_names:
-                continue
-            if not provider.export or not provider.export.env:
-                continue
-            for env_var in provider.export.env.values():
-                env[env_var] = "authsome-proxy-managed"
-                logger.debug("Set dummy env var {} for provider {}", env_var, provider.name)
+        connections_data = self._client.list_connections()
+        connected_names = {entry["name"] for entry in connections_data["connections"]}
+        from authsome.auth.models.provider import ProviderDefinition
+
+        for source_providers in connections_data["by_source"].values():
+            for provider_dict in source_providers:
+                provider = ProviderDefinition.model_validate(provider_dict)
+                if provider.name not in connected_names:
+                    continue
+                if not provider.export or not provider.export.env:
+                    continue
+                for env_var in provider.export.env.values():
+                    env[env_var] = "authsome-proxy-managed"
+                    logger.debug("Set dummy env var {} for provider {}", env_var, provider.name)
 
     @staticmethod
     def _build_ca_bundle(server: RunningProxy) -> Path | None:
