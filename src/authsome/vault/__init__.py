@@ -13,9 +13,7 @@ from __future__ import annotations
 
 import builtins
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-from authsome.store.interfaces import AppStore, VaultStorage
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from authsome.vault.crypto import VaultCrypto
@@ -35,7 +33,7 @@ class Vault:
 
     def __init__(
         self,
-        app_store: AppStore,
+        app_store: Any,
         crypto: VaultCrypto | None = None,
         crypto_mode: str = "local_key",
         master_key_path: Path | None = None,
@@ -79,7 +77,7 @@ class Vault:
 
     def close(self) -> None:
         """Close all open storage connections."""
-        # Vault doesn't own the connections anymore, the AppStore does.
+        # Vault doesn't own the connections; local storage does.
         pass
 
     def __enter__(self) -> Vault:
@@ -90,5 +88,5 @@ class Vault:
 
     # ── Internal ──────────────────────────────────────────────────────────
 
-    def _storage(self, profile: str) -> VaultStorage:
+    def _storage(self, profile: str) -> Any:
         return self._app_store.get_vault_storage(profile)

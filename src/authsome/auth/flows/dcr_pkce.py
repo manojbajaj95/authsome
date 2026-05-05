@@ -20,7 +20,7 @@ from authsome.errors import AuthenticationFailedError, DiscoveryError
 from authsome.utils import utc_now
 
 if TYPE_CHECKING:
-    from authsome.runtime.models import RuntimeSession
+    from authsome.auth.sessions import AuthSession
 
 _CALLBACK_TIMEOUT_SECONDS = 300
 
@@ -42,7 +42,7 @@ class DcrPkceFlow(AuthFlow):
         provider: ProviderDefinition,
         profile: str,
         connection_name: str,
-        runtime_session: RuntimeSession,
+        runtime_session: AuthSession,
         scopes: list[str] | None = None,
         client_id: str | None = None,
         client_secret: str | None = None,
@@ -60,7 +60,7 @@ class DcrPkceFlow(AuthFlow):
         assert client_id is not None  # guaranteed: either passed in or registered above
 
         code_verifier, code_challenge = _generate_pkce()
-        redirect_uri = "http://127.0.0.1:7998/v1/callbacks/dcr_pkce"
+        redirect_uri = str(runtime_session.payload.get("callback_url_override", "http://127.0.0.1:7998/auth/callback/oauth"))
 
         state = secrets.token_urlsafe(32)
         auth_params: dict[str, str] = {
@@ -92,7 +92,7 @@ class DcrPkceFlow(AuthFlow):
         provider: ProviderDefinition,
         profile: str,
         connection_name: str,
-        runtime_session: RuntimeSession,
+        runtime_session: AuthSession,
         callback_data: dict[str, Any],
         client_id: str | None = None,
         client_secret: str | None = None,
@@ -202,7 +202,7 @@ class DcrPkceFlow(AuthFlow):
         reg_endpoint = provider.oauth.registration_endpoint or self._discover_registration_endpoint(provider)
         dcr_payload: dict[str, Any] = {
             "client_name": f"authsome-{provider.name}",
-            "redirect_uris": ["http://127.0.0.1/callback"],
+            "redirect_uris": ["http://127.0.0.1:7998/auth/callback/oauth"],
             "grant_types": ["authorization_code", "refresh_token"],
             "response_types": ["code"],
             "token_endpoint_auth_method": "client_secret_post",

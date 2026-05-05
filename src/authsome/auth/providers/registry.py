@@ -11,7 +11,7 @@ from loguru import logger
 from authsome.auth.models.enums import AuthType, FlowType
 from authsome.auth.models.provider import ProviderDefinition
 from authsome.errors import InvalidProviderSchemaError, ProviderNotFoundError
-from authsome.store.interfaces import AppStore
+from authsome.store.local import LocalAppStore
 from authsome.utils import is_filesystem_safe
 
 _VALID_FLOWS: dict[AuthType, set[FlowType]] = {
@@ -40,8 +40,8 @@ def load_bundled_providers() -> dict[str, ProviderDefinition]:
 class ProviderRegistry:
     """Resolves provider definitions from custom stores and bundled package data."""
 
-    def __init__(self, app_store: AppStore) -> None:
-        """Initialize the registry with an AppStore for custom provider persistence."""
+    def __init__(self, app_store: LocalAppStore) -> None:
+        """Initialize the registry with local custom provider persistence."""
         self._app_store = app_store
         self._bundled: dict[str, ProviderDefinition] = load_bundled_providers()
 

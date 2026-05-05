@@ -7,6 +7,7 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Protocol
 from urllib.parse import urlparse
 
 from loguru import logger
@@ -16,7 +17,6 @@ from mitmproxy.options import Options
 from mitmproxy.tools.dump import DumpMaster
 
 from authsome.proxy.router import RouteMatch
-from authsome.runtime.client import RuntimeClient
 from authsome.utils import utc_now
 
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
@@ -24,6 +24,16 @@ _HEADER_REFRESH_WINDOW = timedelta(seconds=300)
 _REGEX_HOST_PREFIX = "regex:"
 _HOST_SPECIFICITY_REGEX = 0
 _HOST_SPECIFICITY_EXACT = 1
+
+
+class ProxyClient(Protocol):
+    def list_connections(self) -> dict: ...
+
+    def get_provider(self, provider: str) -> dict: ...
+
+    def resolve_credentials(self, **kwargs) -> dict: ...
+
+    def proxy_routes(self) -> dict: ...
 
 
 @dataclass(frozen=True)
@@ -49,7 +59,7 @@ class _HeaderCacheEntry:
 class ProxyRouter:
     """Cached provider route table for proxy request matching."""
 
-    def __init__(self, client: RuntimeClient) -> None:
+    def __init__(self, client: ProxyClient) -> None:
         self._routes_by_host, self._regex_routes = self._build_routes(client)
 
     def route(self, scheme: str, host: str, port: int, path: str) -> RouteMatch | None:
@@ -92,18 +102,51 @@ class ProxyRouter:
 
     @staticmethod
     def _build_routes(
-        client: RuntimeClient,
+        client: ProxyClient,
     ) -> tuple[dict[str, tuple[_RouteTarget, ...]], tuple[_RegexRouteTarget, ...]]:
         routes_by_host: dict[str, list[_RouteTarget]] = {}
         regex_routes: list[_RegexRouteTarget] = []
         from authsome.auth.models.provider import ProviderDefinition
 
+        if hasattr(client, "proxy_routes"):
+            try:
+                route_data = client.proxy_routes()
+                for route in route_data.get("routes", []):
+                    route_match = RouteMatch(provider=route["provider"], connection=route.get("connection"))
+                    regex_pattern = _compile_host_regex(route["host_url"])
+                    auth_paths = frozenset(route.get("auth_endpoint_paths", []))
+                    if regex_pattern is not None:
+                        regex_routes.append(
+                            _RegexRouteTarget(
+                                host_pattern=regex_pattern,
+                                target=_RouteTarget(
+                                    match=route_match,
+                                    path_prefix=None,
+                                    auth_endpoint_paths=auth_paths,
+                                    host_specificity=_HOST_SPECIFICITY_REGEX,
+                                ),
+                            )
+                        )
+                        continue
+                    host, path_prefix = _parse_host_url(route["host_url"])
+                    if not host or host in _LOOPBACK_HOSTS:
+                        continue
+                    routes_by_host.setdefault(host, []).append(
+                        _RouteTarget(
+                            match=route_match,
+                            path_prefix=path_prefix,
+                            auth_endpoint_paths=auth_paths,
+                            host_specificity=_HOST_SPECIFICITY_EXACT,
+                        )
+                    )
+                return {host: tuple(routes) for host, routes in routes_by_host.items()}, tuple(regex_routes)
+            except Exception as exc:
+                logger.warning("Could not load daemon proxy routes, falling back to local route build: {}", exc)
+
         connections_data = client.list_connections()
         for provider_group in connections_data["connections"]:
             provider_name = provider_group["name"]
-            selected_connections = [
-                conn for conn in provider_group["connections"] if conn["connection_name"] == "default"
-            ]
+            selected_connections = provider_group["connections"]
 
             try:
                 definition_dict = client.get_provider(provider_name)
@@ -118,7 +161,7 @@ class ProxyRouter:
                     continue
 
                 resolved = definition.resolve_urls(conn.get("base_url"))
-                route_match = RouteMatch(provider=provider_name, connection=conn["connection_name"])
+                route_match = RouteMatch(provider=provider_name, connection=conn.get("connection_name"))
                 regex_pattern = _compile_host_regex(target_host_url)
                 if regex_pattern is not None:
                     regex_routes.append(
@@ -151,7 +194,7 @@ class ProxyRouter:
         return {host: tuple(routes) for host, routes in routes_by_host.items()}, tuple(regex_routes)
 
 
-def _route(client: RuntimeClient, scheme: str, host: str, port: int, path: str) -> RouteMatch | None:
+def _route(client: ProxyClient, scheme: str, host: str, port: int, path: str) -> RouteMatch | None:
     """Return a RouteMatch when exactly one connected provider matches the request.
 
     Returns None for loopback targets, OAuth endpoints, zero matches, or ambiguous matches.
@@ -262,7 +305,7 @@ class AuthProxyAddon:
     Credential resolution goes through the runtime client.
     """
 
-    def __init__(self, client: RuntimeClient) -> None:
+    def __init__(self, client: ProxyClient) -> None:
         self._client = client
         self._router = ProxyRouter(client)
         self._header_cache: dict[tuple[str, str], _HeaderCacheEntry] = {}
@@ -287,7 +330,7 @@ class AuthProxyAddon:
             flow.request.headers[key] = value
 
     def _get_auth_headers(self, match: RouteMatch) -> dict[str, str]:
-        cache_key = (match.provider, match.connection)
+        cache_key = (match.provider, match.connection or "")
         now = utc_now()
         cached = self._header_cache.get(cache_key)
         if cached and _header_cache_valid(cached, now):
@@ -303,17 +346,19 @@ class AuthProxyAddon:
             # Resolve through runtime client
             headers_resp = self._client.resolve_credentials(
                 provider=match.provider,
-                connection_name=match.connection,
+                connection=match.connection,
             )
             headers = headers_resp["headers"]
+            expires_at_raw = headers_resp.get("expires_at")
+            expires_at = (
+                datetime.fromisoformat(expires_at_raw.replace("Z", "+00:00"))
+                if isinstance(expires_at_raw, str)
+                else expires_at_raw
+            )
 
-            record_dict = self._client.get_connection(match.provider, match.connection)
-            from authsome.auth.models.connection import ConnectionRecord
-
-            record = ConnectionRecord.model_validate(record_dict)
             self._header_cache[cache_key] = _HeaderCacheEntry(
                 headers=headers.copy(),
-                expires_at=record.expires_at,
+                expires_at=expires_at,
             )
             return headers
 
@@ -383,7 +428,7 @@ def _build_proxy_options(host: str, port: int, confdir: Path) -> Options:
 
 
 def start_proxy_server(
-    client: RuntimeClient,
+    client: ProxyClient,
     host: str = "127.0.0.1",
     port: int = 0,
 ) -> RunningProxy:
