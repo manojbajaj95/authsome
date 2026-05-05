@@ -10,9 +10,9 @@ description: "Use `authsome run` to inject auth headers into outbound requests w
 Make sure you are logged in to every provider the agent will hit:
 
 ```bash
-authsome login github
-authsome login openai
-authsome list
+uvx authsome login github
+uvx authsome login openai
+uvx authsome list
 ```
 
 For an overview of how the proxy works, see [Proxy injection](/concepts/proxy-injection).
@@ -20,7 +20,7 @@ For an overview of how the proxy works, see [Proxy injection](/concepts/proxy-in
 ## Run a command
 
 ```bash
-authsome run -- python my_agent.py
+uvx authsome run -- python my_agent.py
 ```
 
 Everything after `--` is the command and its arguments. Authsome:
@@ -37,7 +37,7 @@ Everything after `--` is the command and its arguments. Authsome:
 Check the environment authsome injects:
 
 ```bash
-authsome run -- env | grep -E 'PROXY|OPENAI|GITHUB'
+uvx authsome run -- env | grep -E 'PROXY|OPENAI|GITHUB'
 ```
 
 You should see:
@@ -48,7 +48,7 @@ You should see:
 Make a real call through the proxy:
 
 ```bash
-authsome run -- curl -s https://api.openai.com/v1/models | head -5
+uvx authsome run -- curl -s https://api.openai.com/v1/models | head -5
 ```
 
 You should get a JSON response from OpenAI rather than an authentication error.

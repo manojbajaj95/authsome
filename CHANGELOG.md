@@ -40,7 +40,6 @@
 ### Bug Fixes
 
 * set connection host_url directly from resolved definition ([149b347](https://github.com/manojbajaj95/authsome/commit/149b34705a8d107d99352faac15671c4ed975112))
-* set connection host_url directly from resolved definition ([b8f499a](https://github.com/manojbajaj95/authsome/commit/b8f499a7e12aa0b1f9e6e6f714d230f75afba23f))
 
 ## [0.2.0](https://github.com/manojbajaj95/authsome/compare/authsome-v0.1.12...authsome-v0.2.0) (2026-04-28)
 
@@ -53,7 +52,6 @@
 
 * add --verbose and --log-file options to CLI with loguru sinks ([0058f09](https://github.com/manojbajaj95/authsome/commit/0058f09cd643eeecde7e902c66db35b7c8b17695))
 * add base URL templating support for providers ([ee172db](https://github.com/manojbajaj95/authsome/commit/ee172dbbeed1cc1761a9eb52901d22e39060cad8))
-* add host_url support to auth connections and update proxy serve… ([72a478d](https://github.com/manojbajaj95/authsome/commit/72a478df7953ec5cc5ddca409ff8091f46810bd5))
 * add host_url support to auth connections and update proxy server to match based on resolved connection hosts ([73c5f72](https://github.com/manojbajaj95/authsome/commit/73c5f7259840b3e4d2caeb83e8b71c34590de602))
 * add support for dynamic URL templating using {base_url} in provider definitions and CLI ([156ecf0](https://github.com/manojbajaj95/authsome/commit/156ecf0cbfb8f1fa282e73cd0df695e017353a9c))
 * added support for docs in providers ([#85](https://github.com/manojbajaj95/authsome/issues/85)) ([f112275](https://github.com/manojbajaj95/authsome/commit/f11227528ae02b75eb70d5b07f5f50abc733d482))

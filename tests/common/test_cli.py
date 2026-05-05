@@ -259,6 +259,7 @@ def test_error_mapping(runner, mock_ctx):
     from authsome.errors import (
         AuthenticationFailedError,
         CredentialMissingError,
+        InputCancelledError,
         RefreshFailedError,
     )
 
@@ -273,6 +274,10 @@ def test_error_mapping(runner, mock_ctx):
     mock_ctx.auth.login_with_result.side_effect = AuthenticationFailedError("fail")
     result = runner.invoke(cli, ["login", "test"])
     assert result.exit_code == 4
+
+    mock_ctx.auth.login_with_result.side_effect = InputCancelledError()
+    result = runner.invoke(cli, ["login", "test"])
+    assert result.exit_code == 8
 
     mock_ctx.auth.login_with_result.side_effect = CredentialMissingError("missing", provider="test")
     result = runner.invoke(cli, ["login", "test"])

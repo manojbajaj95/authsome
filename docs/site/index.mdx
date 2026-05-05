@@ -6,9 +6,8 @@ description: "Local auth for AI agents. Log in once via OAuth2 or API key. Auths
 Authsome is a local credential layer for AI agents. You authenticate once with a provider (GitHub, Google, OpenAI, Linear, and more) and authsome keeps the credentials fresh for every agent run that follows.
 
 ```bash
-pip install authsome
-authsome login github
-authsome run -- python my_agent.py
+uvx authsome login github
+uvx authsome run -- python my_agent.py
 ```
 
 ## Why agents need this

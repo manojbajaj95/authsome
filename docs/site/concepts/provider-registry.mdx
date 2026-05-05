@@ -18,10 +18,10 @@ This means you can override any bundled provider — for example, to point GitHu
 
 ## Provider sources
 
-`authsome list` shows whether each provider came from the bundled set or from a user-registered file.
+`uvx authsome list` shows whether each provider came from the bundled set or from a user-registered file.
 
 ```text
-$ authsome list
+$ uvx authsome list
 Providers: 35 total, 2 connected
 
 Provider                     Source    Auth      Connection  Status
@@ -108,14 +108,14 @@ For services where the base URL varies per deployment (GitHub Enterprise, Okta, 
 }
 ```
 
-During `authsome login`, the user is prompted for the base URL with the JSON value as the default. A custom base URL is saved to the profile and used for all future token refreshes on that connection.
+During `uvx authsome login`, the user is prompted for the base URL with the JSON value as the default. A custom base URL is saved to the profile and used for all future token refreshes on that connection.
 
 ## Adding your own providers
 
 Two ways:
 
 1. **Drop a file at `~/.authsome/providers/<name>.json`.** Authsome picks it up on the next CLI invocation.
-2. **Register through the CLI.** `authsome register ./acmecrm.json` validates the JSON, copies it into `~/.authsome/providers/`, and confirms the new provider appears in `authsome list`.
+2. **Register through the CLI.** `uvx authsome register ./acmecrm.json` validates the JSON, copies it into `~/.authsome/providers/`, and confirms the new provider appears in `uvx authsome list`.
 
 See [Custom providers](/guides/custom-providers) for a full walkthrough.
 
@@ -124,7 +124,7 @@ See [Custom providers](/guides/custom-providers) for a full walkthrough.
 To override a bundled provider — for example, to add a scope to GitHub — copy the bundled JSON, edit it, and place it under `~/.authsome/providers/github.json`. Authsome resolves your file first.
 
 ```bash
-authsome inspect github > ~/.authsome/providers/github.json
+uvx authsome inspect github > ~/.authsome/providers/github.json
 # edit the file
-authsome list   # source now shows "custom" for github
+uvx authsome list   # source now shows "custom" for github
 ```

@@ -39,8 +39,8 @@ All commands support `--json` for machine-readable output, `--quiet` to suppress
 ### `whoami` / `doctor`
 
 ```bash
-authsome whoami           # show home directory and encryption mode
-authsome doctor           # run health checks
+uvx authsome whoami           # show home directory and encryption mode
+uvx authsome doctor           # run health checks
 ```
 
 `doctor` exits with `0` if all checks pass and a non-zero code otherwise. Use `--json` for structured output suitable for monitoring.
@@ -48,9 +48,9 @@ authsome doctor           # run health checks
 ### `list` / `inspect`
 
 ```bash
-authsome list                      # all providers + connection states
-authsome inspect github            # full provider definition
-authsome inspect github --json     # same, as JSON
+uvx authsome list                      # all providers + connection states
+uvx authsome inspect github            # full provider definition
+uvx authsome inspect github --json     # same, as JSON
 ```
 
 `list` shows three states per provider — `available`, `configured`, `connected`. See [Credential storage](/concepts/credential-storage#the-three-states) for the state model.
@@ -58,7 +58,7 @@ authsome inspect github --json     # same, as JSON
 ### `login`
 
 ```bash
-authsome login <provider> [OPTIONS]
+uvx authsome login <provider> [OPTIONS]
 ```
 
 | Option | Description |
@@ -72,11 +72,11 @@ authsome login <provider> [OPTIONS]
 Examples:
 
 ```bash
-authsome login github                       # OAuth2 PKCE flow
-authsome login github --flow device_code    # headless OAuth2
-authsome login openai                       # API-key flow via browser bridge
-authsome login github --connection work     # second connection on the same provider
-authsome login okta --base-url https://acme.okta.com
+uvx authsome login github                       # OAuth2 PKCE flow
+uvx authsome login github --flow device_code    # headless OAuth2
+uvx authsome login openai                       # API-key flow via browser bridge
+uvx authsome login github --connection work     # second connection on the same provider
+uvx authsome login okta --base-url https://acme.okta.com
 ```
 
 <Warning>
@@ -86,7 +86,7 @@ authsome login okta --base-url https://acme.okta.com
 ### `get`
 
 ```bash
-authsome get <provider> [OPTIONS]
+uvx authsome get <provider> [OPTIONS]
 ```
 
 | Option | Description |
@@ -96,15 +96,15 @@ authsome get <provider> [OPTIONS]
 | `--show-secret` | Reveal encrypted secret values in output. |
 
 ```bash
-authsome get github                                  # metadata, secrets redacted
-authsome get github --field status                   # → connected
-authsome get github --field access_token --show-secret
+uvx authsome get github                                  # metadata, secrets redacted
+uvx authsome get github --field status                   # → connected
+uvx authsome get github --field access_token --show-secret
 ```
 
 ### `export`
 
 ```bash
-authsome export <provider> [OPTIONS]
+uvx authsome export <provider> [OPTIONS]
 ```
 
 | Option | Description |
@@ -113,8 +113,8 @@ authsome export <provider> [OPTIONS]
 | `--format <fmt>` | Output format: `env` (default) or `json`. |
 
 ```bash
-authsome export github --format env       # KEY=value lines
-authsome export openai --format json      # JSON object
+uvx authsome export github --format env       # KEY=value lines
+uvx authsome export openai --format json      # JSON object
 ```
 
 Only the `access_token` (OAuth2) or `api_key` (API-key) is exported. Refresh tokens are never exposed — authsome handles refresh transparently.
@@ -122,14 +122,14 @@ Only the `access_token` (OAuth2) or `api_key` (API-key) is exported. Refresh tok
 ### `run`
 
 ```bash
-authsome run -- <command> [args...]
+uvx authsome run -- <command> [args...]
 ```
 
 Runs `<command>` behind a local HTTP proxy that injects auth headers into matched outbound requests. The child process never sees the raw secret.
 
 ```bash
-authsome run -- python my_agent.py
-authsome run -- curl https://api.openai.com/v1/models
+uvx authsome run -- python my_agent.py
+uvx authsome run -- curl https://api.openai.com/v1/models
 ```
 
 How it works:
@@ -152,15 +152,15 @@ See [Proxy injection](/concepts/proxy-injection) for the routing contract.
 | `remove` | Removes the provider entirely (custom) or resets to bundled (bundled) | Not contacted |
 
 ```bash
-authsome logout github --connection work
-authsome revoke github
-authsome remove acmecrm
+uvx authsome logout github --connection work
+uvx authsome revoke github
+uvx authsome remove acmecrm
 ```
 
 ### `register`
 
 ```bash
-authsome register <path/to/provider.json> [--force]
+uvx authsome register <path/to/provider.json> [--force]
 ```
 
 Validates the JSON, copies it into `~/.authsome/providers/`, and confirms the new provider appears in `authsome list`. Use `--force` to overwrite an existing provider with the same name.
@@ -170,9 +170,9 @@ See [Custom providers](/guides/custom-providers) for full templates.
 ### `log`
 
 ```bash
-authsome log              # last 50 audit entries
-authsome log -n 200       # last 200
-authsome log --json       # one JSON object per line, parsed
+uvx authsome log              # last 50 audit entries
+uvx authsome log -n 200       # last 200
+uvx authsome log --json       # one JSON object per line, parsed
 ```
 
 Reads from `~/.authsome/audit.log`. Each entry records actions like `login`, `logout`, `revoke`, `export`, and `get --show-secret`.
@@ -189,5 +189,6 @@ Reads from `~/.authsome/audit.log`. Each entry records actions like `login`, `lo
 | `5` | Credential missing |
 | `6` | Refresh failed |
 | `7` | Store unavailable |
+| `8` | User cancelled credential entry |
 
 When `--json` is passed and a command fails, the structured output includes an `error` and `message` key on stderr-friendly format.
