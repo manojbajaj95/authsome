@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents (Claude Code, Codex, Copilot, etc.) when working with this repository.
 
 ## Commands
 
@@ -41,6 +41,52 @@ uv run authsome init
 uv run authsome login github
 uv run authsome list
 ```
+
+## Engineering principles
+
+> For the full set of contribution guidelines, design principles, and AI-assisted development practices, see [CONTRIBUTING.md](CONTRIBUTING.md). Everything in that document applies to AI agents as well as human contributors.
+
+
+
+These rules govern all changes to this codebase — apply them without exception.
+
+**YAGNI.** Implement only what the current task demands. Don't build for hypothetical future requirements.
+
+**Use trusted libraries over reinventing.** Reach for a well-maintained dependency before writing your own crypto, HTTP client, or token parser.
+
+**Deep modules over shallow ones.** Prefer a small surface area with rich internals over many thin wrappers. More files is not more modular.
+
+**Single responsibility and separation of concerns.** Auth authenticates. Vault stores credentials. CLI presents output. A flow must not write to storage; storage must not know about OAuth. If a function is hard to name, it's doing too many things.
+
+**No premature optimization.** Don't add caching, batching, or concurrency before a measured performance problem exists. Simple and slow is fixable; complex and wrong is not.
+
+**Don't do it just because you can.** Clever is a cost. If a feature, abstraction, or refactor doesn't solve a real problem that exists today, skip it.
+
+**Leave it better than you found it.** Fix a nearby typo, remove a dead import, or clarify a confusing comment while you're in the area — not the whole file, just the immediate vicinity.
+
+**Comment the why, not the what.** Use Google-style docstrings for public interfaces. Inline comments explain non-obvious invariants, workarounds, or hidden constraints — not what the code already says.
+
+**Update docs with code.** If you change behavior, update the relevant docstring, `README.md`, or `CONTRIBUTING.md` in the same commit.
+
+## AI agent rules
+
+**Verify before claiming done.** Run `uv run pytest`, `uv run ruff check`, and `uv run ty check`. Confirm they pass before stating work is complete. Never assume.
+
+**Minimal blast radius.** Change only what was asked. Don't refactor, rename, or reorganize while implementing a feature — save cleanup for a dedicated commit.
+
+**Surface uncertainty.** If multiple valid approaches exist, present the tradeoffs. Don't silently pick one and hide the decision.
+
+**No hallucinated APIs.** If unsure a method or parameter exists, search the codebase before using it.
+
+**Read before write.** Understand the existing implementation before modifying it.
+
+**Prefer reversible changes.** Avoid destructive operations without explicit user confirmation.
+
+**Small, focused commits.** One logical change per commit. Resist the urge to batch unrelated changes.
+
+**Explain the why in commit messages.** The diff shows what changed; the message says why.
+
+---
 
 ## Conventions
 
