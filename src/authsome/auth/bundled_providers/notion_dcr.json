@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "name": "notion_dcr",
+  "display_name": "Notion (DCR)",
+  "auth_type": "oauth2",
+  "flow": "dcr_pkce",
+  "oauth": {
+    "authorization_url": "https://mcp.notion.com/authorize",
+    "token_url": "https://mcp.notion.com/token",
+    "revocation_url": "https://mcp.notion.com/token",
+    "registration_endpoint": "https://mcp.notion.com/register",
+    "device_authorization_url": null,
+    "scopes": [],
+    "pkce": true,
+    "supports_device_flow": false,
+    "supports_dcr": true
+  },
+  "export": {
+    "env": {
+      "access_token": "NOTION_ACCESS_TOKEN",
+      "refresh_token": "NOTION_REFRESH_TOKEN"
+    }
+  },
+  "host_url": "mcp.notion.com"
+}
