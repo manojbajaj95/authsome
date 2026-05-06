@@ -6,17 +6,27 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import Protocol
 
 from loguru import logger
 
 from authsome.proxy.server import RunningProxy, start_proxy_server
-from authsome.runtime.client import RuntimeClient
+
+
+class ProxyClient(Protocol):
+    def list_connections(self) -> dict: ...
+
+    def get_provider(self, provider: str) -> dict: ...
+
+    def resolve_credentials(self, **kwargs) -> dict: ...
+
+    def proxy_routes(self) -> dict: ...
 
 
 class ProxyRunner:
     """Launch a subprocess behind the Authsome local auth proxy."""
 
-    def __init__(self, client: RuntimeClient) -> None:
+    def __init__(self, client: ProxyClient) -> None:
         self._client = client
 
     def run(self, command: list[str]) -> subprocess.CompletedProcess[str]:

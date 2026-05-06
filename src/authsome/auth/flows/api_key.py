@@ -13,7 +13,7 @@ from authsome.errors import AuthenticationFailedError
 from authsome.utils import utc_now
 
 if TYPE_CHECKING:
-    from authsome.runtime.models import RuntimeSession
+    from authsome.auth.sessions import AuthSession
 
 
 class ApiKeyFlow(AuthFlow):
@@ -24,7 +24,7 @@ class ApiKeyFlow(AuthFlow):
         provider: ProviderDefinition,
         profile: str,
         connection_name: str,
-        runtime_session: RuntimeSession,
+        runtime_session: AuthSession,
         scopes: list[str] | None = None,
         client_id: str | None = None,
         client_secret: str | None = None,
@@ -41,7 +41,7 @@ class ApiKeyFlow(AuthFlow):
         provider: ProviderDefinition,
         profile: str,
         connection_name: str,
-        runtime_session: RuntimeSession,
+        runtime_session: AuthSession,
         callback_data: dict[str, Any],
         client_id: str | None = None,
         client_secret: str | None = None,
@@ -49,8 +49,8 @@ class ApiKeyFlow(AuthFlow):
         if provider.api_key is None:
             raise AuthenticationFailedError("Provider missing 'api_key' configuration", provider=provider.name)
 
-        api_key = callback_data.get("api_key")
-        if not api_key or not api_key.strip():
+        api_key = runtime_session.payload.get("api_key")
+        if not api_key or not str(api_key).strip():
             raise AuthenticationFailedError("API key cannot be empty", provider=provider.name)
 
         cleaned_key = api_key.strip()

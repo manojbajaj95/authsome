@@ -20,7 +20,7 @@ from authsome.errors import AuthenticationFailedError
 from authsome.utils import utc_now
 
 if TYPE_CHECKING:
-    from authsome.runtime.models import RuntimeSession
+    from authsome.auth.sessions import AuthSession
 
 _CALLBACK_TIMEOUT_SECONDS = 300
 
@@ -42,7 +42,7 @@ class PkceFlow(AuthFlow):
         provider: ProviderDefinition,
         profile: str,
         connection_name: str,
-        runtime_session: RuntimeSession,
+        runtime_session: AuthSession,
         scopes: list[str] | None = None,
         client_id: str | None = None,
         client_secret: str | None = None,
@@ -59,7 +59,9 @@ class PkceFlow(AuthFlow):
         # We assume the daemon or some orchestrator will handle the redirect
         # so we instruct the provider to redirect to the RuntimeServer callbacks endpoint.
         # But for now, we can just use localhost:7998
-        redirect_uri = "http://127.0.0.1:7998/v1/callbacks/pkce"
+        redirect_uri = str(
+            runtime_session.payload.get("callback_url_override", "http://127.0.0.1:7998/auth/callback/oauth")
+        )
 
         state = secrets.token_urlsafe(32)
         auth_params: dict[str, str] = {
@@ -87,7 +89,7 @@ class PkceFlow(AuthFlow):
         provider: ProviderDefinition,
         profile: str,
         connection_name: str,
-        runtime_session: RuntimeSession,
+        runtime_session: AuthSession,
         callback_data: dict[str, Any],
         client_id: str | None = None,
         client_secret: str | None = None,

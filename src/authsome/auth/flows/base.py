@@ -10,7 +10,7 @@ from authsome.auth.models.connection import ConnectionRecord, ProviderClientReco
 from authsome.auth.models.provider import ProviderDefinition
 
 if TYPE_CHECKING:
-    from authsome.runtime.models import RuntimeSession
+    from authsome.auth.sessions import AuthSession
 
 
 @dataclass
@@ -38,7 +38,7 @@ class AuthFlow(ABC):
         provider: ProviderDefinition,
         profile: str,
         connection_name: str,
-        runtime_session: RuntimeSession,
+        runtime_session: AuthSession,
         scopes: list[str] | None = None,
         client_id: str | None = None,
         client_secret: str | None = None,
@@ -57,7 +57,7 @@ class AuthFlow(ABC):
         provider: ProviderDefinition,
         profile: str,
         connection_name: str,
-        runtime_session: RuntimeSession,
+        runtime_session: AuthSession,
         callback_data: dict[str, Any],
         client_id: str | None = None,
         client_secret: str | None = None,

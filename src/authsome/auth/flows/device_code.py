@@ -18,7 +18,7 @@ from authsome.errors import AuthenticationFailedError
 from authsome.utils import utc_now
 
 if TYPE_CHECKING:
-    from authsome.runtime.models import RuntimeSession
+    from authsome.auth.sessions import AuthSession
 
 _DEFAULT_POLL_INTERVAL = 5
 _MAX_POLL_DURATION = 900
@@ -32,7 +32,7 @@ class DeviceCodeFlow(AuthFlow):
         provider: ProviderDefinition,
         profile: str,
         connection_name: str,
-        runtime_session: RuntimeSession,
+        runtime_session: AuthSession,
         scopes: list[str] | None = None,
         client_id: str | None = None,
         client_secret: str | None = None,
@@ -53,6 +53,7 @@ class DeviceCodeFlow(AuthFlow):
         verification_uri = device_data.get("verification_uri") or device_data.get("verification_url")
         verification_uri_complete = device_data.get("verification_uri_complete")
         interval = int(device_data.get("interval", _DEFAULT_POLL_INTERVAL))
+        expires_in = int(device_data.get("expires_in", _MAX_POLL_DURATION))
 
         if not device_code or not user_code or not verification_uri:
             raise AuthenticationFailedError(
@@ -67,6 +68,7 @@ class DeviceCodeFlow(AuthFlow):
 
         runtime_session.payload["internal_device_code"] = device_code
         runtime_session.payload["internal_interval"] = str(interval)
+        runtime_session.payload["expires_in"] = str(expires_in)
         runtime_session.payload["internal_scopes"] = json.dumps(effective_scopes)
 
     def resume(
@@ -74,7 +76,7 @@ class DeviceCodeFlow(AuthFlow):
         provider: ProviderDefinition,
         profile: str,
         connection_name: str,
-        runtime_session: RuntimeSession,
+        runtime_session: AuthSession,
         callback_data: dict[str, Any],
         client_id: str | None = None,
         client_secret: str | None = None,

@@ -31,6 +31,9 @@ dependencies = [
     "click>=8.0",
     "loguru>=0.7",
     "mitmproxy>=11.0",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "python-multipart>=0.0.27",
 ]
 
 [project.optional-dependencies]
@@ -42,7 +45,7 @@ dev = [
 ]
 
 [project.scripts]
-authsome = "authsome.cli:cli"
+authsome = "authsome.cli.main:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/authsome"]
