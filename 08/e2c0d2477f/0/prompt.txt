@@ -1,0 +1,5 @@
+Do we have CONTRIBUTING.md file?
+
+---
+
+I want to add the following principles in my CONTRIBUTING, AGENTS.md file: 1. No over engineering (YAGNI) 2. Use trusted library rather than re inventing 3. Deep modules over multiple small modules 4. Single repsonsibility principle (auth should do auth, vault should do credential storage, period) and separation of concern 5. Premature optimization is evil 6. Don't do it just because you can do it 7. Leave in better state then when you got it 8. Add inline comments to explain what it does ( google style docstring) 9. Its easier to update the docs as and when you do the code change . Similarly i'm open to more ideas on how to do better ai assisted development
