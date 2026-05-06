@@ -7,13 +7,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
+from authsome.context import AuthsomeContext
 
 from authsome.auth import AuthLayer
 from authsome.auth.input_provider import MockInputProvider
 from authsome.auth.models.connection import ConnectionRecord, ProviderClientRecord
 from authsome.auth.models.enums import AuthType, ConnectionStatus, ExportFormat, FlowType
 from authsome.auth.models.provider import ApiKeyConfig, ExportConfig, OAuthConfig, ProviderDefinition
-from authsome.context import AuthsomeContext
 from authsome.errors import (
     AuthsomeError,
     ConnectionNotFoundError,

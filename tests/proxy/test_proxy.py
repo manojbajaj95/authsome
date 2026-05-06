@@ -6,10 +6,10 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+from authsome.context import AuthsomeContext
 
 from authsome.auth import AuthLayer
 from authsome.auth.input_provider import MockInputProvider
-from authsome.context import AuthsomeContext
 from authsome.proxy.router import RouteMatch
 from authsome.proxy.server import AuthProxyAddon, ProxyRouter, _build_proxy_options, _route
 
