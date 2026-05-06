@@ -22,6 +22,7 @@ from authsome.server.schemas import (
     ResumeAuthSessionRequest,
     StartAuthSessionRequest,
 )
+from authsome.ui.web_theme import DARK_THEME_CSS
 from authsome.utils import utc_now
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -253,7 +254,11 @@ def _input_page(session: AuthSession, display_name: str, docs_url: str | None, f
         optional = f"<details><summary>Advanced options</summary>{''.join(optional_rows)}</details>"
     return f"""<!doctype html>
 <html>
-  <head><meta charset="utf-8"><title>Authsome - {html.escape(display_name)}</title></head>
+  <head>
+    <meta charset="utf-8">
+    <title>Authsome - {html.escape(display_name)}</title>
+    <style>{DARK_THEME_CSS}</style>
+  </head>
   <body>
     <main>
       <h1>{html.escape(display_name)}</h1>
@@ -277,15 +282,25 @@ def _field_row(field: dict[str, Any]) -> str:
     pattern = f' pattern="{html.escape(str(field["pattern"]))}"' if field.get("pattern") else ""
     hint = f"<small>{html.escape(str(field['pattern_hint']))}</small>" if field.get("pattern_hint") else ""
     return (
-        f"<label>{label}<br>"
-        f'<input type="{input_type}" name="{name}" value="{value}"{required}{pattern}>'
-        f"</label>{hint}<br><br>"
+        f'<div class="field-group">'
+        f'<label for="{name}">{label}</label>'
+        f'<input id="{name}" type="{input_type}" name="{name}" value="{value}"{required}{pattern}>'
+        f"{hint}</div>"
     )
 
 
 def _message_page(title: str, message: str) -> str:
     return f"""<!doctype html>
 <html>
-  <head><meta charset="utf-8"><title>{html.escape(title)}</title></head>
-  <body><main><h1>{html.escape(title)}</h1><p>{html.escape(message)}</p></main></body>
+  <head>
+    <meta charset="utf-8">
+    <title>{html.escape(title)}</title>
+    <style>{DARK_THEME_CSS}</style>
+  </head>
+  <body>
+    <main>
+      <h1>{html.escape(title)}</h1>
+      <p>{html.escape(message)}</p>
+    </main>
+  </body>
 </html>"""

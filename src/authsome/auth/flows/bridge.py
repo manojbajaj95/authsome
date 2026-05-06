@@ -22,6 +22,7 @@ from typing import Any
 from loguru import logger
 
 from authsome.errors import InputCancelledError
+from authsome.ui.web_theme import BRIDGE_STYLE, DEVICE_BRIDGE_STYLE
 
 
 def _find_free_port() -> int:
@@ -30,215 +31,6 @@ def _find_free_port() -> int:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
-
-_BRIDGE_STYLE = """
-:root {
-  color-scheme: light;
-  --bg: #f6f7f9;
-  --panel: #ffffff;
-  --text: #16181d;
-  --muted: #626a76;
-  --line: #d8dde5;
-  --line-strong: #b8c0cc;
-  --focus: #2f6feb;
-  --danger: #b42318;
-  --danger-bg: #fff4f2;
-  --success-bg: #f0fdf4;
-  --cancel-bg: #f8fafc;
-}
-* { box-sizing: border-box; }
-body {
-  margin: 0;
-  min-height: 100vh;
-  background: var(--bg);
-  color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  line-height: 1.45;
-}
-.page {
-  width: min(100% - 32px, 520px);
-  margin: 0 auto;
-  padding: 48px 0;
-}
-.brand {
-  margin-bottom: 14px;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.panel {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 18px 45px rgba(22, 24, 29, 0.08);
-  padding: 28px;
-}
-h1 {
-  margin: 0;
-  font-size: 24px;
-  line-height: 1.2;
-  letter-spacing: 0;
-}
-.subtitle {
-  margin: 8px 0 24px;
-  color: var(--muted);
-  font-size: 14px;
-}
-form { margin: 0; }
-.field { margin-bottom: 18px; }
-.label-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 7px;
-}
-label {
-  display: block;
-  font-size: 14px;
-  font-weight: 650;
-}
-.optional-chip {
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  color: var(--muted);
-  flex: none;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 2px 8px;
-}
-input {
-  width: 100%;
-  min-height: 42px;
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  color: var(--text);
-  font: inherit;
-  padding: 9px 11px;
-}
-input:focus {
-  border-color: var(--focus);
-  box-shadow: 0 0 0 3px rgba(47, 111, 235, 0.16);
-  outline: none;
-}
-input.has-error {
-  border-color: var(--danger);
-  background: var(--danger-bg);
-}
-input.has-error:focus {
-  border-color: var(--danger);
-  box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.14);
-}
-.field-error {
-  color: var(--danger);
-  font-size: 13px;
-  margin-top: 7px;
-}
-.form-error {
-  background: var(--danger-bg);
-  border: 1px solid #ffd0cb;
-  border-radius: 6px;
-  color: var(--danger);
-  font-size: 14px;
-  margin-bottom: 18px;
-  padding: 11px 12px;
-}
-.secret-wrap,
-.static-wrap {
-  display: flex;
-  gap: 8px;
-  align-items: stretch;
-}
-.secret-wrap input,
-.static-wrap input[readonly] {
-  flex: 1;
-  min-width: 0;
-}
-.static-wrap input[readonly] {
-  background: #f8fafc;
-  color: #303641;
-  cursor: default;
-}
-button,
-.button {
-  min-height: 42px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 700;
-  padding: 9px 13px;
-}
-.primary-button {
-  width: 100%;
-  background: #1f2937;
-  color: #fff;
-}
-.primary-button:hover { background: #111827; }
-.secondary-button {
-  background: #fff;
-  border-color: var(--line-strong);
-  color: #303641;
-  flex: none;
-}
-.secondary-button:hover { background: #f8fafc; }
-.actions {
-  display: grid;
-  gap: 10px;
-  margin-top: 24px;
-}
-.cancel-button {
-  width: 100%;
-  background: transparent;
-  border-color: transparent;
-  color: var(--muted);
-}
-.cancel-button:hover {
-  background: #f8fafc;
-  color: var(--text);
-}
-.instructions {
-  background: #f8fafc;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  margin-bottom: 18px;
-  padding: 13px 14px;
-}
-.instructions-title {
-  margin: 0 0 8px;
-  font-size: 14px;
-  font-weight: 700;
-}
-.instructions-links {
-  margin: 0;
-  padding-left: 18px;
-}
-.instructions-links li { margin-bottom: 4px; }
-a { color: var(--focus); font-weight: 650; }
-.status-panel {
-  text-align: center;
-}
-.status-mark {
-  display: inline-grid;
-  width: 42px;
-  height: 42px;
-  margin-bottom: 14px;
-  place-items: center;
-  border-radius: 999px;
-  font-weight: 800;
-}
-.status-mark.success { background: var(--success-bg); color: #15803d; }
-.status-mark.cancelled { background: var(--cancel-bg); color: #475569; }
-@media (max-width: 520px) {
-  .page {
-    width: min(100% - 24px, 520px);
-    padding: 24px 0;
-  }
-  .panel { padding: 22px; }
-}
-"""
 
 _BRIDGE_SCRIPT = """
 <script>
@@ -305,7 +97,7 @@ class _BridgeHandler(http.server.BaseHTTPRequestHandler):
             [
                 "<!DOCTYPE html>",
                 f"<html><head><title>Authsome - {page_title}</title>",
-                f"<style>{_BRIDGE_STYLE}</style>",
+                f"{BRIDGE_STYLE}",
                 "</head><body><main class='page'>",
                 "<div class='brand'>Authsome</div>",
                 *body,
@@ -527,23 +319,7 @@ class _DeviceBridgeHandler(http.server.BaseHTTPRequestHandler):
 
         html = f"""<!DOCTYPE html>
 <html><head><title>Authsome — {title_esc}</title>
-<style>
-body {{ font-family: system-ui, sans-serif; max-width: 480px; margin: 40px auto; padding: 20px; }}
-h2 {{ margin-bottom: 8px; }}
-.subtitle {{ color: #555; margin-bottom: 20px; }}
-.code-wrap {{ display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }}
-.code-wrap input {{ flex: 1; font-size: 22px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  padding: 12px; border: 1px solid #ccc; border-radius: 6px; background: #f5f5f5;
-  text-align: center; letter-spacing: 2px; }}
-.copybtn {{ padding: 10px 14px; font-size: 14px; border: 1px solid #ccc;
-  background: #fff; border-radius: 6px; cursor: pointer; }}
-.copybtn:hover {{ background: #f0f0f0; }}
-a.verify {{ display: inline-block; margin-bottom: 16px; padding: 10px 16px;
-  background: #0066cc; color: #fff; text-decoration: none; border-radius: 6px; }}
-a.verify:hover {{ background: #0052a3; }}
-.verify-url {{ color: #666; font-size: 12px; word-break: break-all; margin-bottom: 24px; }}
-.label {{ font-weight: 600; margin-bottom: 6px; display: block; }}
-</style></head>
+{DEVICE_BRIDGE_STYLE}</head>
 <body>
   <h2>{title_esc}</h2>
   <p class='subtitle'>Authorize this device to continue.</p>
