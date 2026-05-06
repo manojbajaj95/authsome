@@ -12,11 +12,10 @@ All key schema decisions belong to the caller (AuthLayer).
 from __future__ import annotations
 
 import builtins
-from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from authsome.vault.storage import SQLiteStorage
+from authsome.store.interfaces import AppStore, VaultStorage
 
 if TYPE_CHECKING:
     from authsome.vault.crypto import VaultCrypto
@@ -36,16 +35,15 @@ class Vault:
 
     def __init__(
         self,
-        storage_resolver: Callable[[str], SQLiteStorage],
+        app_store: AppStore,
         crypto: VaultCrypto | None = None,
         crypto_mode: str = "local_key",
         master_key_path: Path | None = None,
     ) -> None:
-        self._storage_resolver = storage_resolver
+        self._app_store = app_store
         self._crypto = crypto
         self._crypto_mode = crypto_mode
         self._master_key_path = master_key_path
-        self._stores: dict[str, SQLiteStorage] = {}
 
     # ── Core KV interface ─────────────────────────────────────────────────
 
@@ -81,9 +79,8 @@ class Vault:
 
     def close(self) -> None:
         """Close all open storage connections."""
-        for store in self._stores.values():
-            store.close()
-        self._stores.clear()
+        # Vault doesn't own the connections anymore, the AppStore does.
+        pass
 
     def __enter__(self) -> Vault:
         return self
@@ -93,7 +90,5 @@ class Vault:
 
     # ── Internal ──────────────────────────────────────────────────────────
 
-    def _storage(self, profile: str) -> SQLiteStorage:
-        if profile not in self._stores:
-            self._stores[profile] = self._storage_resolver(profile)
-        return self._stores[profile]
+    def _storage(self, profile: str) -> VaultStorage:
+        return self._app_store.get_vault_storage(profile)

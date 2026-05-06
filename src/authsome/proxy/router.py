@@ -10,4 +10,4 @@ class RouteMatch:
     """Result of a successful route resolution."""
 
     provider: str
-    connection: str = "default"
+    connection: str | None = None

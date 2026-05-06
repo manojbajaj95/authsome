@@ -3,6 +3,7 @@
 import functools
 import ipaddress
 import json as json_lib
+import os
 import pathlib
 import sys
 import urllib.parse
@@ -14,11 +15,34 @@ import click
 import requests
 from loguru import logger
 
-from authsome import __version__, audit
-from authsome.auth.models.enums import ExportFormat, FlowType
-from authsome.context import AuthsomeContext
+from authsome import FlowType, __version__, audit
+from authsome.auth.models.enums import ExportFormat
+from authsome.auth.models.provider import ProviderDefinition
+from authsome.cli.client import AuthsomeApiClient
+from authsome.cli.daemon_control import (
+    DaemonUnavailableError,
+    daemon_status,
+    ensure_daemon,
+    start_daemon,
+    stop_daemon,
+)
 from authsome.errors import AuthsomeError
+from authsome.proxy.runner import ProxyRunner
 from authsome.utils import redact
+
+
+class CliRuntime:
+    """CLI-local wiring around the daemon API client."""
+
+    def __init__(self, client: AuthsomeApiClient) -> None:
+        self.runtime_client = client
+        self.home = Path(os.environ.get("AUTHSOME_HOME", str(Path.home() / ".authsome")))
+
+    def doctor(self) -> dict[str, Any]:
+        return self.runtime_client.doctor()
+
+    def require_local_proxy(self) -> ProxyRunner:
+        return ProxyRunner(client=self.runtime_client)
 
 
 class ContextObj:
@@ -28,11 +52,11 @@ class ContextObj:
         self.json_output = json_output
         self.quiet = quiet
         self.no_color = no_color
-        self._ctx: AuthsomeContext | None = None
+        self._ctx: CliRuntime | None = None
 
-    def initialize(self) -> AuthsomeContext:
+    def initialize(self) -> CliRuntime:
         if self._ctx is None:
-            self._ctx = AuthsomeContext.create()
+            self._ctx = CliRuntime(ensure_daemon())
             audit.setup(self._ctx.home / "audit.log")
         return self._ctx
 
@@ -75,6 +99,8 @@ def common_options(f):
 
 
 def format_error_code(exc: Exception) -> int:
+    if isinstance(exc, DaemonUnavailableError):
+        return 9
     if not isinstance(exc, AuthsomeError):
         return 1
     exc_name = exc.__class__.__name__
@@ -243,19 +269,22 @@ def cli(ctx: click.Context, verbose: bool, log_file: str) -> None:
 def list_cmd(ctx_obj: ContextObj) -> None:
     """List providers and connection states."""
     actx = ctx_obj.initialize()
-    raw_list = actx.auth.list_connections()
-    by_source = actx.auth.list_providers_by_source()
+    data = actx.runtime_client.list_connections()
+    raw_list = data["connections"]
+    by_source = data["by_source"]
 
     connected: dict[str, list[dict]] = {}
     for provider_group in raw_list:
         connected[provider_group["name"]] = provider_group["connections"]
 
-    def build_provider_entry(provider, source: str) -> dict:
+    def build_provider_entry(provider_data, source: str) -> dict:
+        provider = ProviderDefinition.model_validate(provider_data)
         conns = connected.get(provider.name, [])
         connections_out = []
         for conn in conns:
             c: dict = {
                 "connection_name": conn["connection_name"],
+                "is_default": conn.get("is_default", False),
                 "auth_type": conn.get("auth_type"),
                 "status": conn.get("status"),
             }
@@ -290,7 +319,11 @@ def list_cmd(ctx_obj: ContextObj) -> None:
                         "provider": provider_label,
                         "source": p["source"],
                         "auth": p["auth_type"],
-                        "connection": conn["connection_name"],
+                        "connection": (
+                            f"{conn['connection_name']} (default)"
+                            if conn.get("is_default")
+                            else conn["connection_name"]
+                        ),
                         "status": conn["status"],
                         "expires_at": conn.get("expires_at"),
                         "expires": format_expires_at(conn.get("expires_at")) or "-",
@@ -408,7 +441,7 @@ def login(
 ) -> None:
     """Authenticate with a provider using its configured flow."""
     actx = ctx_obj.initialize()
-    flow_enum = FlowType(flow) if flow else None
+    flow_value = FlowType(flow).value if flow else None
     scope_list = [s.strip() for s in scopes.split(",")] if scopes else None
 
     if force and not ctx_obj.quiet:
@@ -417,16 +450,54 @@ def login(
         ctx_obj.echo(f"Starting login for {provider}...", color="cyan")
 
     try:
-        login_result = actx.auth.login_with_result(
+        session_info = actx.runtime_client.start_login(
             provider=provider,
-            connection_name=connection,
+            connection=connection,
+            flow=flow_value,
             scopes=scope_list,
-            flow_override=flow_enum,
-            force=force,
             base_url=base_url,
+            force=force,
         )
-        record = login_result.record
-        audit.log("login", provider=provider, connection=connection, flow=record.auth_type.value, status="success")
+        session_id = session_info["id"]
+        login_result = {"status": "success"}
+
+        next_action = session_info.get("next_action", {"type": "none"})
+        action_type = next_action.get("type")
+        if action_type == "open_url":
+            auth_url = next_action["url"]
+            if not ctx_obj.quiet:
+                ctx_obj.echo("Opening browser to continue login...", color="cyan")
+                ctx_obj.echo(f"If the browser doesn't open, visit: {auth_url}", color="cyan")
+            import webbrowser
+
+            try:
+                webbrowser.open(auth_url)
+            except Exception:
+                pass
+            login_result = {"status": "started"}
+        elif action_type == "device_code":
+            if not ctx_obj.quiet:
+                verification = next_action.get("verification_uri_complete") or next_action.get("verification_uri")
+                ctx_obj.echo(f"Visit: {verification}", color="cyan")
+                ctx_obj.echo(f"Code: {next_action.get('user_code')}", color="cyan")
+            import time
+
+            interval = int(next_action.get("interval", 5))
+            while True:
+                time.sleep(interval)
+                s_state = actx.runtime_client.resume_login_session(session_id)
+                if s_state.get("status") in ("completed", "failed", "expired", "cancelled"):
+                    login_result = {
+                        "status": "success" if s_state.get("status") == "completed" else s_state.get("status"),
+                        "record_status": s_state.get("status"),
+                    }
+                    if s_state.get("status") != "completed":
+                        raise AuthsomeError(s_state.get("error") or "Device-code login did not complete")
+                    break
+        else:
+            login_result = {"status": "started"}
+
+        audit.log("login", provider=provider, connection=connection, flow=flow or "unknown", status="success")
     except Exception:
         audit.log("login", provider=provider, connection=connection, status="failure")
         raise
@@ -434,14 +505,19 @@ def login(
     if ctx_obj.json_output:
         ctx_obj.print_json(
             {
-                "status": "already_connected" if login_result.already_connected else "success",
+                "status": login_result.get("status", "success"),
                 "provider": provider,
                 "connection": connection,
-                "record_status": record.status.value,
+                "record_status": login_result.get("record_status", "valid"),
             }
         )
-    elif login_result.already_connected:
+    elif login_result.get("status") == "already_connected":
         ctx_obj.echo(f"Already logged in to {provider} ({connection}).", color="green")
+    elif login_result.get("status") == "started":
+        ctx_obj.echo(
+            f"Login started for {provider} ({connection}). Run 'authsome list' to verify completion.",
+            color="green",
+        )
     else:
         ctx_obj.echo(f"Successfully logged in to {provider} ({connection}).", color="green")
 
@@ -455,13 +531,34 @@ def login(
 def logout(ctx_obj: ContextObj, provider: str, connection: str) -> None:
     """Log out of a connection and remove local state."""
     actx = ctx_obj.initialize()
-    actx.auth.logout(provider, connection)
+    actx.runtime_client.logout(provider, connection)
     audit.log("logout", provider=provider, connection=connection)
 
     if ctx_obj.json_output:
         ctx_obj.print_json({"status": "logged_out", "provider": provider, "connection": connection})
     else:
         ctx_obj.echo(f"Logged out of {provider} ({connection}).", color="green")
+
+
+@cli.group(name="connection")
+def connection_group() -> None:
+    """Manage provider connections."""
+
+
+@connection_group.command(name="set-default")
+@click.argument("provider")
+@click.argument("connection")
+@common_options
+@pass_ctx
+@handle_errors
+def set_default_connection(ctx_obj: ContextObj, provider: str, connection: str) -> None:
+    """Set the default connection for a provider."""
+    actx = ctx_obj.initialize()
+    actx.runtime_client.set_default_connection(provider, connection)
+    if ctx_obj.json_output:
+        ctx_obj.print_json({"status": "ok", "provider": provider, "default_connection": connection})
+    else:
+        ctx_obj.echo(f"Default connection for {provider} set to {connection}.", color="green")
 
 
 @cli.command()
@@ -472,7 +569,7 @@ def logout(ctx_obj: ContextObj, provider: str, connection: str) -> None:
 def revoke(ctx_obj: ContextObj, provider: str) -> None:
     """Complete reset of the provider, removing all connections and client secrets."""
     actx = ctx_obj.initialize()
-    actx.auth.revoke(provider)
+    actx.runtime_client.revoke(provider)
     audit.log("revoke", provider=provider, connection="all")
 
     if ctx_obj.json_output:
@@ -487,9 +584,9 @@ def revoke(ctx_obj: ContextObj, provider: str) -> None:
 @pass_ctx
 @handle_errors
 def remove(ctx_obj: ContextObj, provider: str) -> None:
-    """Uninstall a local provider or reset a bundled one."""
+    """Delete a custom provider definition."""
     actx = ctx_obj.initialize()
-    actx.auth.remove(provider)
+    actx.runtime_client.remove(provider)
     audit.log("remove", provider=provider, connection="all")
 
     if ctx_obj.json_output:
@@ -509,7 +606,10 @@ def remove(ctx_obj: ContextObj, provider: str) -> None:
 def get(ctx_obj: ContextObj, provider: str, connection: str, field: str | None, show_secret: bool) -> None:
     """Return provider connection metadata by default."""
     actx = ctx_obj.initialize()
-    record = actx.auth.get_connection(provider, connection)
+    record_dict = actx.runtime_client.get_connection(provider, connection)
+    from authsome.auth.models.connection import ConnectionRecord
+
+    record = ConnectionRecord.model_validate(record_dict)
 
     if show_secret:
         from authsome.utils import require_os_auth
@@ -560,10 +660,11 @@ def get(ctx_obj: ContextObj, provider: str, connection: str, field: str | None, 
 def inspect(ctx_obj: ContextObj, provider: str) -> None:
     """Return provider definition and local connection summary."""
     actx = ctx_obj.initialize()
-    definition = actx.auth.get_provider(provider)
-    data = definition.model_dump(mode="json")
+    definition_dict = actx.runtime_client.get_provider(provider)
+    data = definition_dict
     data["connections"] = []
-    for provider_group in actx.auth.list_connections():
+    connections_data = actx.runtime_client.list_connections()
+    for provider_group in connections_data["connections"]:
         if provider_group["name"] == provider:
             data["connections"] = provider_group["connections"]
             break
@@ -590,8 +691,8 @@ def export(ctx_obj: ContextObj, provider: str | None, connection: str, export_fo
     )
     actx = ctx_obj.initialize()
     fmt = ExportFormat(export_format)
-    output = actx.auth.export(provider, connection, format=fmt)
-    audit.log("export", provider=provider, connection=connection, format=export_format)
+    output = actx.runtime_client.export(provider, connection, format=fmt.value)
+    audit.log("export", provider=provider, connection=connection, format=fmt.value)
     if output:
         click.echo(output)
 
@@ -604,7 +705,7 @@ def export(ctx_obj: ContextObj, provider: str | None, connection: str, export_fo
 def run(ctx_obj: ContextObj, command: tuple[str]) -> None:
     """Run a subprocess behind the local auth proxy."""
     actx = ctx_obj.initialize()
-    result = actx.proxy.run(list(command))
+    result = actx.require_local_proxy().run(list(command))
     sys.exit(result.returncode)
 
 
@@ -649,7 +750,7 @@ def register(ctx_obj: ContextObj, path: str, force: bool) -> None:
                 ctx_obj.echo("Registration aborted.", color="yellow")
                 sys.exit(0)
 
-        actx.auth.register_provider(definition, force=force)
+        actx.runtime_client.register_provider(definition.model_dump(mode="json"), force=force)
 
         endpoints = [ep for _, ep, _ in endpoints_to_check]
         audit.log("register", provider=definition.name, endpoints=endpoints)
@@ -693,33 +794,17 @@ def register(ctx_obj: ContextObj, path: str, force: bool) -> None:
 def whoami(ctx_obj: ContextObj) -> None:
     """Show basic local context."""
     actx = ctx_obj.initialize()
-    from authsome.auth.models.config import GlobalConfig
 
-    home = actx.home
-    config_path = home / "config.json"
-    config = GlobalConfig()
-    if config_path.exists():
-        try:
-            config = GlobalConfig.model_validate_json(config_path.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-
-    # Basic health check
+    # Get info from daemon
+    whoami_data = actx.runtime_client.whoami()
     doctor_results = actx.doctor()
-    vault_status = "OK" if (doctor_results.get("encryption") and doctor_results.get("store")) else "ERROR"
 
-    # Encryption details
-    enc_mode = config.encryption.mode if config.encryption else "local_key"
-    if enc_mode == "local_key":
-        enc_desc = f"Local File ({home / 'master.key'})"
-    elif enc_mode == "keyring":
-        enc_desc = "OS Keyring"
-    else:
-        enc_desc = enc_mode
+    vault_status = "OK" if doctor_results.get("checks", {}).get("vault") == "ok" else "ERROR"
 
     # Connected providers with counts
     connected_providers = []
-    for provider_group in actx.auth.list_connections():
+    connections_data = actx.runtime_client.list_connections()
+    for provider_group in connections_data["connections"]:
         active_conns = [c["connection_name"] for c in provider_group["connections"] if connection_is_active(c)]
         if active_conns:
             connected_providers.append(
@@ -731,10 +816,10 @@ def whoami(ctx_obj: ContextObj) -> None:
             )
 
     data = {
-        "authsome_version": __version__,
-        "home_directory": str(home),
-        "active_profile": actx.auth.identity,
-        "encryption_backend": enc_desc,
+        "authsome_version": whoami_data["version"],
+        "home_directory": whoami_data["home"],
+        "active_identity": whoami_data["active_identity"],
+        "encryption_backend": whoami_data["encryption_backend"],
         "vault_status": vault_status,
         "connected_providers_count": len(connected_providers),
         "connected_providers": connected_providers,
@@ -745,7 +830,7 @@ def whoami(ctx_obj: ContextObj) -> None:
     else:
         ctx_obj.echo(f"Authsome Version:  {data['authsome_version']}")
         ctx_obj.echo(f"Home Directory:    {data['home_directory']}")
-        ctx_obj.echo(f"Active Profile:    {data['active_profile']}")
+        ctx_obj.echo(f"Active Identity:   {data['active_identity']}")
         status_color = "green" if vault_status == "OK" else "red"
         ctx_obj.echo(f"Encryption:        {data['encryption_backend']} [", nl=False)
         ctx_obj.echo(vault_status, color=status_color, nl=False)
@@ -770,18 +855,11 @@ def doctor(ctx_obj: ContextObj) -> None:
     if ctx_obj.json_output:
         ctx_obj.print_json(results)
     else:
-        all_ok = True
-        for key, val in results.items():
-            if key in ["issues", "providers_count", "profiles_count"]:
-                continue
-            status = "OK" if val else "FAIL"
-            color = "green" if val else "red"
-            if isinstance(val, bool) and not val:
-                all_ok = False
+        all_ok = results.get("status") == "ready"
+        for key, val in results.get("checks", {}).items():
+            ok = val == "ok"
             ctx_obj.echo(f"{key}: ", nl=False)
-            ctx_obj.echo(status, color=color)
-
-        ctx_obj.echo(f"Providers Configured: {results.get('providers_count', 0)}")
+            ctx_obj.echo("OK" if ok else "FAIL", color="green" if ok else "red")
         issues = results.get("issues", [])
         if issues:
             ctx_obj.echo("\nIssues found:", color="red")
@@ -790,6 +868,79 @@ def doctor(ctx_obj: ContextObj) -> None:
 
         if not all_ok:
             sys.exit(1)
+
+
+@cli.group()
+def daemon() -> None:
+    """Manage the local Authsome daemon."""
+
+
+@daemon.command(name="serve")
+def daemon_serve() -> None:
+    """Run the daemon in the foreground."""
+    from authsome.server.daemon import serve
+
+    serve()
+
+
+@daemon.command(name="start")
+@common_options
+@pass_ctx
+@handle_errors
+def daemon_start(ctx_obj: ContextObj) -> None:
+    """Start the local daemon in the background."""
+    start_daemon()
+    ctx_obj.echo("Daemon start requested.", color="green")
+
+
+@daemon.command(name="stop")
+@common_options
+@pass_ctx
+@handle_errors
+def daemon_stop(ctx_obj: ContextObj) -> None:
+    """Stop the local daemon."""
+    stop_daemon()
+    ctx_obj.echo("Daemon stopped.", color="green")
+
+
+@daemon.command(name="restart")
+@common_options
+@pass_ctx
+@handle_errors
+def daemon_restart(ctx_obj: ContextObj) -> None:
+    """Restart the local daemon."""
+    stop_daemon()
+    start_daemon()
+    ctx_obj.echo("Daemon restart requested.", color="green")
+
+
+@daemon.command(name="status")
+@common_options
+@pass_ctx
+@handle_errors
+def daemon_status_cmd(ctx_obj: ContextObj) -> None:
+    """Show daemon status."""
+    status = daemon_status()
+    if ctx_obj.json_output:
+        ctx_obj.print_json(status)
+    else:
+        ctx_obj.echo(json_lib.dumps(status, indent=2))
+
+
+@daemon.command(name="logs")
+@click.option("-n", "--lines", default=80, help="Number of lines to show.")
+@common_options
+@pass_ctx
+@handle_errors
+def daemon_logs(ctx_obj: ContextObj, lines: int) -> None:
+    """Show daemon log output."""
+    from authsome.cli.daemon_control import LOG_FILE
+
+    if not LOG_FILE.exists():
+        ctx_obj.echo(f"No daemon log found at {LOG_FILE}", err=True, color="yellow")
+        return
+    for line in LOG_FILE.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:]:
+        ctx_obj.echo(line)
 
 
 if __name__ == "__main__":
