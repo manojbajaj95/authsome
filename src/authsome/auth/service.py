@@ -20,7 +20,7 @@ from authsome.auth.flows.base import AuthFlow
 from authsome.auth.flows.dcr_pkce import DcrPkceFlow
 from authsome.auth.flows.device_code import DeviceCodeFlow
 from authsome.auth.flows.pkce import PkceFlow
-from authsome.auth.input_provider import InputProvider
+from authsome.auth.input_provider import InputField
 from authsome.auth.models.connection import (
     ConnectionRecord,
     ProviderClientRecord,
@@ -41,7 +41,7 @@ from authsome.errors import (
     TokenExpiredError,
     UnsupportedFlowError,
 )
-from authsome.store.local import LocalAppStore
+from authsome.store.interfaces import AppStore
 from authsome.utils import build_store_key, utc_now
 from authsome.vault import Vault
 
@@ -67,7 +67,7 @@ class AuthService:
         self,
         vault: Vault,
         registry: ProviderRegistry,
-        app_store: LocalAppStore,
+        app_store: AppStore,
         identity: str | None = None,
     ) -> None:
         self._vault = vault
@@ -88,7 +88,7 @@ class AuthService:
         return self._identity
 
     @property
-    def app_store(self) -> LocalAppStore:
+    def app_store(self) -> AppStore:
         return self._app_store
 
     # ── Provider operations ───────────────────────────────────────────────
@@ -200,52 +200,104 @@ class AuthService:
 
     # ── Authentication ────────────────────────────────────────────────────
 
-    def login(
+    def get_required_inputs(
         self,
-        provider: str,
-        connection_name: str = "default",
+        session: AuthSession,
         scopes: list[str] | None = None,
-        flow_override: FlowType | None = None,
-        force: bool = False,
-        input_provider: InputProvider | None = None,
         base_url: str | None = None,
-    ) -> ConnectionRecord:
-        """Synchronously perform a login flow (primarily for testing)."""
-        import uuid
+    ) -> list[InputField]:
+        """Determine what inputs are missing for a given session."""
+        from authsome.auth.input_provider import InputField
 
+        provider = session.provider
         definition = self.get_provider(provider)
-        session = AuthSession(
-            session_id=f"sess_{uuid.uuid4().hex[:12]}",
-            provider=provider,
-            profile=self._identity,
-            connection_name=connection_name,
-            flow_type=(flow_override or definition.flow).value,
-        )
+        flow_type = FlowType(session.flow_type)
+        client_record = self._get_provider_client_credentials(provider)
 
-        # Execute the flow
-        self.begin_login_flow(
-            session=session,
-            scopes=scopes,
-            flow_override=flow_override,
-            force=force,
-            base_url=base_url,
-            input_provider=input_provider,
-        )
+        flow_base_url = base_url or (client_record.base_url if client_record else None)
+        flow_client_id = client_record.client_id if client_record else None
+        persisted_scopes = client_record.scopes if client_record else None
 
-        # For synchronous flows (API_KEY, mocked OAuth in tests), resume immediately.
-        # We poll briefly for DEVICE_CODE to match old behavior.
-        import time
+        fields: list[InputField] = []
 
-        start_time = time.time()
-        while time.time() - start_time < 30:  # 30s timeout for sync login
-            record = self.resume_login_flow(session, {})
-            if record is not None:
-                return record
-            if session.flow_type != "device_code":
-                break
-            time.sleep(1)
+        if definition.oauth and definition.oauth.base_url and not flow_base_url:
+            fields.append(
+                InputField(
+                    name="base_url",
+                    label="Base URL",
+                    secret=False,
+                    default=definition.oauth.base_url,
+                )
+            )
+            fields.append(
+                InputField(
+                    name="host_url",
+                    label="API Host URL",
+                    secret=False,
+                    default=definition.host_url or "",
+                )
+            )
 
-        raise AuthsomeError(f"Login flow for '{provider}' did not complete synchronously.")
+        if flow_type == FlowType.PKCE and not flow_client_id:
+            fields.append(InputField(name="client_id", label="Client ID", secret=False))
+            fields.append(InputField(name="client_secret", label="Client Secret (Optional)", secret=True, default=""))
+        elif flow_type == FlowType.DEVICE_CODE and not flow_client_id:
+            fields.append(
+                InputField(
+                    name="client_id",
+                    label="Client ID (leave blank for public device flow)",
+                    secret=False,
+                    default="",
+                )
+            )
+            fields.append(InputField(name="client_secret", label="Client Secret (Optional)", secret=True, default=""))
+
+        if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE, FlowType.DCR_PKCE):
+            if scopes is None and persisted_scopes is None:
+                default_scopes = (
+                    ",".join(definition.oauth.scopes) if definition.oauth and definition.oauth.scopes else ""
+                )
+                fields.append(
+                    InputField(name="scopes", label="Scopes (comma-separated)", secret=False, default=default_scopes)
+                )
+
+        if flow_type == FlowType.API_KEY:
+            api_key_field = InputField(name="api_key", label="API Key", secret=True)
+            if definition.api_key and definition.api_key.key_pattern:
+                api_key_field.pattern = definition.api_key.key_pattern
+                api_key_field.pattern_hint = definition.api_key.key_pattern_hint
+            fields.append(api_key_field)
+
+        return fields
+
+    def save_inputs(self, session: AuthSession, inputs: dict[str, str]) -> None:
+        """Save collected inputs to the Vault or session payload."""
+        from authsome.auth.models.connection import ProviderClientRecord
+
+        provider = session.provider
+        flow_type = FlowType(session.flow_type)
+        client_record = self._get_provider_client_credentials(provider)
+
+        if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE, FlowType.DCR_PKCE):
+            if client_record is None:
+                client_record = ProviderClientRecord(profile=self._identity, provider=provider)
+            if inputs.get("base_url"):
+                client_record.base_url = inputs["base_url"]
+                session.payload["base_url"] = inputs["base_url"]
+            if inputs.get("host_url"):
+                client_record.host_url = inputs["host_url"]
+            if inputs.get("client_id"):
+                client_record.client_id = inputs["client_id"]
+            if inputs.get("client_secret"):
+                client_record.client_secret = inputs["client_secret"]
+            if "scopes" in inputs:
+                scopes_input = inputs["scopes"].strip()
+                client_record.scopes = [s.strip() for s in scopes_input.split(",") if s.strip()] if scopes_input else []
+            self._save_provider_client_credentials(client_record)
+        elif flow_type == FlowType.API_KEY:
+            api_key = inputs.get("api_key")
+            if api_key:
+                session.payload["api_key"] = api_key
 
     def begin_login_flow(
         self,
@@ -254,13 +306,12 @@ class AuthService:
         flow_override: FlowType | None = None,
         force: bool = False,
         base_url: str | None = None,
-        input_provider: InputProvider | None = None,
     ) -> None:
         provider = session.provider
         connection_name = session.connection_name
         definition = self.get_provider(provider)
 
-        flow_type = flow_override or definition.flow
+        flow_type = flow_override or FlowType(session.flow_type)
         handler_cls = _FLOW_HANDLERS.get(flow_type)
         if handler_cls is None:
             raise UnsupportedFlowError(flow_type.value, provider=provider)
@@ -271,105 +322,25 @@ class AuthService:
         flow_client_id = client_record.client_id if client_record else None
         flow_client_secret = client_record.client_secret if client_record else None
         flow_base_url = base_url or (client_record.base_url if client_record else None)
-        flow_api_key = None
-        persisted_scopes = client_record.scopes if client_record else None
 
-        from authsome.auth.input_provider import BridgeInputProvider, InputField
-        from authsome.auth.models.connection import ProviderClientRecord
+        final_scopes = (
+            scopes
+            if scopes is not None
+            else (client_record.scopes if client_record and client_record.scopes is not None else None)
+        )
 
-        # Build list of fields that still need to be collected
-        fields_to_collect: list[InputField] = []
-        static_hints: list[dict] = []  # display-only hints shown in the bridge form
+        resolved_definition = definition.resolve_urls(flow_base_url)
 
-        if definition.oauth and definition.oauth.base_url and not flow_base_url:
-            fields_to_collect.append(
-                InputField(
-                    name="base_url",
-                    label="Base URL",
-                    secret=False,
-                    default=definition.oauth.base_url,
-                )
-            )
-            # Add host_url override if base_url is present
-            fields_to_collect.append(
-                InputField(
-                    name="host_url",
-                    label="API Host URL",
-                    secret=False,
-                    default=definition.host_url or "",
-                )
-            )
-
-        if flow_type == FlowType.PKCE and not flow_client_id:
-            static_hints.append(
-                {"type": "static", "label": "Redirect URL", "value": "http://127.0.0.1:7998/v1/callbacks/pkce"}
-            )
-            fields_to_collect.append(InputField(name="client_id", label="Client ID", secret=False))
-            fields_to_collect.append(
-                InputField(name="client_secret", label="Client Secret (Optional)", secret=True, default="")
-            )
-        elif flow_type == FlowType.DEVICE_CODE and not flow_client_id:
-            fields_to_collect.append(
-                InputField(
-                    name="client_id",
-                    label="Client ID (leave blank for public device flow)",
-                    secret=False,
-                    default="",
-                )
-            )
-            fields_to_collect.append(
-                InputField(name="client_secret", label="Client Secret (Optional)", secret=True, default="")
-            )
-
-        if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE, FlowType.DCR_PKCE):
-            if scopes is None and persisted_scopes is None:
-                default_scopes = (
-                    ",".join(definition.oauth.scopes) if definition.oauth and definition.oauth.scopes else ""
-                )
-                fields_to_collect.append(
-                    InputField(name="scopes", label="Scopes (comma-separated)", secret=False, default=default_scopes)
-                )
-
-        if flow_type == FlowType.API_KEY:
-            api_key_field = InputField(name="api_key", label="API Key", secret=True)
-            if definition.api_key and definition.api_key.key_pattern:
-                api_key_field.pattern = definition.api_key.key_pattern
-                api_key_field.pattern_hint = definition.api_key.key_pattern_hint
-            fields_to_collect.append(api_key_field)
-
-        static_hints.extend(self._build_docs_hints(definition, flow_type))
-
-        if fields_to_collect:
-            ip = input_provider or BridgeInputProvider(
-                title=f"{definition.display_name} Credentials",
-                static_fields=static_hints,
-            )
-            inputs = ip.collect(fields_to_collect)
-
-            if flow_type in (FlowType.PKCE, FlowType.DEVICE_CODE, FlowType.DCR_PKCE):
-                if client_record is None:
-                    client_record = ProviderClientRecord(profile=self._identity, provider=provider)
-                if inputs.get("base_url"):
-                    client_record.base_url = inputs["base_url"]
-                    flow_base_url = inputs["base_url"]
-                if inputs.get("host_url"):
-                    client_record.host_url = inputs["host_url"]
-                if inputs.get("client_id"):
-                    client_record.client_id = inputs["client_id"]
-                    flow_client_id = inputs["client_id"]
-                if inputs.get("client_secret"):
-                    client_record.client_secret = inputs["client_secret"]
-                    flow_client_secret = inputs["client_secret"]
-                if "scopes" in inputs:
-                    scopes_input = inputs["scopes"].strip()
-                    client_record.scopes = (
-                        [s.strip() for s in scopes_input.split(",") if s.strip()] if scopes_input else []
-                    )
-                self._save_provider_client_credentials(client_record)
-            elif flow_type == FlowType.API_KEY:
-                flow_api_key = inputs.get("api_key")
-                if flow_api_key:
-                    session.payload["api_key"] = flow_api_key
+        handler.begin(
+            provider=resolved_definition,
+            profile=self._identity,
+            connection_name=connection_name,
+            runtime_session=session,
+            scopes=final_scopes,
+            client_id=flow_client_id,
+            client_secret=flow_client_secret,
+            base_url=flow_base_url,
+        )
 
         final_scopes = (
             scopes

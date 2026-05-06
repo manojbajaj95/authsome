@@ -49,8 +49,8 @@ class ApiKeyFlow(AuthFlow):
         if provider.api_key is None:
             raise AuthenticationFailedError("Provider missing 'api_key' configuration", provider=provider.name)
 
-        api_key = callback_data.get("api_key")
-        if not api_key or not api_key.strip():
+        api_key = runtime_session.payload.get("api_key")
+        if not api_key or not str(api_key).strip():
             raise AuthenticationFailedError("API key cannot be empty", provider=provider.name)
 
         cleaned_key = api_key.strip()

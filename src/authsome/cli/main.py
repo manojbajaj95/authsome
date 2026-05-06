@@ -458,7 +458,7 @@ def login(
             base_url=base_url,
             force=force,
         )
-        session_id = session_info["session_id"]
+        session_id = session_info["id"]
         login_result = {"status": "success"}
 
         next_action = session_info.get("next_action", {"type": "none"})

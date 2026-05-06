@@ -10,8 +10,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from authsome.auth import AuthService
-from authsome.auth.input_provider import InputField, MockInputProvider
-from authsome.auth.models.connection import ProviderClientRecord
+from authsome.auth.input_provider import InputField
 from authsome.auth.models.enums import FlowType
 from authsome.auth.sessions import AuthSession, AuthSessionStatus, AuthSessionStore
 from authsome.server.routes._deps import get_auth_service, get_auth_sessions
@@ -65,13 +64,21 @@ def start_session(
         except Exception:
             pass
 
-    fields = _required_input_fields(auth, session, flow)
+    fields = auth.get_required_inputs(session, scopes=body.scopes, base_url=body.base_url)
     if fields:
         session.state = AuthSessionStatus.WAITING_FOR_USER
         session.payload["input_fields"] = [_field_to_payload(field) for field in fields]
         return _session_response(session)
 
-    _begin_oauth_or_device(auth, sessions, session)
+    auth.begin_login_flow(
+        session=session,
+        scopes=body.scopes,
+        force=body.force,
+        base_url=body.base_url,
+    )
+    if FlowType(session.flow_type) == FlowType.DEVICE_CODE:
+        _update_device_code_expiry(sessions, session)
+    sessions.index_oauth_state(session)
     return _session_response(session)
 
 
@@ -162,102 +169,37 @@ async def submit_input(
     form = await request.form()
     inputs = {key: str(value) for key, value in form.items()}
 
+    auth.save_inputs(session, inputs)
+
     flow = FlowType(session.flow_type)
     if flow == FlowType.API_KEY:
-        auth.login(
-            session.provider,
-            session.connection_name,
-            force=bool(session.payload.get("force", False)),
-            input_provider=MockInputProvider(inputs),
-        )
+        auth.resume_login_flow(session, {})
         session.state = AuthSessionStatus.COMPLETED
         session.status_message = "Login successful"
         return HTMLResponse(_message_page("Authentication successful", "You can close this window."))
 
-    _save_oauth_setup_inputs(auth, session, inputs)
-    _begin_oauth_or_device(auth, sessions, session)
+    auth.begin_login_flow(
+        session=session,
+        scopes=session.payload.get("requested_scopes"),
+        force=bool(session.payload.get("force", False)),
+        base_url=session.payload.get("base_url"),
+    )
+    if flow == FlowType.DEVICE_CODE:
+        _update_device_code_expiry(sessions, session)
+    sessions.index_oauth_state(session)
+
     auth_url = session.payload.get("auth_url")
     if auth_url:
         return RedirectResponse(str(auth_url), status_code=303)
     return HTMLResponse(_message_page("Authentication started", "Return to your terminal to continue."))
 
 
-def _required_input_fields(auth: AuthService, session: AuthSession, flow: FlowType) -> list[InputField]:
-    definition = auth.get_provider(session.provider)
-    client_record = auth._get_provider_client_credentials(session.provider)
-    fields: list[InputField] = []
-
-    if flow == FlowType.API_KEY:
-        api_key_field = InputField(name="api_key", label="API Key", secret=True)
-        if definition.api_key and definition.api_key.key_pattern:
-            api_key_field.pattern = definition.api_key.key_pattern
-            api_key_field.pattern_hint = definition.api_key.key_pattern_hint
-        return [api_key_field]
-
-    if definition.oauth and definition.oauth.base_url and not (client_record and client_record.base_url):
-        fields.append(InputField(name="base_url", label="Base URL", secret=False, default=definition.oauth.base_url))
-        fields.append(
-            InputField(name="host_url", label="API Host URL", secret=False, default=definition.host_url or "")
-        )
-
-    if flow == FlowType.PKCE and not (client_record and client_record.client_id):
-        fields.append(InputField(name="client_id", label="Client ID", secret=False))
-        fields.append(InputField(name="client_secret", label="Client Secret", secret=True, default=""))
-    elif flow == FlowType.DEVICE_CODE and not (client_record and client_record.client_id):
-        fields.append(InputField(name="client_id", label="Client ID", secret=False, default=""))
-        fields.append(InputField(name="client_secret", label="Client Secret", secret=True, default=""))
-
-    requested_scopes = session.payload.get("requested_scopes")
-    persisted_scopes = client_record.scopes if client_record else None
-    needs_scope_input = (
-        flow in (FlowType.PKCE, FlowType.DEVICE_CODE, FlowType.DCR_PKCE)
-        and requested_scopes is None
-        and persisted_scopes is None
-    )
-    if needs_scope_input:
-        default_scopes = ",".join(definition.oauth.scopes) if definition.oauth and definition.oauth.scopes else ""
-        fields.append(InputField(name="scopes", label="Scopes", secret=False, default=default_scopes))
-
-    return fields
-
-
-def _save_oauth_setup_inputs(auth: AuthService, session: AuthSession, inputs: dict[str, str]) -> None:
-    record = auth._get_provider_client_credentials(session.provider)
-    if record is None:
-        record = ProviderClientRecord(profile=auth.identity, provider=session.provider)
-    if inputs.get("base_url"):
-        record.base_url = inputs["base_url"]
-        session.payload["base_url"] = inputs["base_url"]
-    if inputs.get("host_url"):
-        record.host_url = inputs["host_url"]
-    if inputs.get("client_id"):
-        record.client_id = inputs["client_id"]
-    if inputs.get("client_secret"):
-        record.client_secret = inputs["client_secret"]
-    if "scopes" in inputs:
-        scopes_input = inputs["scopes"].strip()
-        record.scopes = [scope.strip() for scope in scopes_input.split(",") if scope.strip()] if scopes_input else []
-    auth._save_provider_client_credentials(record)
-
-
-def _begin_oauth_or_device(auth: AuthService, sessions: AuthSessionStore, session: AuthSession) -> None:
-    scopes = session.payload.get("requested_scopes")
-    flow = FlowType(session.flow_type)
-    if flow in (FlowType.PKCE, FlowType.DCR_PKCE):
-        session.payload["callback_url_override"] = OAUTH_CALLBACK_URL
-    auth.begin_login_flow(
-        session=session,
-        scopes=scopes,
-        flow_override=flow,
-        force=bool(session.payload.get("force", False)),
-        base_url=session.payload.get("base_url"),
-    )
-    if flow == FlowType.DEVICE_CODE and "expires_in" in session.payload:
+def _update_device_code_expiry(sessions: AuthSessionStore, session: AuthSession) -> None:
+    if "expires_in" in session.payload:
         try:
             session.expires_at = utc_now() + timedelta(seconds=int(session.payload["expires_in"]))
         except ValueError:
             pass
-    sessions.index_oauth_state(session)
 
 
 def _session_response(session: AuthSession) -> AuthSessionResponse:
@@ -317,7 +259,7 @@ def _input_page(session: AuthSession, display_name: str, docs_url: str | None, f
       <h1>{html.escape(display_name)}</h1>
       {docs}
       <form method="post" action="/auth/sessions/{html.escape(session.session_id)}/input">
-        {''.join(required_rows)}
+        {"".join(required_rows)}
         {optional}
         <button type="submit">Continue</button>
       </form>

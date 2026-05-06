@@ -1,4 +1,4 @@
-"""Local filesystem storage for config, providers, profiles, and vault data."""
+"""Local filesystem and SQLite implementation of the AppStore."""
 
 from __future__ import annotations
 
@@ -13,10 +13,11 @@ from authsome.auth.models.config import GlobalConfig
 from authsome.auth.models.profile import ProfileMetadata
 from authsome.auth.models.provider import ProviderDefinition
 from authsome.errors import ProfileNotFoundError, ProviderNotFoundError, StoreUnavailableError
+from authsome.store.interfaces import AppStore, VaultStorage
 from authsome.utils import utc_now
 
 
-class SQLiteVaultStorage:
+class SQLiteVaultStorage(VaultStorage):
     """SQLite KV store for a single profile directory."""
 
     def __init__(self, profile_dir: Path) -> None:
@@ -114,8 +115,8 @@ class SQLiteVaultStorage:
             self._conn = None
 
 
-class LocalAppStore:
-    """Local filesystem storage implementation."""
+class LocalAppStore(AppStore):
+    """Local filesystem implementation of AppStore."""
 
     def __init__(self, home_dir: Path) -> None:
         self._home = home_dir
@@ -249,7 +250,7 @@ class LocalAppStore:
 
     # ── Vault ─────────────────────────────────────────────────────────────
 
-    def get_vault_storage(self, profile: str) -> SQLiteVaultStorage:
+    def get_vault_storage(self, profile: str) -> VaultStorage:
         if profile not in self._vault_stores:
             profile_dir = self._profiles_dir / profile
             if not profile_dir.exists():

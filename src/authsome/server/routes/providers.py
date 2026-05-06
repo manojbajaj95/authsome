@@ -15,8 +15,7 @@ router = APIRouter(prefix="/providers", tags=["providers"])
 def list_providers(auth: AuthService = Depends(get_auth_service)):
     by_source = auth.list_providers_by_source()
     return {
-        source: [provider.model_dump(mode="json") for provider in providers]
-        for source, providers in by_source.items()
+        source: [provider.model_dump(mode="json") for provider in providers] for source, providers in by_source.items()
     }
 
 

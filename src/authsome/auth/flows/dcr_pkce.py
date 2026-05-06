@@ -60,7 +60,9 @@ class DcrPkceFlow(AuthFlow):
         assert client_id is not None  # guaranteed: either passed in or registered above
 
         code_verifier, code_challenge = _generate_pkce()
-        redirect_uri = str(runtime_session.payload.get("callback_url_override", "http://127.0.0.1:7998/auth/callback/oauth"))
+        redirect_uri = str(
+            runtime_session.payload.get("callback_url_override", "http://127.0.0.1:7998/auth/callback/oauth")
+        )
 
         state = secrets.token_urlsafe(32)
         auth_params: dict[str, str] = {

@@ -59,7 +59,9 @@ class PkceFlow(AuthFlow):
         # We assume the daemon or some orchestrator will handle the redirect
         # so we instruct the provider to redirect to the RuntimeServer callbacks endpoint.
         # But for now, we can just use localhost:7998
-        redirect_uri = str(runtime_session.payload.get("callback_url_override", "http://127.0.0.1:7998/auth/callback/oauth"))
+        redirect_uri = str(
+            runtime_session.payload.get("callback_url_override", "http://127.0.0.1:7998/auth/callback/oauth")
+        )
 
         state = secrets.token_urlsafe(32)
         auth_params: dict[str, str] = {
