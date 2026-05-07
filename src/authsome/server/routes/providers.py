@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from authsome.auth import AuthService
 from authsome.auth.models.provider import ProviderDefinition
