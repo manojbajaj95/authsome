@@ -9,64 +9,34 @@ import requests
 DEFAULT_DAEMON_URL = "http://127.0.0.1:7998"
 
 
-def raise_for_error(response: requests.Response) -> None:
+def raise_for_error(response: requests.Response, provider: str | None = None) -> None:
     try:
         response.raise_for_status()
     except requests.HTTPError as exc:
         try:
             data = response.json()
             error_name = data.get("error")
-            if error_name:
+            message = data.get("message")
+            if error_name and message:
                 import authsome.errors as err_mod
 
                 exc_cls = getattr(err_mod, error_name, None)
                 if exc_cls and issubclass(exc_cls, err_mod.AuthsomeError):
-                    exc_cls_any: Any = exc_cls
-                    provider = data.get("provider")
-                    operation = data.get("operation")
-                    message = data.get("message", "")
-
-                    prefix = f"{error_name}: "
-                    if message.startswith(prefix):
-                        message = message[len(prefix) :]
-
-                    suffix_part = "DO NOT HALLUCINATE"
-                    if suffix_part in message:
-                        message = message.split(suffix_part)[0].strip()
-                        message = message.rstrip(". ")
-
-                    if error_name == "ConnectionNotFoundError":
-                        raise exc_cls_any(
-                            provider=provider or "unknown",
-                            connection=data.get("connection", "default"),
-                            profile=data.get("profile", "default"),
-                        ) from exc
-                    elif error_name in ("ProviderNotFoundError", "ProfileNotFoundError"):
-                        raise exc_cls_any(provider or "unknown") from exc
-                    elif error_name == "UnsupportedAuthTypeError":
-                        raise exc_cls_any(data.get("auth_type", "unknown"), provider=provider) from exc
-                    elif error_name == "UnsupportedFlowError":
-                        raise exc_cls_any(data.get("flow", "unknown"), provider=provider) from exc
-                    elif error_name == "CredentialMissingError":
-                        raise exc_cls_any(message, provider=provider) from exc
-                    elif error_name == "InputCancelledError":
-                        raise exc_cls_any(message) from exc
-                    elif error_name == "TokenExpiredError":
-                        raise exc_cls_any(provider=provider) from exc
-                    elif error_name in ("RefreshFailedError", "AuthenticationFailedError", "DiscoveryError"):
-                        reason = message
-                        for prefix_to_strip in (f"[{provider}] ", f"({operation}) "):
-                            if reason.startswith(prefix_to_strip):
-                                reason = reason[len(prefix_to_strip) :]
-                        raise exc_cls_any(reason, provider=provider) from exc
-                    elif error_name == "InvalidProviderSchemaError":
-                        raise exc_cls_any(message, provider=provider) from exc
-                    elif error_name in ("EncryptionUnavailableError", "StoreUnavailableError"):
-                        raise exc_cls_any(message) from exc
-                    else:
-                        raise err_mod.AuthsomeError(message, provider=provider, operation=operation) from exc
+                    obj = exc_cls.__new__(exc_cls)
+                    Exception.__init__(obj, message)
+                    obj.provider = data.get("provider") or provider
+                    obj.operation = data.get("operation")
+                    raise obj from exc
         except Exception:
             pass
+
+        # Fallback if the server did not return a structured JSON error
+        status_code = getattr(exc.response, "status_code", 0) if getattr(exc, "response", None) is not None else 0
+        if status_code in (404, 500) and provider:
+            import authsome.errors as err_mod
+
+            raise err_mod.ConnectionNotFoundError(provider=provider, connection="default") from exc
+
         raise exc
 
 
@@ -76,19 +46,19 @@ class AuthsomeApiClient:
     def __init__(self, base_url: str = DEFAULT_DAEMON_URL) -> None:
         self._base_url = base_url.rstrip("/")
 
-    def _get(self, path: str) -> dict[str, Any]:
+    def _get(self, path: str, provider: str | None = None) -> dict[str, Any]:
         response = requests.get(f"{self._base_url}{path}", timeout=10)
-        raise_for_error(response)
+        raise_for_error(response, provider=provider)
         return response.json()
 
-    def _post(self, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _post(self, path: str, body: dict[str, Any] | None = None, provider: str | None = None) -> dict[str, Any]:
         response = requests.post(f"{self._base_url}{path}", json=body or {}, timeout=30)
-        raise_for_error(response)
+        raise_for_error(response, provider=provider)
         return response.json()
 
-    def _delete(self, path: str) -> dict[str, Any]:
+    def _delete(self, path: str, provider: str | None = None) -> dict[str, Any]:
         response = requests.delete(f"{self._base_url}{path}", timeout=30)
-        raise_for_error(response)
+        raise_for_error(response, provider=provider)
         return response.json()
 
     def health(self) -> dict[str, Any]:
@@ -98,7 +68,7 @@ class AuthsomeApiClient:
         return self._get("/ready")
 
     def start_login(self, **kwargs: Any) -> dict[str, Any]:
-        return self._post("/auth/sessions", kwargs)
+        return self._post("/auth/sessions", kwargs, provider=kwargs.get("provider"))
 
     def get_session(self, session_id: str) -> dict[str, Any]:
         return self._get(f"/auth/sessions/{session_id}")
@@ -110,30 +80,32 @@ class AuthsomeApiClient:
         return self._get("/connections")
 
     def get_connection(self, provider: str, connection_name: str = "default") -> dict[str, Any]:
-        return self._get(f"/connections/{provider}/{connection_name}")
+        return self._get(f"/connections/{provider}/{connection_name}", provider=provider)
 
     def logout(self, provider: str, connection_name: str = "default") -> None:
-        self._post(f"/connections/{provider}/{connection_name}/logout")
+        self._post(f"/connections/{provider}/{connection_name}/logout", provider=provider)
 
     def revoke(self, provider: str) -> None:
-        self._post(f"/connections/{provider}/revoke")
+        self._post(f"/connections/{provider}/revoke", provider=provider)
 
     def set_default_connection(self, provider: str, connection_name: str) -> None:
-        self._post(f"/connections/{provider}/{connection_name}/default")
+        self._post(f"/connections/{provider}/{connection_name}/default", provider=provider)
 
     def get_provider(self, provider: str) -> dict[str, Any]:
-        return self._get(f"/providers/{provider}")
+        return self._get(f"/providers/{provider}", provider=provider)
 
     def register_provider(self, definition_dict: dict[str, Any], force: bool = False) -> None:
-        self._post("/providers", {"definition": definition_dict, "force": force})
+        provider = definition_dict.get("name")
+        self._post("/providers", {"definition": definition_dict, "force": force}, provider=provider)
 
     def remove(self, provider: str) -> None:
-        self._delete(f"/providers/{provider}")
+        self._delete(f"/providers/{provider}", provider=provider)
 
     def export(self, provider: str | None = None, connection_name: str = "default", format: str = "env") -> str:
         result = self._post(
             "/credentials/export",
             {"provider": provider, "connection": connection_name, "format": format},
+            provider=provider,
         )
         return result["output"]
 
@@ -141,7 +113,7 @@ class AuthsomeApiClient:
         return self._get("/proxy/routes")
 
     def resolve_credentials(self, **kwargs: Any) -> dict[str, Any]:
-        return self._post("/credentials/resolve", kwargs)
+        return self._post("/credentials/resolve", kwargs, provider=kwargs.get("provider"))
 
     def whoami(self) -> dict[str, Any]:
         return self._get("/whoami")
