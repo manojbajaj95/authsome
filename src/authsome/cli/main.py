@@ -767,15 +767,15 @@ def inspect(ctx_obj: ContextObj, provider: str) -> None:
 @handle_errors
 def export(ctx_obj: ContextObj, provider: str | None, connection: str, export_format: str) -> None:
     """Export credential material in selected format."""
+    actx = ctx_obj.initialize()
+    fmt = ExportFormat(export_format)
+    output = actx.runtime_client.export(provider, connection, format=fmt.value)
+    audit.log("export", provider=provider, connection=connection, format=fmt.value)
     ctx_obj.echo(
         "Note: secrets are now in your shell environment for this session. Prefer 'authsome run' for scoped injection.",
         err=True,
         color="yellow",
     )
-    actx = ctx_obj.initialize()
-    fmt = ExportFormat(export_format)
-    output = actx.runtime_client.export(provider, connection, format=fmt.value)
-    audit.log("export", provider=provider, connection=connection, format=fmt.value)
     if output:
         click.echo(output)
 
