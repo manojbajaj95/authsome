@@ -10,7 +10,8 @@ DARK_THEME_CSS = """
   --text: #ededed;
   --muted: #a1a1aa;
   --line: #27272a;
-  --focus: #ededed;
+  --accent: #83ca16;
+  --focus: var(--accent);
   --primary: #ededed;
   --primary-text: #000000;
 }
@@ -48,10 +49,9 @@ p {
 }
 a {
   color: var(--text);
-  text-decoration: underline;
-  text-underline-offset: 4px;
+  text-decoration: none;
 }
-a:hover { color: var(--muted); }
+a:hover { color: var(--accent); }
 .field-group { margin-bottom: 16px; }
 label {
   display: block;
@@ -108,6 +108,10 @@ summary {
   color: var(--text);
   cursor: pointer;
   user-select: none;
+  transition: color 0.15s;
+}
+summary:hover {
+  color: var(--accent);
 }
 details[open] summary { margin-bottom: 12px; }
 """
@@ -121,7 +125,8 @@ BRIDGE_STYLE = """
   --text: #ededed;
   --muted: #a1a1aa;
   --line: #27272a;
-  --focus: #ededed;
+  --accent: #83ca16;
+  --focus: var(--accent);
   --danger: #ef4444;
   --danger-bg: #450a0a;
   --success-bg: #064e3b;
@@ -151,6 +156,10 @@ body {
   font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+.brand::after {
+  content: ".";
+  color: var(--accent);
 }
 .panel {
   background: var(--panel);
@@ -297,8 +306,8 @@ button,
   font-size: 13px;
 }
 .instructions-links li { margin-bottom: 4px; }
-a { color: var(--text); text-decoration: underline; text-underline-offset: 4px; }
-a:hover { color: var(--muted); }
+a { color: var(--text); text-decoration: none; }
+a:hover { color: var(--accent); }
 .status-panel {
   text-align: center;
 }
@@ -311,7 +320,7 @@ a:hover { color: var(--muted); }
   border-radius: 999px;
   font-weight: 600;
 }
-.status-mark.success { background: var(--success-bg); color: #34d399; }
+.status-mark.success { background: var(--success-bg); color: var(--accent); }
 .status-mark.cancelled { background: var(--cancel-bg); color: #94a3b8; }
 .code-display {
   background: var(--bg);
@@ -355,7 +364,8 @@ DEVICE_BRIDGE_STYLE = """
   --text: #ededed;
   --muted: #a1a1aa;
   --line: #27272a;
-  --focus: #ededed;
+  --accent: #83ca16;
+  --focus: var(--accent);
   --primary: #ededed;
   --primary-text: #000000;
 }
@@ -396,7 +406,7 @@ h2 { margin-bottom: 8px; font-weight: 500; letter-spacing: -0.02em; }
   transition: background 0.15s;
   font-weight: 500;
 }
-.copybtn:hover { background: #111111; }
+.copybtn:hover { background: #111111; border-color: var(--accent); }
 a.verify {
   display: inline-block;
   margin-bottom: 20px;
