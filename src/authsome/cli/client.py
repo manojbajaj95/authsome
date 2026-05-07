@@ -21,6 +21,7 @@ def raise_for_error(response: requests.Response) -> None:
 
                 exc_cls = getattr(err_mod, error_name, None)
                 if exc_cls and issubclass(exc_cls, err_mod.AuthsomeError):
+                    exc_cls_any: Any = exc_cls
                     provider = data.get("provider")
                     operation = data.get("operation")
                     message = data.get("message", "")
@@ -35,33 +36,33 @@ def raise_for_error(response: requests.Response) -> None:
                         message = message.rstrip(". ")
 
                     if error_name == "ConnectionNotFoundError":
-                        raise exc_cls(
+                        raise exc_cls_any(
                             provider=provider or "unknown",
                             connection=data.get("connection", "default"),
                             profile=data.get("profile", "default"),
                         ) from exc
                     elif error_name in ("ProviderNotFoundError", "ProfileNotFoundError"):
-                        raise exc_cls(provider or "unknown") from exc
+                        raise exc_cls_any(provider or "unknown") from exc
                     elif error_name == "UnsupportedAuthTypeError":
-                        raise exc_cls(data.get("auth_type", "unknown"), provider=provider) from exc
+                        raise exc_cls_any(data.get("auth_type", "unknown"), provider=provider) from exc
                     elif error_name == "UnsupportedFlowError":
-                        raise exc_cls(data.get("flow", "unknown"), provider=provider) from exc
+                        raise exc_cls_any(data.get("flow", "unknown"), provider=provider) from exc
                     elif error_name == "CredentialMissingError":
-                        raise exc_cls(message, provider=provider) from exc
+                        raise exc_cls_any(message, provider=provider) from exc
                     elif error_name == "InputCancelledError":
-                        raise exc_cls(message) from exc
+                        raise exc_cls_any(message) from exc
                     elif error_name == "TokenExpiredError":
-                        raise exc_cls(provider=provider) from exc
+                        raise exc_cls_any(provider=provider) from exc
                     elif error_name in ("RefreshFailedError", "AuthenticationFailedError", "DiscoveryError"):
                         reason = message
                         for prefix_to_strip in (f"[{provider}] ", f"({operation}) "):
                             if reason.startswith(prefix_to_strip):
                                 reason = reason[len(prefix_to_strip) :]
-                        raise exc_cls(reason, provider=provider) from exc
+                        raise exc_cls_any(reason, provider=provider) from exc
                     elif error_name == "InvalidProviderSchemaError":
-                        raise exc_cls(message, provider=provider) from exc
+                        raise exc_cls_any(message, provider=provider) from exc
                     elif error_name in ("EncryptionUnavailableError", "StoreUnavailableError"):
-                        raise exc_cls(message) from exc
+                        raise exc_cls_any(message) from exc
                     else:
                         raise err_mod.AuthsomeError(message, provider=provider, operation=operation) from exc
         except Exception:
