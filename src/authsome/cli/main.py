@@ -128,7 +128,45 @@ def handle_errors(func):
             if ctx_obj.json_output:
                 ctx_obj.print_json({"error": exc.__class__.__name__, "message": str(exc)})
             else:
-                ctx_obj.echo(f"Error: {exc}", err=True, color="red")
+                import requests
+
+                from authsome.errors import ConnectionNotFoundError
+
+                provider_name = kwargs.get("provider") or (args[0] if args and isinstance(args[0], str) else None)
+                if isinstance(exc, ConnectionNotFoundError) or exc.__class__.__name__ == "ConnectionNotFoundError":
+                    p_name = provider_name or getattr(exc, "provider", None) or "provider"
+                    ctx_obj.echo(
+                        f"Error: {p_name.capitalize()} is not connected. "
+                        f'Please connect using "authsome login {p_name}".',
+                        err=True,
+                        color="red",
+                    )
+                elif isinstance(exc, requests.HTTPError):
+                    resp = getattr(exc, "response", None)
+                    url = getattr(resp, "url", "") if resp is not None else ""
+                    status_code = getattr(resp, "status_code", 0) if resp is not None else 0
+                    import re
+
+                    match = re.search(r"/connections/([^/]+)/", url)
+                    if match and status_code in (404, 500):
+                        p_name = match.group(1)
+                        ctx_obj.echo(
+                            f"Error: {p_name.capitalize()} is not connected. "
+                            f'Please connect using "authsome login {p_name}".',
+                            err=True,
+                            color="red",
+                        )
+                    elif provider_name and status_code in (404, 500):
+                        ctx_obj.echo(
+                            f"Error: {provider_name.capitalize()} is not connected. "
+                            f'Please connect using "authsome login {provider_name}".',
+                            err=True,
+                            color="red",
+                        )
+                    else:
+                        ctx_obj.echo(f"Error: {exc}", err=True, color="red")
+                else:
+                    ctx_obj.echo(f"Error: {exc}", err=True, color="red")
             sys.exit(format_error_code(exc))
 
     return wrapper

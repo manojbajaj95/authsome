@@ -9,6 +9,66 @@ import requests
 DEFAULT_DAEMON_URL = "http://127.0.0.1:7998"
 
 
+def raise_for_error(response: requests.Response) -> None:
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        try:
+            data = response.json()
+            error_name = data.get("error")
+            if error_name:
+                import authsome.errors as err_mod
+
+                exc_cls = getattr(err_mod, error_name, None)
+                if exc_cls and issubclass(exc_cls, err_mod.AuthsomeError):
+                    provider = data.get("provider")
+                    operation = data.get("operation")
+                    message = data.get("message", "")
+
+                    prefix = f"{error_name}: "
+                    if message.startswith(prefix):
+                        message = message[len(prefix) :]
+
+                    suffix_part = "DO NOT HALLUCINATE"
+                    if suffix_part in message:
+                        message = message.split(suffix_part)[0].strip()
+                        message = message.rstrip(". ")
+
+                    if error_name == "ConnectionNotFoundError":
+                        raise exc_cls(
+                            provider=provider or "unknown",
+                            connection=data.get("connection", "default"),
+                            profile=data.get("profile", "default"),
+                        ) from exc
+                    elif error_name in ("ProviderNotFoundError", "ProfileNotFoundError"):
+                        raise exc_cls(provider or "unknown") from exc
+                    elif error_name == "UnsupportedAuthTypeError":
+                        raise exc_cls(data.get("auth_type", "unknown"), provider=provider) from exc
+                    elif error_name == "UnsupportedFlowError":
+                        raise exc_cls(data.get("flow", "unknown"), provider=provider) from exc
+                    elif error_name == "CredentialMissingError":
+                        raise exc_cls(message, provider=provider) from exc
+                    elif error_name == "InputCancelledError":
+                        raise exc_cls(message) from exc
+                    elif error_name == "TokenExpiredError":
+                        raise exc_cls(provider=provider) from exc
+                    elif error_name in ("RefreshFailedError", "AuthenticationFailedError", "DiscoveryError"):
+                        reason = message
+                        for prefix_to_strip in (f"[{provider}] ", f"({operation}) "):
+                            if reason.startswith(prefix_to_strip):
+                                reason = reason[len(prefix_to_strip) :]
+                        raise exc_cls(reason, provider=provider) from exc
+                    elif error_name == "InvalidProviderSchemaError":
+                        raise exc_cls(message, provider=provider) from exc
+                    elif error_name in ("EncryptionUnavailableError", "StoreUnavailableError"):
+                        raise exc_cls(message) from exc
+                    else:
+                        raise err_mod.AuthsomeError(message, provider=provider, operation=operation) from exc
+        except Exception:
+            pass
+        raise exc
+
+
 class AuthsomeApiClient:
     """Small typed wrapper around the local daemon API."""
 
@@ -17,17 +77,17 @@ class AuthsomeApiClient:
 
     def _get(self, path: str) -> dict[str, Any]:
         response = requests.get(f"{self._base_url}{path}", timeout=10)
-        response.raise_for_status()
+        raise_for_error(response)
         return response.json()
 
     def _post(self, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
         response = requests.post(f"{self._base_url}{path}", json=body or {}, timeout=30)
-        response.raise_for_status()
+        raise_for_error(response)
         return response.json()
 
     def _delete(self, path: str) -> dict[str, Any]:
         response = requests.delete(f"{self._base_url}{path}", timeout=30)
-        response.raise_for_status()
+        raise_for_error(response)
         return response.json()
 
     def health(self) -> dict[str, Any]:
