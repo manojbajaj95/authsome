@@ -383,7 +383,7 @@ class AuthService:
         flow_client_id = client_record.client_id if client_record else None
         flow_client_secret = client_record.client_secret if client_record else None
 
-        flow_base_url = session.payload.get("callback_url")
+        flow_base_url = session.payload.get("base_url") or (client_record.base_url if client_record else None)
         resolved_definition = definition.resolve_urls(flow_base_url)
 
         result = handler.resume(
@@ -404,6 +404,7 @@ class AuthService:
                 client_record = ProviderClientRecord(profile=self._identity, provider=provider)
             client_record.client_id = result.client_record.client_id
             client_record.client_secret = result.client_record.client_secret
+            client_record.base_url = result.client_record.base_url or client_record.base_url
             self._save_provider_client_credentials(client_record)
 
         result.connection.base_url = flow_base_url
@@ -414,6 +415,18 @@ class AuthService:
 
         logger.info("Login successful: provider={} connection={} profile={}", provider, connection_name, self._identity)
         return result.connection
+
+    def background_resume(self, session: AuthSession) -> None:
+        """Resume a flow in a background thread."""
+        from authsome.auth.sessions import AuthSessionStatus
+
+        try:
+            self.resume_login_flow(session, {})
+            session.state = AuthSessionStatus.COMPLETED
+            session.status_message = "Login successful"
+        except Exception as e:
+            session.state = AuthSessionStatus.FAILED
+            session.error_message = str(e)
 
     @staticmethod
     def _connection_is_valid(record: ConnectionRecord) -> bool:

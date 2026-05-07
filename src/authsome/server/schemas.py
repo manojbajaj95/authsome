@@ -30,19 +30,11 @@ class OpenUrlAction(BaseModel):
     url: str
 
 
-class DeviceCodeAction(BaseModel):
-    type: Literal["device_code"]
-    verification_uri: str
-    verification_uri_complete: str | None = None
-    user_code: str
-    interval: int = 5
-
-
 class NoneAction(BaseModel):
     type: Literal["none"] = "none"
 
 
-NextAction = Annotated[OpenUrlAction | DeviceCodeAction | NoneAction, Field(discriminator="type")]
+NextAction = Annotated[OpenUrlAction | NoneAction, Field(discriminator="type")]
 
 
 class AuthSessionResponse(BaseModel):

@@ -498,48 +498,37 @@ def login(
             force=force,
         )
         session_id = session_info["id"]
-        login_result = {"status": "success"}
+        status = session_info.get("status")
+        login_result = {"status": "started", "record_status": status}
 
-        if session_info.get("status") == "completed":
-            login_result = {"status": "already_connected"}
+        if status == "completed":
+            login_result["status"] = "success"
         else:
             next_action = session_info.get("next_action", {"type": "none"})
             action_type = next_action.get("type")
+
             if action_type == "open_url":
                 auth_url = next_action["url"]
                 if not ctx_obj.quiet:
                     ctx_obj.echo("Opening browser to continue login...", color="cyan")
-                    ctx_obj.echo(f"If the browser doesn't open, visit: {auth_url}", color="cyan")
+                    ctx_obj.echo(f"Visit: {auth_url}", color="cyan")
                 import webbrowser
 
                 try:
                     webbrowser.open(auth_url)
                 except Exception:
                     pass
-                login_result = {"status": "started"}
-            elif action_type == "device_code":
-                if not ctx_obj.quiet:
-                    verification = next_action.get("verification_uri_complete") or next_action.get("verification_uri")
-                    ctx_obj.echo(f"Visit: {verification}", color="cyan")
-                    ctx_obj.echo(f"Code: {next_action.get('user_code')}", color="cyan")
-                import time
 
-                interval = int(next_action.get("interval", 5))
-                while True:
-                    time.sleep(interval)
-                    s_state = actx.runtime_client.resume_login_session(session_id)
-                    if s_state.get("status") in ("completed", "failed", "expired", "cancelled"):
-                        login_result = {
-                            "status": "success" if s_state.get("status") == "completed" else s_state.get("status"),
-                            "record_status": s_state.get("status"),
-                        }
-                        if s_state.get("status") != "completed":
-                            raise AuthsomeError(s_state.get("error") or "Device-code login did not complete")
-                        break
-            else:
-                login_result = {"status": "started"}
+            if not ctx_obj.quiet:
+                ctx_obj.echo(
+                    "\nLogin process started. The connection will be updated automatically once complete.",
+                    color="yellow",
+                )
+                ctx_obj.echo(f"Session ID: {session_id}")
 
-        audit.log("login", provider=provider, connection=connection, flow=flow or "unknown", status="success")
+        audit.log(
+            "login", provider=provider, connection=connection, flow=flow or "unknown", status=login_result["status"]
+        )
     except Exception:
         audit.log("login", provider=provider, connection=connection, status="failure")
         raise
@@ -550,10 +539,10 @@ def login(
                 "status": login_result.get("status", "success"),
                 "provider": provider,
                 "connection": connection,
-                "record_status": login_result.get("record_status", "valid"),
+                "record_status": login_result.get("record_status"),
             }
         )
-    elif login_result.get("status") == "already_connected":
+    elif login_result.get("status") == "success":
         ctx_obj.echo(
             f"Already logged in to {provider} ({connection}). Use the --force flag to overwrite and open the browser.",
             color="green",
