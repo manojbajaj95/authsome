@@ -383,7 +383,7 @@ def list_cmd(ctx_obj: ContextObj) -> None:
             ).rstrip()
 
         is_active = connection_is_active(row)
-        
+
         if is_active:
             prov_color = "green"
             prov_bold = True
@@ -396,27 +396,27 @@ def list_cmd(ctx_obj: ContextObj) -> None:
             prov_bold = False
             conn_color = None
             expires_color = None
-            if row['status'] == 'not_connected':
+            if row["status"] == "not_connected":
                 status_color = None
                 status_dim = True
             else:
                 status_color = "red"
                 status_dim = False
 
-        provider_str = pad_field(row['provider'], 'provider', color=prov_color, bold=prov_bold)
-        source_str = pad_field(row['source'], 'source')
-        auth_str = pad_field(row['auth'], 'auth')
-        connection_str = pad_field(row['connection'], 'connection', color=conn_color)
-        status_str = pad_field(row['status'], 'status', color=status_color, bold=is_active, dim=status_dim)
-        expires_str = pad_field(row['expires'], 'expires', color=expires_color)
-        
+        provider_str = pad_field(row["provider"], "provider", color=prov_color, bold=prov_bold)
+        source_str = pad_field(row["source"], "source")
+        auth_str = pad_field(row["auth"], "auth")
+        connection_str = pad_field(row["connection"], "connection", color=conn_color)
+        status_str = pad_field(row["status"], "status", color=status_color, bold=is_active, dim=status_dim)
+        expires_str = pad_field(row["expires"], "expires", color=expires_color)
+
         return f"{provider_str}  {source_str}  {auth_str}  {connection_str}  {status_str}  {expires_str}".rstrip()
 
     ctx_obj.echo(render_row(headers, is_header=True))
     ctx_obj.echo(
         render_row(
             {key: "-" * widths[key] for key in ("provider", "source", "auth", "connection", "status", "expires")},
-            is_divider=True
+            is_divider=True,
         )
     )
     for row in rows:
@@ -500,41 +500,44 @@ def login(
         session_id = session_info["id"]
         login_result = {"status": "success"}
 
-        next_action = session_info.get("next_action", {"type": "none"})
-        action_type = next_action.get("type")
-        if action_type == "open_url":
-            auth_url = next_action["url"]
-            if not ctx_obj.quiet:
-                ctx_obj.echo("Opening browser to continue login...", color="cyan")
-                ctx_obj.echo(f"If the browser doesn't open, visit: {auth_url}", color="cyan")
-            import webbrowser
-
-            try:
-                webbrowser.open(auth_url)
-            except Exception:
-                pass
-            login_result = {"status": "started"}
-        elif action_type == "device_code":
-            if not ctx_obj.quiet:
-                verification = next_action.get("verification_uri_complete") or next_action.get("verification_uri")
-                ctx_obj.echo(f"Visit: {verification}", color="cyan")
-                ctx_obj.echo(f"Code: {next_action.get('user_code')}", color="cyan")
-            import time
-
-            interval = int(next_action.get("interval", 5))
-            while True:
-                time.sleep(interval)
-                s_state = actx.runtime_client.resume_login_session(session_id)
-                if s_state.get("status") in ("completed", "failed", "expired", "cancelled"):
-                    login_result = {
-                        "status": "success" if s_state.get("status") == "completed" else s_state.get("status"),
-                        "record_status": s_state.get("status"),
-                    }
-                    if s_state.get("status") != "completed":
-                        raise AuthsomeError(s_state.get("error") or "Device-code login did not complete")
-                    break
+        if session_info.get("status") == "completed":
+            login_result = {"status": "already_connected"}
         else:
-            login_result = {"status": "started"}
+            next_action = session_info.get("next_action", {"type": "none"})
+            action_type = next_action.get("type")
+            if action_type == "open_url":
+                auth_url = next_action["url"]
+                if not ctx_obj.quiet:
+                    ctx_obj.echo("Opening browser to continue login...", color="cyan")
+                    ctx_obj.echo(f"If the browser doesn't open, visit: {auth_url}", color="cyan")
+                import webbrowser
+
+                try:
+                    webbrowser.open(auth_url)
+                except Exception:
+                    pass
+                login_result = {"status": "started"}
+            elif action_type == "device_code":
+                if not ctx_obj.quiet:
+                    verification = next_action.get("verification_uri_complete") or next_action.get("verification_uri")
+                    ctx_obj.echo(f"Visit: {verification}", color="cyan")
+                    ctx_obj.echo(f"Code: {next_action.get('user_code')}", color="cyan")
+                import time
+
+                interval = int(next_action.get("interval", 5))
+                while True:
+                    time.sleep(interval)
+                    s_state = actx.runtime_client.resume_login_session(session_id)
+                    if s_state.get("status") in ("completed", "failed", "expired", "cancelled"):
+                        login_result = {
+                            "status": "success" if s_state.get("status") == "completed" else s_state.get("status"),
+                            "record_status": s_state.get("status"),
+                        }
+                        if s_state.get("status") != "completed":
+                            raise AuthsomeError(s_state.get("error") or "Device-code login did not complete")
+                        break
+            else:
+                login_result = {"status": "started"}
 
         audit.log("login", provider=provider, connection=connection, flow=flow or "unknown", status="success")
     except Exception:
@@ -551,7 +554,10 @@ def login(
             }
         )
     elif login_result.get("status") == "already_connected":
-        ctx_obj.echo(f"Already logged in to {provider} ({connection}).", color="green")
+        ctx_obj.echo(
+            f"Already logged in to {provider} ({connection}). Use the --force flag to overwrite and open the browser.",
+            color="green",
+        )
     elif login_result.get("status") == "started":
         ctx_obj.echo(
             f"Login started for {provider} ({connection}). Run 'authsome list' to verify completion.",
