@@ -13,6 +13,7 @@ def raise_for_error(response: requests.Response) -> None:
     try:
         response.raise_for_status()
     except requests.HTTPError as exc:
+        obj = None
         try:
             data = response.json()
             error_name = data.get("error")
@@ -26,9 +27,12 @@ def raise_for_error(response: requests.Response) -> None:
                     Exception.__init__(obj, message)
                     obj.provider = data.get("provider")
                     obj.operation = data.get("operation")
-                    raise obj from exc
         except Exception:
             pass
+
+        if obj is not None:
+            raise obj from exc
+
         raise exc
 
 

@@ -125,21 +125,6 @@ def handle_errors(func):
         try:
             return func(ctx_obj, *args, **kwargs)
         except Exception as exc:
-            if isinstance(exc, requests.HTTPError):
-                resp = getattr(exc, "response", None)
-                status_code = resp.status_code if resp is not None else 0
-                if status_code in (404, 500):
-                    provider = kwargs.get("provider")
-                    if not provider:
-                        for arg in args:
-                            if isinstance(arg, str) and arg != ctx_obj:
-                                provider = arg
-                                break
-                    if provider:
-                        import authsome.errors as err_mod
-
-                        exc = err_mod.ConnectionNotFoundError(provider=provider, connection="default")
-
             if ctx_obj.json_output:
                 ctx_obj.print_json({"error": exc.__class__.__name__, "message": str(exc)})
             else:
