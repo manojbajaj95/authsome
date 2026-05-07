@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import html
 from datetime import timedelta
 from typing import Any
 
@@ -21,7 +20,7 @@ from authsome.server.schemas import (
     ResumeAuthSessionRequest,
     StartAuthSessionRequest,
 )
-from authsome.server.ui.web_theme import DARK_THEME_CSS
+from authsome.server.ui import pages
 from authsome.utils import utc_now
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -122,12 +121,12 @@ def oauth_callback(
 ) -> HTMLResponse:
     state = request.query_params.get("state")
     if not state:
-        return HTMLResponse(_message_page("Authentication failed", "Missing OAuth state."), status_code=400)
+        return HTMLResponse(pages.message_page("Authentication failed", "Missing OAuth state."), status_code=400)
     try:
         session = sessions.get_by_oauth_state(state)
     except KeyError:
         return HTMLResponse(
-            _message_page("Authentication session expired", "Please run authsome login again."),
+            pages.message_page("Authentication session expired", "Please run authsome login again."),
             status_code=400,
         )
     callback_data = dict(request.query_params)
@@ -138,8 +137,8 @@ def oauth_callback(
     except Exception as exc:
         session.state = AuthSessionStatus.FAILED
         session.error_message = str(exc)
-        return HTMLResponse(_message_page("Authentication failed", str(exc)), status_code=400)
-    return HTMLResponse(_message_page("Authentication successful", "You can close this window."))
+        return HTMLResponse(pages.message_page("Authentication failed", str(exc)), status_code=400)
+    return HTMLResponse(pages.message_page("Authentication successful", "You can close this window."))
 
 
 @router.get("/sessions/{session_id}/input", response_class=HTMLResponse)
@@ -152,12 +151,12 @@ def input_page(
         session = sessions.get(session_id)
     except KeyError:
         return HTMLResponse(
-            _message_page("Authentication session expired", "Please run authsome login again."),
+            pages.message_page("Authentication session expired", "Please run authsome login again."),
             status_code=404,
         )
     definition = auth.get_provider(session.provider)
     fields = session.payload.get("input_fields", [])
-    return HTMLResponse(_input_page(session, definition.display_name, definition.docs, fields))
+    return HTMLResponse(pages.input_page(session.session_id, definition.display_name, definition.docs, fields))
 
 
 @router.get("/sessions/{session_id}/device", response_class=HTMLResponse)
@@ -170,7 +169,7 @@ def device_page(
         session = sessions.get(session_id)
     except KeyError:
         return HTMLResponse(
-            _message_page("Authentication session expired", "Please run authsome login again."),
+            pages.message_page("Authentication session expired", "Please run authsome login again."),
             status_code=404,
         )
     user_code = session.payload.get("user_code")
@@ -178,11 +177,11 @@ def device_page(
     verification_uri_complete = session.payload.get("verification_uri_complete")
     if not user_code or not verification_uri:
         return HTMLResponse(
-            _message_page("Invalid session", "This session does not have a device code."), status_code=400
+            pages.message_page("Invalid session", "This session does not have a device code."), status_code=400
         )
     definition = auth.get_provider(session.provider)
     return HTMLResponse(
-        _device_code_page(session, definition.display_name, user_code, verification_uri, verification_uri_complete)
+        pages.device_code_page(definition.display_name, user_code, verification_uri, verification_uri_complete)
     )
 
 
@@ -205,7 +204,7 @@ async def submit_input(
         auth.resume_login_flow(session, {})
         session.state = AuthSessionStatus.COMPLETED
         session.status_message = "Login successful"
-        return HTMLResponse(_message_page("Authentication successful", "You can close this window."))
+        return HTMLResponse(pages.message_page("Authentication successful", "You can close this window."))
 
     auth.begin_login_flow(
         session=session,
@@ -224,7 +223,7 @@ async def submit_input(
     auth_url = session.payload.get("auth_url")
     if auth_url:
         return RedirectResponse(str(auth_url), status_code=303)
-    return HTMLResponse(_message_page("Authentication started", "Return to your terminal to continue."))
+    return HTMLResponse(pages.message_page("Authentication started", "Return to your terminal to continue."))
 
 
 def _update_device_code_expiry(sessions: AuthSessionStore, session: AuthSession) -> None:
@@ -262,108 +261,3 @@ def _session_response(session: AuthSession) -> AuthSessionResponse:
 
 def _field_to_payload(field: InputField) -> dict[str, Any]:
     return field.model_dump(mode="json", exclude_none=True)
-
-
-def _input_page(session: AuthSession, display_name: str, docs_url: str | None, fields: list[dict[str, Any]]) -> str:
-    required_rows = []
-    optional_rows = []
-    for field in fields:
-        row = _field_row(field)
-        if field.get("default") is None:
-            required_rows.append(row)
-        else:
-            optional_rows.append(row)
-    docs = (
-        f'<p><a href="{html.escape(docs_url)}" target="_blank" rel="noreferrer">Provider documentation</a></p>'
-        if docs_url
-        else ""
-    )
-    optional = ""
-    if optional_rows:
-        optional = f"<details><summary>Advanced options</summary>{''.join(optional_rows)}</details>"
-    return f"""<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>Authsome - {html.escape(display_name)}</title>
-    <style>{DARK_THEME_CSS}</style>
-  </head>
-  <body>
-    <main>
-      <h1>{html.escape(display_name)}</h1>
-      {docs}
-      <form method="post" action="/auth/sessions/{html.escape(session.session_id)}/input">
-        {"".join(required_rows)}
-        {optional}
-        <button type="submit">Continue</button>
-      </form>
-    </main>
-  </body>
-</html>"""
-
-
-def _field_row(field: dict[str, Any]) -> str:
-    name = html.escape(str(field["name"]))
-    label = html.escape(str(field["label"]))
-    input_type = "password" if field.get("secret", True) else "text"
-    value = html.escape(str(field.get("default") or ""))
-    required = " required" if field.get("default") is None else ""
-    pattern = f' pattern="{html.escape(str(field["pattern"]))}"' if field.get("pattern") else ""
-    hint = f"<small>{html.escape(str(field['pattern_hint']))}</small>" if field.get("pattern_hint") else ""
-    return (
-        f'<div class="field-group">'
-        f'<label for="{name}">{label}</label>'
-        f'<input id="{name}" type="{input_type}" name="{name}" value="{value}"{required}{pattern}>'
-        f"{hint}</div>"
-    )
-
-
-def _device_code_page(
-    session: AuthSession,
-    display_name: str,
-    user_code: str,
-    verification_uri: str,
-    verification_uri_complete: str | None,
-) -> str:
-    link = verification_uri_complete or verification_uri
-    return f"""<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Authsome - Device Login</title>
-  </head>
-  <body>
-    <div class="card">
-      <h1>{html.escape(display_name)}</h1>
-      <p>Enter the following code on your device to complete the login.</p>
-      
-      <div class="code-container">
-        <div class="user-code">{html.escape(user_code)}</div>
-      </div>
-      
-      <a href="{html.escape(link)}" target="_blank" class="btn">Open Login Page</a>
-      
-      <p style="margin-top: 24px; font-size: 13px;">
-        After completing the login on your device, return to your terminal.
-      </p>
-    </div>
-  </body>
-</html>"""
-
-
-def _message_page(title: str, message: str) -> str:
-    return f"""<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>{html.escape(title)}</title>
-    <style>{DARK_THEME_CSS}</style>
-  </head>
-  <body>
-    <main>
-      <h1>{html.escape(title)}</h1>
-      <p>{html.escape(message)}</p>
-    </main>
-  </body>
-</html>"""

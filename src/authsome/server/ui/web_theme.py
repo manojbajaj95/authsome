@@ -369,18 +369,34 @@ DEVICE_BRIDGE_STYLE = """
   --primary: #ededed;
   --primary-text: #000000;
 }
+.brand {
+  margin-bottom: 24px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.brand::after {
+  content: ".";
+  color: var(--accent);
+}
 body {
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  max-width: 480px;
-  margin: 40px auto;
-  padding: 20px;
+  max-width: 420px;
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px 20px;
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
-h2 { margin-bottom: 8px; font-weight: 500; letter-spacing: -0.02em; }
-.subtitle { color: var(--muted); margin-bottom: 24px; font-size: 14px; }
-.code-wrap { display: flex; gap: 8px; align-items: center; margin-bottom: 20px; }
+h2 { margin: 0 0 8px; font-size: 20px; font-weight: 500; letter-spacing: -0.02em; }
+.subtitle { color: var(--muted); margin-bottom: 32px; font-size: 14px; line-height: 1.5; }
+.code-wrap { display: flex; gap: 8px; align-items: stretch; margin-bottom: 24px; }
 .code-wrap input {
   flex: 1;
   font-size: 24px;
@@ -396,20 +412,22 @@ h2 { margin-bottom: 8px; font-weight: 500; letter-spacing: -0.02em; }
 }
 .code-wrap input:focus { outline: none; border-color: var(--focus); }
 .copybtn {
-  padding: 12px 16px;
+  padding: 0 20px;
   font-size: 14px;
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--text);
   border-radius: 6px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: all 0.15s;
   font-weight: 500;
 }
 .copybtn:hover { background: #111111; border-color: var(--accent); }
 a.verify {
-  display: inline-block;
-  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
   padding: 12px 16px;
   background: var(--primary);
   color: var(--primary-text);
@@ -422,6 +440,6 @@ a.verify {
   box-sizing: border-box;
 }
 a.verify:hover { opacity: 0.9; }
-.note { font-size: 13px; color: var(--muted); text-align: center; }
+.note { font-size: 13px; color: var(--muted); text-align: center; line-height: 1.5; }
 </style>
 """
