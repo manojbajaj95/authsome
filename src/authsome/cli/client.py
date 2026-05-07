@@ -9,6 +9,33 @@ import requests
 DEFAULT_DAEMON_URL = "http://127.0.0.1:7998"
 
 
+def raise_for_error(response: requests.Response) -> None:
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        obj = None
+        try:
+            data = response.json()
+            error_name = data.get("error")
+            message = data.get("message")
+            if error_name and message:
+                import authsome.errors as err_mod
+
+                exc_cls = getattr(err_mod, error_name, None)
+                if exc_cls and issubclass(exc_cls, err_mod.AuthsomeError):
+                    obj = exc_cls.__new__(exc_cls)
+                    Exception.__init__(obj, message)
+                    obj.provider = data.get("provider")
+                    obj.operation = data.get("operation")
+        except Exception:
+            pass
+
+        if obj is not None:
+            raise obj from exc
+
+        raise exc
+
+
 class AuthsomeApiClient:
     """Small typed wrapper around the local daemon API."""
 
@@ -17,17 +44,17 @@ class AuthsomeApiClient:
 
     def _get(self, path: str) -> dict[str, Any]:
         response = requests.get(f"{self._base_url}{path}", timeout=10)
-        response.raise_for_status()
+        raise_for_error(response)
         return response.json()
 
     def _post(self, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
         response = requests.post(f"{self._base_url}{path}", json=body or {}, timeout=30)
-        response.raise_for_status()
+        raise_for_error(response)
         return response.json()
 
     def _delete(self, path: str) -> dict[str, Any]:
         response = requests.delete(f"{self._base_url}{path}", timeout=30)
-        response.raise_for_status()
+        raise_for_error(response)
         return response.json()
 
     def health(self) -> dict[str, Any]:

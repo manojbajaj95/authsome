@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from authsome.auth import AuthService
 from authsome.auth.models.provider import ProviderDefinition
@@ -34,7 +34,5 @@ def register_provider(body: dict, auth: AuthService = Depends(get_auth_service))
 
 @router.delete("/{provider}")
 def delete_provider(provider: str, auth: AuthService = Depends(get_auth_service)):
-    if not auth.registry.is_local(provider):
-        raise HTTPException(status_code=400, detail="Only custom providers can be deleted")
-    auth.registry.remove_provider(provider)
+    auth.remove(provider)
     return {"status": "ok", "provider": provider}
