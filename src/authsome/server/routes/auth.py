@@ -6,7 +6,7 @@ import html
 from datetime import timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from authsome.auth import AuthService
@@ -16,7 +16,6 @@ from authsome.auth.sessions import AuthSession, AuthSessionStatus, AuthSessionSt
 from authsome.server.routes._deps import get_auth_service, get_auth_sessions
 from authsome.server.schemas import (
     AuthSessionResponse,
-    DeviceCodeAction,
     NoneAction,
     OpenUrlAction,
     ResumeAuthSessionRequest,
@@ -33,6 +32,7 @@ OAUTH_CALLBACK_URL = f"{LOCAL_BASE_URL}/auth/callback/oauth"
 @router.post("/sessions", response_model=AuthSessionResponse)
 def start_session(
     body: StartAuthSessionRequest,
+    background_tasks: BackgroundTasks,
     auth: AuthService = Depends(get_auth_service),
     sessions: AuthSessionStore = Depends(get_auth_sessions),
 ) -> AuthSessionResponse:
@@ -78,6 +78,7 @@ def start_session(
     )
     if FlowType(session.flow_type) == FlowType.DEVICE_CODE:
         _update_device_code_expiry(sessions, session)
+        background_tasks.add_task(auth.background_resume, session)
     sessions.index_oauth_state(session)
     return _session_response(session)
 
@@ -158,10 +159,37 @@ def input_page(
     return HTMLResponse(_input_page(session, definition.display_name, definition.docs, fields))
 
 
+@router.get("/sessions/{session_id}/device", response_class=HTMLResponse)
+def device_page(
+    session_id: str,
+    auth: AuthService = Depends(get_auth_service),
+    sessions: AuthSessionStore = Depends(get_auth_sessions),
+) -> HTMLResponse:
+    try:
+        session = sessions.get(session_id)
+    except KeyError:
+        return HTMLResponse(
+            _message_page("Authentication session expired", "Please run authsome login again."),
+            status_code=404,
+        )
+    user_code = session.payload.get("user_code")
+    verification_uri = session.payload.get("verification_uri")
+    verification_uri_complete = session.payload.get("verification_uri_complete")
+    if not user_code or not verification_uri:
+        return HTMLResponse(
+            _message_page("Invalid session", "This session does not have a device code."), status_code=400
+        )
+    definition = auth.get_provider(session.provider)
+    return HTMLResponse(
+        _device_code_page(session, definition.display_name, user_code, verification_uri, verification_uri_complete)
+    )
+
+
 @router.post("/sessions/{session_id}/input")
 async def submit_input(
     session_id: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     auth: AuthService = Depends(get_auth_service),
     sessions: AuthSessionStore = Depends(get_auth_sessions),
 ):
@@ -186,6 +214,10 @@ async def submit_input(
     )
     if flow == FlowType.DEVICE_CODE:
         _update_device_code_expiry(sessions, session)
+        background_tasks.add_task(auth.background_resume, session)
+        if session.payload.get("user_code") and session.payload.get("verification_uri"):
+            return RedirectResponse(url=f"{LOCAL_BASE_URL}/auth/sessions/{session.session_id}/device", status_code=303)
+
     sessions.index_oauth_state(session)
 
     auth_url = session.payload.get("auth_url")
@@ -203,25 +235,22 @@ def _update_device_code_expiry(sessions: AuthSessionStore, session: AuthSession)
 
 
 def _session_response(session: AuthSession) -> AuthSessionResponse:
-    action: OpenUrlAction | DeviceCodeAction | NoneAction = NoneAction()
+    action: OpenUrlAction | NoneAction = NoneAction()
     input_fields = session.payload.get("input_fields")
     if input_fields and session.state != AuthSessionStatus.COMPLETED:
         action = OpenUrlAction(type="open_url", url=f"{LOCAL_BASE_URL}/auth/sessions/{session.session_id}/input")
     elif session.payload.get("auth_url"):
         action = OpenUrlAction(type="open_url", url=str(session.payload["auth_url"]))
     elif session.payload.get("verification_uri") and session.payload.get("user_code"):
-        action = DeviceCodeAction(
-            type="device_code",
-            verification_uri=str(session.payload["verification_uri"]),
-            verification_uri_complete=session.payload.get("verification_uri_complete"),
-            user_code=str(session.payload["user_code"]),
-            interval=int(session.payload.get("internal_interval", 5)),
+        action = OpenUrlAction(
+            type="open_url",
+            url=f"{LOCAL_BASE_URL}/auth/sessions/{session.session_id}/device",
         )
     return AuthSessionResponse(
         id=session.session_id,
         provider=session.provider,
         connection=session.connection_name,
-        status=str(session.state),
+        status=session.state,
         message=session.status_message,
         error=session.error_message,
         created_at=session.created_at,
@@ -281,6 +310,40 @@ def _field_row(field: dict[str, Any]) -> str:
         f'<input type="{input_type}" name="{name}" value="{value}"{required}{pattern}>'
         f"</label>{hint}<br><br>"
     )
+
+
+def _device_code_page(
+    session: AuthSession,
+    display_name: str,
+    user_code: str,
+    verification_uri: str,
+    verification_uri_complete: str | None,
+) -> str:
+    link = verification_uri_complete or verification_uri
+    return f"""<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Authsome - Device Login</title>
+  </head>
+  <body>
+    <div class="card">
+      <h1>{html.escape(display_name)}</h1>
+      <p>Enter the following code on your device to complete the login.</p>
+      
+      <div class="code-container">
+        <div class="user-code">{html.escape(user_code)}</div>
+      </div>
+      
+      <a href="{html.escape(link)}" target="_blank" class="btn">Open Login Page</a>
+      
+      <p style="margin-top: 24px; font-size: 13px;">
+        After completing the login on your device, return to your terminal.
+      </p>
+    </div>
+  </body>
+</html>"""
 
 
 def _message_page(title: str, message: str) -> str:
