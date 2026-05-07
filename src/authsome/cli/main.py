@@ -128,8 +128,6 @@ def handle_errors(func):
             if ctx_obj.json_output:
                 ctx_obj.print_json({"error": exc.__class__.__name__, "message": str(exc)})
             else:
-                import requests
-
                 from authsome.errors import ConnectionNotFoundError
 
                 provider_name = kwargs.get("provider") or (args[0] if args and isinstance(args[0], str) else None)
