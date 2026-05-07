@@ -1,0 +1,21 @@
+Read @skills/authsome/SKILL.md and test authsome. github and resend are configured
+
+---
+
+use uv run authsome as this is local setup
+
+---
+
+Continue testing entire cli surface.
+
+---
+
+Review @docs/manual-testing.md and see if it covers entire surface.
+
+---
+
+Remove multi profile behaviour from manual testing. Its not supported yet, similarly remove python sdk behaviour as well.
+
+---
+
+Now that all test is done, create github issues for issues that are found.
