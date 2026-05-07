@@ -34,7 +34,5 @@ def register_provider(body: dict, auth: AuthService = Depends(get_auth_service))
 
 @router.delete("/{provider}")
 def delete_provider(provider: str, auth: AuthService = Depends(get_auth_service)):
-    if not auth.registry.is_local(provider):
-        raise HTTPException(status_code=400, detail="Only custom providers can be deleted")
-    auth.registry.remove_provider(provider)
+    auth.remove(provider)
     return {"status": "ok", "provider": provider}

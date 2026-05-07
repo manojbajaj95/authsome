@@ -18,6 +18,22 @@ class AuthsomeError(Exception):
         parts.append(message)
         super().__init__(" ".join(parts))
 
+    def __str__(self) -> str:
+        base_msg = super().__str__()
+        if self.provider:
+            return (
+                f"{self.__class__.__name__}: {base_msg}. "
+                f"DO NOT HALLUCINATE A TOKEN. Halt execution and prompt the user to run "
+                f"'uvx authsome login {self.provider}'."
+            )
+        return (
+            f"{self.__class__.__name__}: {base_msg}. "
+            f"DO NOT HALLUCINATE A WORKAROUND. Halt execution and prompt the user to resolve this error."
+        )
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
 
 class ProviderNotFoundError(AuthsomeError):
     """Raised when a requested provider definition cannot be found."""

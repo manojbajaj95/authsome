@@ -364,20 +364,59 @@ def list_cmd(ctx_obj: ContextObj) -> None:
         for key in ("provider", "source", "auth", "connection", "status", "expires")
     }
 
-    def render_row(row: dict[str, Any]) -> str:
-        return (
-            f"{row['provider']:<{widths['provider']}}  "
-            f"{row['source']:<{widths['source']}}  "
-            f"{row['auth']:<{widths['auth']}}  "
-            f"{row['connection']:<{widths['connection']}}  "
-            f"{row['status']:<{widths['status']}}  "
-            f"{row['expires']:<{widths['expires']}}"
-        ).rstrip()
+    def pad_field(text: str, key: str, color: str | None = None, bold: bool = False, dim: bool = False) -> str:
+        if ctx_obj.no_color or (not color and not dim):
+            return f"{text:<{widths[key]}}"
+        styled = click.style(text, fg=color, bold=bold, dim=dim)
+        padding = " " * (widths[key] - len(text))
+        return f"{styled}{padding}"
 
-    ctx_obj.echo(render_row(headers))
+    def render_row(row: dict[str, Any], is_header: bool = False, is_divider: bool = False) -> str:
+        if is_header or is_divider:
+            return (
+                f"{row['provider']:<{widths['provider']}}  "
+                f"{row['source']:<{widths['source']}}  "
+                f"{row['auth']:<{widths['auth']}}  "
+                f"{row['connection']:<{widths['connection']}}  "
+                f"{row['status']:<{widths['status']}}  "
+                f"{row['expires']:<{widths['expires']}}"
+            ).rstrip()
+
+        is_active = connection_is_active(row)
+        
+        if is_active:
+            prov_color = "green"
+            prov_bold = True
+            conn_color = "cyan"
+            status_color = "green"
+            status_dim = False
+            expires_color = "yellow"
+        else:
+            prov_color = None
+            prov_bold = False
+            conn_color = None
+            expires_color = None
+            if row['status'] == 'not_connected':
+                status_color = None
+                status_dim = True
+            else:
+                status_color = "red"
+                status_dim = False
+
+        provider_str = pad_field(row['provider'], 'provider', color=prov_color, bold=prov_bold)
+        source_str = pad_field(row['source'], 'source')
+        auth_str = pad_field(row['auth'], 'auth')
+        connection_str = pad_field(row['connection'], 'connection', color=conn_color)
+        status_str = pad_field(row['status'], 'status', color=status_color, bold=is_active, dim=status_dim)
+        expires_str = pad_field(row['expires'], 'expires', color=expires_color)
+        
+        return f"{provider_str}  {source_str}  {auth_str}  {connection_str}  {status_str}  {expires_str}".rstrip()
+
+    ctx_obj.echo(render_row(headers, is_header=True))
     ctx_obj.echo(
         render_row(
-            {key: "-" * widths[key] for key in ("provider", "source", "auth", "connection", "status", "expires")}
+            {key: "-" * widths[key] for key in ("provider", "source", "auth", "connection", "status", "expires")},
+            is_divider=True
         )
     )
     for row in rows:
