@@ -1,7 +1,6 @@
 """Tests for the AuthLayer core."""
 
 import json
-import os
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -963,10 +962,8 @@ class TestAuthLayerExport:
     def test_export_env_format(self, auth: AuthLayer, monkeypatch: pytest.MonkeyPatch) -> None:
         auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-export-padded-for-regex"}))
 
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         output = auth.export("openai", format=ExportFormat.ENV)
-        assert output == "Successfully exported credentials to environment."
-        assert os.environ["OPENAI_API_KEY"] == "sk-export-padded-for-regex"
+        assert output == "OPENAI_API_KEY=sk-export-padded-for-regex"
 
     def test_export_json_format(self, auth: AuthLayer) -> None:
         auth.login("openai", input_provider=MockInputProvider({"api_key": "sk-json-padded-for-regex"}))
@@ -1017,12 +1014,33 @@ class TestAuthLayerExport:
         )
         auth._save_connection(record)
 
-        monkeypatch.delenv("TESTEXPORT_ACCESS_TOKEN", raising=False)
-        monkeypatch.delenv("TESTEXPORT_REFRESH_TOKEN", raising=False)
         env_out = auth.export("testexport", format=ExportFormat.ENV)
-        assert env_out == "Successfully exported credentials to environment."
-        assert os.environ["TESTEXPORT_ACCESS_TOKEN"] == "acc"
-        assert os.environ["TESTEXPORT_REFRESH_TOKEN"] == "ref"
+        assert "TESTEXPORT_ACCESS_TOKEN=acc" in env_out
+        assert "TESTEXPORT_REFRESH_TOKEN=ref" in env_out
+
+    def test_export_shell_string(self, auth: AuthLayer) -> None:
+        provider = ProviderDefinition(
+            name="testexport-shell",
+            display_name="Test Export Shell",
+            auth_type=AuthType.API_KEY,
+            flow=FlowType.API_KEY,
+            api_key={"header_name": "Authorization"},
+        )
+        auth.register_provider(provider)
+        auth._save_connection(
+            ConnectionRecord(
+                schema_version=2,
+                provider="testexport-shell",
+                profile="default",
+                connection_name="default",
+                auth_type=AuthType.API_KEY,
+                status=ConnectionStatus.CONNECTED,
+                api_key="key123",
+            )
+        )
+
+        shell_out = auth.export("testexport-shell", format=ExportFormat.SHELL)
+        assert shell_out == "export TESTEXPORT_SHELL_API_KEY=key123"
 
 
 class TestAuthLayerDoctor:

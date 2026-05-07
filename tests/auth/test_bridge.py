@@ -12,6 +12,7 @@ from authsome.auth.flows.bridge import (
     device_code_bridge,
     secure_input_bridge,
 )
+from authsome.errors import InputCancelledError
 
 
 def test_find_free_port():
@@ -43,6 +44,9 @@ def test_secure_input_bridge_success():
             assert "https://example.com/oauth-app" in html
             assert "API Key" in html
             assert "Username" in html
+            assert "Authsome" in html
+            assert "data-toggle-secret='api_key'" in html
+            assert "<span class='optional-chip'>Optional</span>" in html
 
         # 2. Test POST
         data = urllib.parse.urlencode({"api_key": "secret123", "username": "testuser"}).encode("utf-8")
@@ -50,7 +54,7 @@ def test_secure_input_bridge_success():
         with urllib.request.urlopen(req_post) as response:
             assert response.status == 200
             html = response.read().decode("utf-8")
-            assert "Success!" in html
+            assert "Credentials received" in html
 
     with patch("authsome.auth.flows.bridge.webbrowser.open", side_effect=mock_open):
         res = secure_input_bridge("Test Auth", fields)
@@ -86,7 +90,7 @@ def test_secure_input_bridge_rejects_bad_pattern_then_accepts():
             html = response.read().decode("utf-8")
             assert "Please fix the highlighted field" in html
             assert "Keys start with &#x27;sk-&#x27;." in html
-            assert "Success!" not in html
+            assert "Credentials received" not in html
 
         # 3. Good POST shuts the server down and returns success.
         good = urllib.parse.urlencode({"api_key": "sk-abcdefgh1234"}).encode("utf-8")
@@ -94,7 +98,7 @@ def test_secure_input_bridge_rejects_bad_pattern_then_accepts():
         with urllib.request.urlopen(good_req) as response:
             assert response.status == 200
             html = response.read().decode("utf-8")
-            assert "Success!" in html
+            assert "Credentials received" in html
 
     with patch("authsome.auth.flows.bridge.webbrowser.open", side_effect=mock_open):
         res = secure_input_bridge("Test Auth", fields)
@@ -112,7 +116,7 @@ def test_secure_input_bridge_no_pattern_skips_validation():
         req = urllib.request.Request(url, data=data, method="POST")
         with urllib.request.urlopen(req) as response:
             html = response.read().decode("utf-8")
-            assert "Success!" in html
+            assert "Credentials received" in html
 
     with patch("authsome.auth.flows.bridge.webbrowser.open", side_effect=mock_open):
         res = secure_input_bridge("Test Auth", fields)
@@ -128,8 +132,25 @@ def test_secure_input_bridge_timeout():
 
     with patch("authsome.auth.flows.bridge.webbrowser.open", side_effect=mock_open):
         with patch("threading.Thread.join"):
-            with pytest.raises(RuntimeError, match="timed out or was cancelled"):
+            with pytest.raises(RuntimeError, match="timed out"):
                 secure_input_bridge("Test Auth", fields)
+
+
+def test_secure_input_bridge_cancel_raises_typed_error():
+    fields = [{"name": "api_key", "label": "API Key", "type": "password"}]
+
+    def mock_open(url):
+        data = urllib.parse.urlencode({"_action": "cancel"}).encode("utf-8")
+        req = urllib.request.Request(url, data=data, method="POST")
+        with urllib.request.urlopen(req) as response:
+            assert response.status == 200
+            html = response.read().decode("utf-8")
+            assert "Credential entry cancelled" in html
+            assert "No credentials were saved" in html
+
+    with patch("authsome.auth.flows.bridge.webbrowser.open", side_effect=mock_open):
+        with pytest.raises(InputCancelledError, match="Credential entry was cancelled"):
+            secure_input_bridge("Test Auth", fields)
 
 
 def test_log_message():

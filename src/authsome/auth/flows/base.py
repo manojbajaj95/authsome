@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from authsome.auth.models.connection import ConnectionRecord, ProviderClientRecord
 from authsome.auth.models.provider import ProviderDefinition
+
+if TYPE_CHECKING:
+    from authsome.auth.sessions import AuthSession
 
 
 @dataclass
@@ -29,19 +33,37 @@ class AuthFlow(ABC):
     """
 
     @abstractmethod
-    def authenticate(
+    def begin(
         self,
         provider: ProviderDefinition,
         profile: str,
         connection_name: str,
+        runtime_session: AuthSession,
         scopes: list[str] | None = None,
         client_id: str | None = None,
         client_secret: str | None = None,
-        api_key: str | None = None,
-    ) -> FlowResult:
-        """Execute the authentication flow and return a FlowResult.
+        base_url: str | None = None,
+    ) -> None:
+        """Start the authentication flow.
 
-        All credential fields in the returned record are plaintext strings.
-        The caller (AuthLayer) is responsible for persisting via the Vault.
+        Must populate runtime_session.payload with flow-specific data
+        and transition the session to 'waiting_for_user' or 'processing'.
+        """
+        ...
+
+    @abstractmethod
+    def resume(
+        self,
+        provider: ProviderDefinition,
+        profile: str,
+        connection_name: str,
+        runtime_session: AuthSession,
+        callback_data: dict[str, Any],
+        client_id: str | None = None,
+        client_secret: str | None = None,
+    ) -> FlowResult | None:
+        """Resume the authentication flow with callback or input data.
+
+        Returns the final FlowResult or None if the flow is still pending.
         """
         ...

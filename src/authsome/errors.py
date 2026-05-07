@@ -18,6 +18,12 @@ class AuthsomeError(Exception):
         parts.append(message)
         super().__init__(" ".join(parts))
 
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}: {super().__str__()}"
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
 
 class ProviderNotFoundError(AuthsomeError):
     """Raised when a requested provider definition cannot be found."""
@@ -45,6 +51,13 @@ class CredentialMissingError(AuthsomeError):
 
     def __init__(self, message: str = "Credential not found", *, provider: str | None = None) -> None:
         super().__init__(message, provider=provider)
+
+
+class InputCancelledError(AuthsomeError):
+    """Raised when a user cancels an interactive credential prompt."""
+
+    def __init__(self, message: str = "Credential entry was cancelled") -> None:
+        super().__init__(message, operation="input")
 
 
 class TokenExpiredError(AuthsomeError):

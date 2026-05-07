@@ -34,3 +34,4 @@ class ExportFormat(StrEnum):
 
     ENV = "env"
     JSON = "json"
+    SHELL = "shell"

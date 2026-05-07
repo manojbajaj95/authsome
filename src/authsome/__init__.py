@@ -7,21 +7,17 @@ Provides credential management for third-party services with support for:
 - Encrypted local storage (OS keyring or local file)
 
 Usage:
-    from authsome import AuthsomeContext
-
-    ctx = AuthsomeContext.create()
-    ctx.vault.init()
-    ctx.auth.login("openai")
-    headers = ctx.auth.get_auth_headers("openai")
+    Run `authsome login openai` to start the local daemon and connect a
+    provider, then use `authsome run ...` to inject credentials through the
+    local proxy.
 """
 
 from loguru import logger as _logger
 
-from authsome.auth import AuthLayer
+from authsome.auth import AuthLayer, AuthService
 from authsome.auth.models.connection import ConnectionRecord, Sensitive
 from authsome.auth.models.enums import AuthType, ConnectionStatus, ExportFormat, FlowType
 from authsome.auth.models.provider import ProviderDefinition
-from authsome.context import AuthsomeContext
 from authsome.errors import (
     AuthenticationFailedError,
     AuthsomeError,
@@ -29,6 +25,7 @@ from authsome.errors import (
     CredentialMissingError,
     DiscoveryError,
     EncryptionUnavailableError,
+    InputCancelledError,
     InvalidProviderSchemaError,
     ProfileNotFoundError,
     ProviderNotFoundError,
@@ -42,12 +39,12 @@ from authsome.vault import Vault
 
 _logger.disable("authsome")
 
-__version__ = "0.2.1"
+__version__ = "0.2.3"
 
 __all__ = [
     # Core
     "AuthLayer",
-    "AuthsomeContext",
+    "AuthService",
     "Vault",
     # Models
     "AuthType",
@@ -64,6 +61,7 @@ __all__ = [
     "CredentialMissingError",
     "DiscoveryError",
     "EncryptionUnavailableError",
+    "InputCancelledError",
     "InvalidProviderSchemaError",
     "ProfileNotFoundError",
     "ProviderNotFoundError",

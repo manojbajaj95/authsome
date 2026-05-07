@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 from click.testing import CliRunner
 
 from authsome.auth.models.enums import ExportFormat
@@ -258,6 +259,7 @@ def test_error_mapping(runner, mock_ctx):
     from authsome.errors import (
         AuthenticationFailedError,
         CredentialMissingError,
+        InputCancelledError,
         RefreshFailedError,
     )
 
@@ -272,6 +274,10 @@ def test_error_mapping(runner, mock_ctx):
     mock_ctx.auth.login_with_result.side_effect = AuthenticationFailedError("fail")
     result = runner.invoke(cli, ["login", "test"])
     assert result.exit_code == 4
+
+    mock_ctx.auth.login_with_result.side_effect = InputCancelledError()
+    result = runner.invoke(cli, ["login", "test"])
+    assert result.exit_code == 8
 
     mock_ctx.auth.login_with_result.side_effect = CredentialMissingError("missing", provider="test")
     result = runner.invoke(cli, ["login", "test"])
@@ -353,7 +359,9 @@ def test_get_show_secret(runner, mock_ctx):
     )
     mock_ctx.auth.get_connection.return_value = record
 
-    result = runner.invoke(cli, ["get", "openai", "--show-secret"])
+    with patch("authsome.utils.require_os_auth", return_value=True):
+        result = runner.invoke(cli, ["get", "openai", "--show-secret"])
+
     assert result.exit_code == 0
     assert "sk-super-secret" in result.output
 
@@ -504,7 +512,7 @@ def test_register_success(runner, mock_ctx, tmp_path):
         )
     )
 
-    result = runner.invoke(cli, ["register", str(f)])
+    result = runner.invoke(cli, ["register", str(f)], input="y\n")
     assert result.exit_code == 0
     mock_ctx.auth.register_provider.assert_called_once()
 
@@ -546,9 +554,9 @@ def test_whoami(runner, mock_ctx, tmp_path):
     result = runner.invoke(cli, ["whoami"])
     assert result.exit_code == 0
     assert str(tmp_path) in result.output
-    assert "Active Profile: default" in result.output
+    assert "Active Profile:    default" in result.output
     assert "Authsome Version:" in result.output
-    assert "local_key" in result.output  # default encryption mode
+    assert "Encryption:        Local File" in result.output  # default encryption mode
     assert "Connected Providers: 2" in result.output
     assert "github" in result.output
     assert "openai" in result.output
@@ -578,10 +586,11 @@ def test_whoami_with_config(runner, mock_ctx, tmp_path):
     result = runner.invoke(cli, ["whoami", "--json"])
     assert result.exit_code == 0
     data = json.loads(result.output)
-    assert data["encryption_mode"] == "keyring"
+    assert data["encryption_backend"] == "OS Keyring"
     assert data["active_profile"] == "work"
     assert data["connected_providers_count"] == 1
-    assert data["connected_providers"] == ["openai"]
+    assert data["connected_providers"][0]["name"] == "openai"
+    assert data["connected_providers"][0]["count"] == 1
     assert "authsome_version" in data
 
 
@@ -638,3 +647,94 @@ def test_echo_quiet(runner, mock_ctx):
     result = runner.invoke(cli, ["logout", "openai", "--quiet"])
     assert result.exit_code == 0
     assert "Logged out" not in result.output
+
+
+@pytest.mark.parametrize(
+    "provider_data, expected_exit_code, expected_output",
+    [
+        (
+            {
+                "schema_version": 1,
+                "name": "test_http",
+                "display_name": "Test HTTP",
+                "auth_type": "oauth2",
+                "flow": "pkce",
+                "host_url": "api.github.com",
+                "oauth": {
+                    "authorization_url": "http://github.com/login",
+                    "token_url": "https://github.com/token",
+                    "scopes": [],
+                    "pkce": True,
+                    "supports_device_flow": False,
+                    "supports_dcr": False,
+                },
+            },
+            1,
+            "must use HTTPS scheme",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "name": "test_localhost",
+                "display_name": "Test Localhost",
+                "auth_type": "oauth2",
+                "flow": "pkce",
+                "host_url": "api.github.com",
+                "oauth": {
+                    "authorization_url": "https://localhost:8080/login",
+                    "token_url": "https://github.com/token",
+                    "scopes": [],
+                    "pkce": True,
+                    "supports_device_flow": False,
+                    "supports_dcr": False,
+                },
+            },
+            1,
+            "cannot be localhost",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "name": "test_unreachable",
+                "display_name": "Test Unreachable",
+                "auth_type": "api_key",
+                "flow": "api_key",
+                "api_key": {"header_name": "Authorization"},
+                "host_url": "this-domain-does-not-exist.example.com",
+            },
+            0,
+            "is unreachable:",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "name": "test_valid",
+                "display_name": "Test Valid",
+                "auth_type": "api_key",
+                "flow": "api_key",
+                "api_key": {"header_name": "Authorization"},
+                "host_url": "api.github.com",
+            },
+            0,
+            "Provider test_valid registered",
+        ),
+    ],
+)
+@patch("requests.head")
+def test_register_scenarios(mock_head, runner, mock_ctx, tmp_path, provider_data, expected_exit_code, expected_output):
+    if provider_data["name"] == "test_valid":
+        mock_head.return_value.status_code = 200
+    else:
+        mock_head.side_effect = requests.RequestException("Mocked timeout")
+
+    f = tmp_path / "test_provider.json"
+    f.write_text(json.dumps(provider_data))
+
+    result = runner.invoke(cli, ["register", str(f)], input="y\n")
+    assert result.exit_code == expected_exit_code
+    assert expected_output in result.output
+
+    if expected_exit_code == 0:
+        mock_ctx.auth.register_provider.assert_called_once()
+        if provider_data["name"] == "test_valid":
+            assert "is unreachable:" not in result.output

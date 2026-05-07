@@ -1,12 +1,12 @@
 # Manual Testing Guide
 
-This guide walks through the full authsome workflow by hand, covering the most important paths. Run these after any significant change to verify that the CLI and core flows work end-to-end.
+This guide walks through the full CLI surface. Run these after any significant change to verify that commands, flows, and output modes work end-to-end.
 
 ## Prerequisites
 
 ```bash
-pip install -e ".[dev]"
-authsome --version
+uv pip install -e ".[dev]"
+uv run authsome --version
 ```
 
 ---
@@ -14,160 +14,239 @@ authsome --version
 ## 1. Initialization
 
 ```bash
-# Start fresh (optional — skip if you want to keep existing config)
+# Start fresh (optional — skip to keep existing config)
 rm -rf ~/.authsome
 
-# No explicit init required (auto-initialized on first run)
+uv run authsome whoami
 ```
 
-**Expected:**
-- Output includes the path to `~/.authsome`
-- `~/.authsome/master.key` is created (mode `0600`)
-- `~/.authsome/profiles/default/` directory exists
+**Expected:** Home directory, active identity (`default`), encryption mode, and connected provider count.
 
 ```bash
-authsome whoami
+uv run authsome whoami --json
 ```
 
-**Expected:** Shows home directory and encryption mode (`local_key` by default).
+**Expected:** Same data as structured JSON.
 
 ```bash
-authsome doctor
+uv run authsome doctor
 ```
 
-**Expected:** All checks pass (exit code 0, `OK` printed for each item).
+**Expected:** Exit code `0`; `OK` printed for `config`, `providers`, `vault`.
+
+```bash
+uv run authsome doctor --json
+```
+
+**Expected:** `{"status": "ready", "checks": {"config": "ok", ...}}`.
 
 ---
 
-## 2. API Key Login (OpenAI)
+## 2. Login — API Key
+
+Uses Resend (or any `api_key` provider):
 
 ```bash
-authsome login openai
+uv run authsome login resend
 ```
 
 **Expected:**
 - Browser opens a local form at `http://127.0.0.1:7999`
-- After entering a valid API key and submitting, the terminal prints `Successfully logged in to openai`
+- After submitting a valid API key, terminal prints success
 
 ```bash
-authsome list
+uv run authsome list
 ```
 
-**Expected:** `openai` is listed with status `connected`.
+**Expected:** `resend` listed with status `connected`.
+
+---
+
+## 3. Login — OAuth2 PKCE
 
 ```bash
-authsome get openai
+uv run authsome login github
 ```
 
-**Expected:** Connection metadata is shown; the API key field shows `***REDACTED***`.
+**Expected:**
+- Browser opens `https://github.com/login/oauth/authorize?...`
+- After authorizing, terminal prints success
 
 ```bash
-authsome get openai --show-secret
+uv run authsome list
 ```
 
-**Expected:** The actual API key value is printed.
+**Expected:** `github` listed with status `connected`.
+
+---
+
+## 4. Login — Device Code (headless)
 
 ```bash
-authsome get openai --field status
+uv run authsome login github --flow device_code
+```
+
+**Expected:**
+- Terminal prints a URL and a user code (no browser opens)
+- After authorizing on GitHub, terminal prints success
+
+---
+
+## 5. List
+
+```bash
+uv run authsome list
+```
+
+**Expected:** Table of all providers; connected ones show connection name and status.
+
+```bash
+uv run authsome list --json
+```
+
+**Expected:** JSON with `bundled` and `custom` arrays; each connected provider has a non-empty `connections` array.
+
+---
+
+## 6. Get
+
+```bash
+uv run authsome get github
+```
+
+**Expected:** Connection metadata; sensitive fields show `***REDACTED***`.
+
+```bash
+uv run authsome get github --show-secret
+```
+
+**Expected:** Actual token value printed; warning about shell history printed to stderr.
+
+```bash
+uv run authsome get github --field status
 ```
 
 **Expected:** Prints `connected`.
 
 ```bash
-authsome export openai --format env
+uv run authsome get github --field scopes
 ```
 
-**Expected:** Prints `Successfully exported credentials to environment.` and the key is now present in `os.environ`.
+**Expected:** Prints the scope list.
+
+```bash
+uv run authsome get github --json
+```
+
+**Expected:** Connection record as JSON.
 
 ---
 
-## 3. OAuth2 Login (GitHub — PKCE)
+## 7. Inspect
 
 ```bash
-authsome login github
+uv run authsome inspect github
+```
+
+**Expected:** Full provider definition (URLs, flow config, scopes) plus connection summary as JSON.
+
+```bash
+uv run authsome inspect resend
+```
+
+**Expected:** Provider definition with `api_key` config block and connection summary.
+
+---
+
+## 8. Export
+
+```bash
+uv run authsome export github --format env
+```
+
+**Expected:** `GITHUB_ACCESS_TOKEN=<value>` printed; warning about shell history.
+
+```bash
+uv run authsome export github --format shell
+```
+
+**Expected:** `export GITHUB_ACCESS_TOKEN=<value>`.
+
+```bash
+uv run authsome export github --format json
+```
+
+**Expected:** `{"GITHUB_ACCESS_TOKEN": "<value>"}`.
+
+---
+
+## 9. Proxy Run
+
+```bash
+# Verify proxy env vars are injected
+uv run authsome run -- env | grep -E 'HTTP_PROXY|HTTPS_PROXY|AUTHSOME_PROXY_MODE'
 ```
 
 **Expected:**
-- Browser opens `https://github.com/login/oauth/authorize?...`
-- After authorizing, the terminal prints `Successfully logged in to github`
+- `HTTP_PROXY` and `HTTPS_PROXY` set to the local proxy address
+- `AUTHSOME_PROXY_MODE=true`
 
 ```bash
-authsome get github
+# Verify dummy credential placeholders are set
+uv run authsome run -- env | grep -E 'GITHUB_ACCESS_TOKEN|RESEND_API_KEY'
 ```
 
-**Expected:** Shows access token as `***REDACTED***`, status `connected`.
+**Expected:** Both set to `authsome-proxy-managed` (real credentials are never in the child environment).
 
 ```bash
-authsome export github --format env
+# Make a real API call through the proxy
+uv run authsome run --quiet curl -s https://api.github.com/user
 ```
 
-**Expected:** Prints `Successfully exported credentials to environment.`
+**Expected:** JSON response from GitHub with `login` field; no proxy log noise (suppressed by `--quiet`).
+
+```bash
+# Multi-provider: both providers injected in one session
+uv run authsome run --quiet curl -s https://api.resend.com/domains
+```
+
+**Expected:** Valid JSON response from Resend.
 
 ---
 
-## 4. OAuth2 Login — Device Code (headless)
+## 10. Log
 
 ```bash
-authsome login github --flow device_code
+uv run authsome log
 ```
 
-**Expected:**
-- Terminal prints a URL and a user code
-- After authorizing on GitHub, prints `Successfully logged in to github`
+**Expected:** Recent audit entries as newline-delimited JSON objects with `timestamp`, `event`, `provider`, `status`.
+
+```bash
+uv run authsome log -n 5
+```
+
+**Expected:** Last 5 entries only.
+
+```bash
+uv run authsome log -n 5 --json
+```
+
+**Expected:** Same entries as a JSON array.
 
 ---
 
-## 5. Logout, Revoke, Remove
+## 11. Connection Management
 
 ```bash
-# Logout (clears local record, does not call provider revocation endpoint)
-authsome logout github
-authsome list  # github should show 'not_connected'
-
-# Re-login before testing revoke
-authsome login github
-
-# Revoke (calls GitHub's token revocation endpoint and removes local record)
-authsome revoke github
-authsome list  # github should show 'not_connected'
-
-# Remove (deletes all records for the provider without revoking)
-authsome login openai
-authsome remove openai
-authsome list  # openai should be gone
+uv run authsome connection set-default github default
 ```
+
+**Expected:** Confirmation that `default` is now the default connection for `github`.
 
 ---
 
-## 6. Proxy Run
-
-Log in to at least one provider before testing:
-
-```bash
-authsome login openai
-```
-
-Then run a command under the proxy:
-
-```bash
-# Verify proxy environment variables are set
-authsome run -- env | grep -E 'PROXY|OPENAI'
-```
-
-**Expected:**
-- `HTTP_PROXY` and `HTTPS_PROXY` are set to the local proxy address
-- `OPENAI_API_KEY=authsome-proxy-managed` (the real key is never exposed)
-
-```bash
-# Make a real API call through the proxy (requires valid OpenAI key)
-authsome run -- curl -s https://api.openai.com/v1/models | head -5
-```
-
-**Expected:** JSON response from OpenAI (not an auth error).
-
----
-
-## 7. Custom Provider Registration
+## 12. Custom Provider Registration
 
 ```bash
 cat > /tmp/test-provider.json << 'EOF'
@@ -182,74 +261,145 @@ cat > /tmp/test-provider.json << 'EOF'
 }
 EOF
 
-authsome register /tmp/test-provider.json
-authsome inspect test-custom
+uv run authsome register /tmp/test-provider.json
 ```
 
-**Expected:** Provider definition is printed as JSON.
-
----
-
-## 8. JSON Output Mode
-
-Every command supports `--json` for machine-readable output:
+**Expected:** Confirmation prompt → provider registered. No `host_url` means no reachability check.
 
 ```bash
-authsome list --json | python3 -m json.tool
-authsome get openai --json | python3 -m json.tool
-authsome whoami --json | python3 -m json.tool
-authsome doctor --json | python3 -m json.tool
+uv run authsome inspect test-custom
 ```
 
-**Expected:** Valid JSON output in all cases. Error conditions should also produce JSON with an `"error"` key when `--json` is passed.
+**Expected:** Provider definition printed as JSON; `connections` is empty.
+
+```bash
+uv run authsome list | grep test-custom
+```
+
+**Expected:** Listed under `custom` source, `not_connected`.
+
+```bash
+# Register again to test --force
+uv run authsome register /tmp/test-provider.json --force
+```
+
+**Expected:** Overwrites existing without prompting for overwrite confirmation.
+
+```bash
+uv run authsome remove test-custom
+```
+
+**Expected:** `Removed provider test-custom.`
+
+```bash
+uv run authsome list | grep test-custom
+```
+
+**Expected:** No output (provider gone).
 
 ---
 
-## 9. Error Handling
+## 13. Logout and Revoke
+
+```bash
+# Logout removes local record only
+uv run authsome logout github
+uv run authsome list  # github → not_connected
+
+# Re-login
+uv run authsome login github
+
+# Revoke removes local record and calls provider revocation endpoint
+uv run authsome revoke github
+uv run authsome list  # github → not_connected
+```
+
+---
+
+## 14. Daemon
+
+```bash
+uv run authsome daemon status
+```
+
+**Expected:** JSON showing `running: true`, health checks all `ok`, PID, and log file path.
+
+```bash
+uv run authsome daemon stop
+uv run authsome daemon status
+```
+
+**Expected:** `running: false` after stop.
+
+```bash
+uv run authsome daemon start
+uv run authsome daemon status
+```
+
+**Expected:** `running: true` after start.
+
+---
+
+## 15. Global Flags
+
+```bash
+# Quiet: suppress informational output
+uv run authsome --quiet list
+```
+
+**Expected:** Provider table only; no banners or notes.
+
+```bash
+# No color: plain text output
+uv run authsome --no-color list
+```
+
+**Expected:** Same table without ANSI color codes.
+
+```bash
+# Verbose: debug logging to stderr
+uv run authsome --verbose get github
+```
+
+**Expected:** DEBUG log lines on stderr in addition to normal stdout output.
+
+---
+
+## 16. Error Handling
 
 ```bash
 # Non-existent provider
-authsome login doesnotexist
+uv run authsome login doesnotexist 2>&1; echo "exit: $?"
 ```
 
-**Expected:** Exit code `3`, message mentions provider not found.
+**Expected:** `ProviderNotFoundError`, exit code `3`.
 
 ```bash
-# Get on a provider with no connection
-authsome logout openai
-authsome get openai
+uv run authsome inspect doesnotexist 2>&1; echo "exit: $?"
 ```
 
-**Expected:** Exit code non-zero, message indicates no connection.
-
----
-
-## 10. Multi-profile
-
-Multiple profiles can be created programmatically. The active profile is the `default_profile` set in `~/.authsome/config.json`. To manually test profile isolation:
+**Expected:** `ProviderNotFoundError`, exit code `3`.
 
 ```bash
-# Create a second profile via the SDK or by editing config
-python3 -c "
-from authsome.vault import Vault
-from authsome.auth import AuthLayer
-from authsome.auth.providers.registry import ProviderRegistry
-from pathlib import Path
-
-home = Path.home() / '.authsome'
-vault = Vault(home)
-registry = ProviderRegistry(home)
-layer = AuthLayer(vault=vault, registry=registry, identity='default')
-layer.create_profile('work', description='Work profile')
-print('Profile work created')
-"
-
-authsome list   # shows connections in default profile
+uv run authsome logout doesnotexist 2>&1; echo "exit: $?"
 ```
 
-**Expected:** Each profile keeps its own isolated set of Connections in the Vault.
+**Expected:** `ProviderNotFoundError`, exit code `3`.
 
-> **Note:** CLI-level `--profile` flag is not yet implemented. Profile selection is a planned addition.
+```bash
+# Missing required argument
+uv run authsome get 2>&1; echo "exit: $?"
+```
+
+**Expected:** Usage error, exit code `2`.
+
+```bash
+# Get on a disconnected provider
+uv run authsome logout resend
+uv run authsome get resend 2>&1; echo "exit: $?"
+```
+
+**Expected:** Non-zero exit; message indicates no connection found.
 
 ---
 

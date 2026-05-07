@@ -1,0 +1,194 @@
+---
+title: "Provider schema"
+description: "Every field in a provider JSON definition."
+---
+
+A provider definition is a JSON file that tells authsome how to authenticate against a service. This page documents every field. For walkthroughs and templates, see [Custom providers](/guides/custom-providers).
+
+## Top-level fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `schema_version` | Yes | Always `1`. |
+| `name` | Yes | Internal identifier, lowercase, filesystem-safe (e.g. `github`, `acme-crm`). |
+| `display_name` | Yes | Human-readable name (e.g. `GitHub`, `Acme CRM`). |
+| `auth_type` | Yes | `"oauth2"` or `"api_key"`. |
+| `flow` | Yes | One of `pkce`, `device_code`, `dcr_pkce`, `api_key`. Must be valid for the auth type. |
+| `host_url` | No (recommended) | API host for proxy routing. Bare host, full URL, or `regex:<pattern>`. |
+| `oauth` | If `auth_type` is `oauth2` | OAuth2 configuration block. |
+| `api_key` | If `auth_type` is `api_key` | API-key configuration block. |
+| `export` | No (recommended) | Mapping of internal credential fields to environment variable names. |
+| `docs` | No | URL to the provider's auth documentation. Surfaced after `register`. |
+
+## `oauth` block
+
+Required when `auth_type` is `oauth2`.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `authorization_url` | Yes | Authorization endpoint. Supports `{base_url}` template. |
+| `token_url` | Yes | Token endpoint. Supports `{base_url}` template. |
+| `revocation_url` | No | Revocation endpoint, if the provider has one. Supports `{base_url}`. |
+| `device_authorization_url` | If `supports_device_flow` | Device authorization endpoint. Supports `{base_url}`. |
+| `base_url` | No | Default base URL for multi-tenant or self-hosted providers. |
+| `scopes` | Yes | Default scopes to request. |
+| `pkce` | Yes | `true` if the provider supports PKCE (RFC 7636). |
+| `supports_device_flow` | No | `true` if the device authorization grant is available. |
+| `supports_dcr` | No | `true` if Dynamic Client Registration is available. |
+| `registration_endpoint` | If `supports_dcr` | DCR endpoint URL. Supports `{base_url}`. |
+
+### Multi-tenant URLs
+
+Set `base_url` to a default and use `{base_url}` in other URL fields:
+
+```json
+{
+  "oauth": {
+    "base_url": "https://github.com",
+    "authorization_url": "{base_url}/login/oauth/authorize",
+    "token_url": "{base_url}/login/oauth/access_token"
+  }
+}
+```
+
+At login time, `--base-url` overrides the default and is saved to the connection.
+
+## `api_key` block
+
+Required when `auth_type` is `api_key`.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `header_name` | No | HTTP header name. Default: `Authorization`. |
+| `header_prefix` | No | Prefix before the key value. Default: `Bearer`. |
+| `env_var` | No | Environment variable name to check before prompting at login. |
+| `key_pattern` | No | Regex the key must match. Used to validate input at login. |
+| `key_pattern_hint` | No | Human-readable hint shown when validation fails. |
+
+Common header shapes:
+
+```json
+{ "header_name": "Authorization", "header_prefix": "Bearer" }      // Bearer <key>
+{ "header_name": "X-API-Key",     "header_prefix": "" }            // raw key in custom header
+{ "header_name": "Authorization", "header_prefix": "Token" }       // GitHub-style token header
+```
+
+## `export` block
+
+Maps internal credential field names to canonical environment variable names. Used by `authsome export --format env` and by the proxy when setting placeholder variables for the child process.
+
+OAuth2 example:
+
+```json
+{
+  "export": {
+    "env": {
+      "access_token": "GITHUB_ACCESS_TOKEN"
+    }
+  }
+}
+```
+
+API-key example:
+
+```json
+{
+  "export": {
+    "env": {
+      "api_key": "OPENAI_API_KEY"
+    }
+  }
+}
+```
+
+Only `access_token` (OAuth2) and `api_key` (API-key) are valid keys in the `env` map. Refresh tokens are never exported.
+
+## `host_url` formats
+
+The `host_url` field controls proxy routing. See [Proxy injection](/concepts/proxy-injection) for matching rules.
+
+| Form | Example | Meaning |
+|------|---------|---------|
+| Bare host | `"api.openai.com"` | Exact host match. |
+| Full URL | `"https://api.openai.com"` | Host portion is extracted. |
+| Regex | `"regex:^api[0-9]+\\.github\\.com$"` | Regex applied to the request host. |
+
+Use the regex form only when an API genuinely serves multiple hosts following a pattern. Most services use a single bare host.
+
+## Flow / auth-type compatibility
+
+| `flow` | Valid `auth_type` |
+|--------|-------------------|
+| `pkce` | `oauth2` |
+| `device_code` | `oauth2` (provider must set `supports_device_flow: true`) |
+| `dcr_pkce` | `oauth2` (provider must set `supports_dcr: true`) |
+| `api_key` | `api_key` |
+
+`authsome register` validates these constraints and rejects mismatched JSON.
+
+## Worked examples
+
+### OAuth2 with PKCE (GitHub)
+
+```json
+{
+  "schema_version": 1,
+  "name": "github",
+  "display_name": "GitHub",
+  "auth_type": "oauth2",
+  "flow": "pkce",
+  "oauth": {
+    "base_url": "https://github.com",
+    "authorization_url": "{base_url}/login/oauth/authorize",
+    "token_url": "{base_url}/login/oauth/access_token",
+    "device_authorization_url": "{base_url}/login/device/code",
+    "scopes": ["repo", "read:user"],
+    "pkce": true,
+    "supports_device_flow": true,
+    "supports_dcr": false
+  },
+  "host_url": "api.github.com",
+  "export": {
+    "env": {
+      "access_token": "GITHUB_ACCESS_TOKEN"
+    }
+  }
+}
+```
+
+### API key (OpenAI)
+
+```json
+{
+  "schema_version": 1,
+  "name": "openai",
+  "display_name": "OpenAI",
+  "auth_type": "api_key",
+  "flow": "api_key",
+  "api_key": {
+    "header_name": "Authorization",
+    "header_prefix": "Bearer",
+    "key_pattern": "^sk-[A-Za-z0-9_-]{20,}$",
+    "key_pattern_hint": "OpenAI API keys start with 'sk-' followed by at least 20 letters, digits, '_' or '-'."
+  },
+  "host_url": "api.openai.com",
+  "export": {
+    "env": {
+      "api_key": "OPENAI_API_KEY"
+    }
+  }
+}
+```
+
+## Validation rules
+
+`authsome register` enforces:
+
+- Required fields are present.
+- `name` is filesystem-safe (lowercase letters, digits, hyphens, underscores).
+- `auth_type` is one of `oauth2`, `api_key`.
+- `flow` is valid for the auth type.
+- URL fields are syntactically valid where required.
+- `regex:` prefixes compile as Python regular expressions.
+
+Invalid definitions exit with code `2` and a message identifying the failing field.

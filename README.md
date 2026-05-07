@@ -8,8 +8,8 @@
 [![codecov](https://codecov.io/gh/manojbajaj95/authsome/branch/main/graph/badge.svg)](https://codecov.io/gh/manojbajaj95/authsome)
 
 ```text
-              __  __
-  ____ ___  _/ /_/ /_  _________  ____ ___  ___
+               __  __
+  ____ ___  __/ /_/ /_  _________  ____ ___  ___
  / __ `/ / / / __/ __ \/ ___/ __ \/ __ `__ \/ _ \
 / /_/ / /_/ / /_/ / / (__  ) /_/ / / / / / /  __/
 \__,_/\__,_/\__/_/ /_/____/\____/_/ /_/ /_/\___/
@@ -18,6 +18,12 @@
 **Local auth for AI agents.**
 
 Log in once via OAuth2/API Key. Authsome keeps the credentials fresh for every AI agent.
+
+---
+
+## Demo
+
+https://github.com/user-attachments/assets/27f9b229-baf4-4889-be9a-378a133654dc
 
 ---
 
@@ -55,19 +61,19 @@ The CLI is the agent's interface: setup once, then inject fresh credentials when
 Authenticate once:
 
 ```bash
-authsome login github
+uvx authsome login github
 ```
 
 Then agents get valid credentials on demand:
 
 ```bash
-authsome get github --field access_token --show-secret
+uvx authsome get github --field access_token --show-secret
 # → ghu_...
 
-authsome export github --format env
-# → Successfully exported credentials to environment.
+export $(uvx authsome export github)
+# → sets GITHUB_ACCESS_TOKEN in current shell
 
-authsome run python my_agent.py
+uvx authsome run python my_agent.py
 # runs behind a local auth proxy that injects headers at request time
 # without exposing secrets in the child process environment.
 # matched automatically via provider host_url (e.g. api.openai.com)
@@ -95,23 +101,35 @@ Authsome gives agents one command for a valid token, without scattering long-liv
 ## Quick Start
 
 ```bash
-pip install authsome
-authsome init
-authsome login github                  # opens browser, completes PKCE flow
-authsome login github --flow device_code  # headless: Device Code, works over SSH and CI
-authsome login openai                  # secure API key entry via browser bridge
-authsome list                          # all connections + token status
+uvx authsome login github                  # opens browser, completes PKCE flow
+uvx authsome login github --flow device_code  # headless: Device Code, works over SSH and CI
+uvx authsome login openai                  # secure API key entry via browser bridge
+uvx authsome list                          # all connections + token status
 ```
 
 ## Docs
 
-- [CLI reference](docs/cli.md)
-- [Providers](docs/providers.md)
-- [Architecture](docs/architecture.md)
+The full documentation site lives in [`docs/site/`](docs/site/)
+
+- [Quickstart](docs/site/quickstart.mdx)
+- [CLI reference](docs/site/reference/cli.mdx)
+- [Architecture](docs/site/concepts/architecture.mdx)
+- [Custom providers](docs/site/guides/custom-providers.mdx)
+- [Troubleshooting](docs/site/troubleshooting/doctor.mdx)
+
+To preview locally:
+
+```bash
+cd docs/site
+npm i -g mint   # requires Node.js >= 20.17.0
+mint dev
+```
+
+
 
 ## Specs
 
-- [Authsome v1](specs/authsome-v1.md)
+- [Authsome v1](docs/specs/authsome-v1.md)
 
 ## License
 

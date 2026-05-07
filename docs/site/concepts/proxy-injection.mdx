@@ -1,0 +1,99 @@
+---
+title: "Proxy injection"
+description: "How `authsome run` injects auth headers into outbound HTTP requests without exposing secrets to the child process."
+---
+
+`authsome run` is the most secure way to give a subprocess access to credentials. Instead of passing tokens through environment variables, authsome starts a local HTTP proxy, points the child process at it, and injects the right `Authorization` header on the way out.
+
+The child process never sees the raw secret.
+
+## The flow
+
+<Steps>
+  <Step title="Authsome starts a proxy">
+    A local mitmproxy-based HTTP proxy binds to an ephemeral port on `127.0.0.1`.
+  </Step>
+  <Step title="Authsome spawns the child">
+    The subprocess is launched with `HTTP_PROXY` and `HTTPS_PROXY` (and lowercase variants) pointing at the local proxy. Provider-specific placeholder variables like `OPENAI_API_KEY=authsome-proxy-managed` are also set so SDKs initialize without crashing.
+  </Step>
+  <Step title="Outbound requests are intercepted">
+    When the child makes an HTTP(S) call, mitmproxy decrypts and inspects the request. It looks at the destination host.
+  </Step>
+  <Step title="The proxy matches by host_url">
+    Authsome iterates the registered providers and matches the request host against each provider's `host_url` field. On a match, it asks the AuthLayer for fresh credentials (refreshing if necessary) and injects the right `Authorization` header.
+  </Step>
+  <Step title="The request is forwarded">
+    The authenticated request goes to the external API. The response streams back through the proxy unchanged.
+  </Step>
+  <Step title="Cleanup">
+    When the child exits, the proxy shuts down. Authsome returns the child's exit code.
+  </Step>
+</Steps>
+
+## Routing contract
+
+Provider definitions declare a `host_url` to opt in to proxy injection.
+
+```json
+{
+  "name": "github",
+  "host_url": "api.github.com"
+}
+```
+
+The `host_url` value can be one of:
+
+| Form | Example | Matches |
+|------|---------|---------|
+| Bare host | `api.github.com` | Exact host match |
+| Full URL | `https://api.github.com` | The host portion is extracted |
+| Host regex | `regex:^api[0-9]+\\.github\\.com$` | A regular expression on the host |
+
+Use the `regex:` prefix when an API serves multiple hosts that follow a pattern.
+
+### Matching rules
+
+- **Exact host match** is preferred. The first provider whose `host_url` matches wins.
+- **Ambiguous matches** (two providers claim the same host) are not injected. The request is forwarded unchanged. Authsome logs a warning.
+- **Unmatched traffic** is forwarded unchanged. The proxy is transparent for everything it does not recognize.
+- The **default connection** is used for injected credentials. Per-request connection selection is future work.
+
+## Why this matters
+
+Compared to `authsome export`, which sets environment variables in the child process, `authsome run` keeps several attack surfaces closed:
+
+| Risk | `export` | `run` |
+|------|:---:|:---:|
+| Secrets visible in `ps`/`/proc/<pid>/environ` | Yes | No |
+| Secrets visible in shell history | Possible | No |
+| Secrets in subprocess env passed to deeper children | Yes | No |
+| Long-lived shell session keeps secrets in env | Yes | No |
+
+The trade-off is the proxy itself. See **Known limitations** below.
+
+## Known limitations
+
+<Warning>
+  HTTPS interception requires the mitmproxy CA certificate to be trusted on your machine. Without it, TLS verification fails and the child sees connection errors. See [Proxy networking](/troubleshooting/proxy-networking) for setup.
+</Warning>
+
+- **Non-HTTP protocols** are not intercepted. WebSockets, gRPC, raw TCP database connections, and SSH all bypass the proxy.
+- **Pinned TLS** in some SDKs ignores `HTTP_PROXY` or rejects custom CAs.
+- **Host-based routing is fragile** if two providers share a base URL. In that case authsome refuses to inject and forwards unchanged.
+- **Path matching, header matching, and per-request connection selection** are not yet implemented.
+
+## When to use which
+
+Use `authsome run` when:
+
+- The agent calls APIs over HTTP(S) only.
+- You want secrets to never enter the child's environment.
+- You can afford to install the mitmproxy CA on the machine running the agent.
+
+Use `authsome export` when:
+
+- The tool you are running cannot use an HTTP proxy.
+- You are operating in an environment where TLS interception is not possible.
+- A short-lived shell needs the credentials directly.
+
+For a step-by-step guide to running an agent under the proxy, see [Run agents with the proxy](/guides/run-agents-with-proxy).

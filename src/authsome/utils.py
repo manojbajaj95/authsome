@@ -102,3 +102,75 @@ def redact(record: Any, redacted_value: str = "***REDACTED***") -> dict[str, Any
                 if data.get(field_name) is not None:
                     data[field_name] = redacted_value
     return data
+
+
+def require_os_auth(action_name: str) -> bool:
+    """
+    Prompt the user for OS-level authentication (e.g., Touch ID on macOS)
+    before allowing a sensitive action. Returns True if authenticated, False otherwise.
+    """
+    import subprocess
+    import sys
+
+    if sys.platform == "darwin":
+        prompt = f"Authsome requires authentication to {action_name}."
+        script = f'do shell script "echo authenticated" with prompt "{prompt}" with administrator privileges'
+        try:
+            subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                check=True,
+            )
+            return True
+        except subprocess.CalledProcessError:
+            return False
+    elif sys.platform.startswith("linux"):
+        import shutil
+
+        if shutil.which("pkexec"):
+            try:
+                subprocess.run(["pkexec", "true"], check=True, capture_output=True)
+                return True
+            except subprocess.CalledProcessError:
+                return False
+        elif shutil.which("sudo"):
+            print(f"Authsome requires authentication to {action_name}.")
+            try:
+                subprocess.run(["sudo", "-v"], check=True)
+                return True
+            except subprocess.CalledProcessError:
+                return False
+        return False
+    elif sys.platform == "win32":
+        import ctypes
+        import getpass
+        import os
+        from ctypes import wintypes
+
+        try:
+            password = getpass.getpass(f"Authsome requires authentication to {action_name}. Password: ")
+            if not password:
+                return False
+
+            LOGON32_LOGON_INTERACTIVE = 2
+            LOGON32_PROVIDER_DEFAULT = 0
+
+            token = wintypes.HANDLE()
+            username = os.environ.get("USERNAME", "")
+
+            result = ctypes.windll.advapi32.LogonUserW(
+                username,
+                None,
+                password,
+                LOGON32_LOGON_INTERACTIVE,
+                LOGON32_PROVIDER_DEFAULT,
+                ctypes.byref(token),
+            )
+            if result:
+                ctypes.windll.kernel32.CloseHandle(token)
+                return True
+            return False
+        except (KeyboardInterrupt, EOFError):
+            return False
+
+    return False

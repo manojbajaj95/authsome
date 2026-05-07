@@ -5,18 +5,20 @@ from __future__ import annotations
 import json
 import time
 from datetime import timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import requests
 from loguru import logger
 
 from authsome.auth.flows.base import AuthFlow, FlowResult
-from authsome.auth.flows.bridge import DeviceCodeBridgeHandle, device_code_bridge
 from authsome.auth.models.connection import AccountInfo, ConnectionRecord
 from authsome.auth.models.enums import AuthType, ConnectionStatus
 from authsome.auth.models.provider import ProviderDefinition
 from authsome.errors import AuthenticationFailedError
 from authsome.utils import utc_now
+
+if TYPE_CHECKING:
+    from authsome.auth.sessions import AuthSession
 
 _DEFAULT_POLL_INTERVAL = 5
 _MAX_POLL_DURATION = 900
@@ -25,22 +27,24 @@ _MAX_POLL_DURATION = 900
 class DeviceCodeFlow(AuthFlow):
     """OAuth2 Device Authorization Grant — headless flow."""
 
-    def authenticate(
+    def begin(
         self,
         provider: ProviderDefinition,
         profile: str,
         connection_name: str,
+        runtime_session: AuthSession,
         scopes: list[str] | None = None,
         client_id: str | None = None,
         client_secret: str | None = None,
-        api_key: str | None = None,
-    ) -> FlowResult:
+        base_url: str | None = None,
+    ) -> None:
         if provider.oauth is None:
             raise AuthenticationFailedError("Provider missing 'oauth' configuration", provider=provider.name)
         if not provider.oauth.device_authorization_url:
             raise AuthenticationFailedError(
                 "Provider does not have a device_authorization_url configured.", provider=provider.name
             )
+
         effective_scopes = list(scopes) if scopes is not None else list(provider.oauth.scopes or [])
         device_data = self._request_device_code(provider=provider, client_id=client_id, scopes=effective_scopes)
 
@@ -48,71 +52,90 @@ class DeviceCodeFlow(AuthFlow):
         user_code = device_data.get("user_code")
         verification_uri = device_data.get("verification_uri") or device_data.get("verification_url")
         verification_uri_complete = device_data.get("verification_uri_complete")
-        expires_in = int(device_data.get("expires_in", _MAX_POLL_DURATION))
         interval = int(device_data.get("interval", _DEFAULT_POLL_INTERVAL))
+        expires_in = int(device_data.get("expires_in", _MAX_POLL_DURATION))
 
         if not device_code or not user_code or not verification_uri:
             raise AuthenticationFailedError(
                 "Device authorization response missing required fields", provider=provider.name
             )
 
-        print(f"\n{'=' * 60}")
-        print(f"  {provider.display_name} — Device Authorization")
-        print(f"{'=' * 60}")
-        print("\n  1. Open this URL in your browser:\n")
-        print(f"     {verification_uri_complete or verification_uri}")
-        print("\n  2. Enter this code when prompted:\n")
-        print(f"     {user_code}")
-        print(f"\n  Waiting for authorization (expires in {expires_in}s)...")
-        print(f"{'=' * 60}\n")
+        runtime_session.state = "waiting_for_user"
+        runtime_session.payload["user_code"] = user_code
+        runtime_session.payload["verification_uri"] = verification_uri
+        if verification_uri_complete:
+            runtime_session.payload["verification_uri_complete"] = verification_uri_complete
 
-        bridge: DeviceCodeBridgeHandle | None = None
-        try:
-            bridge = device_code_bridge(
-                title=f"{provider.display_name} — Device Authorization",
-                user_code=user_code,
-                verification_uri=verification_uri,
-                verification_uri_complete=verification_uri_complete,
-            )
-        except Exception as exc:
-            # Bridge is best-effort; fall back to terminal output only.
-            logger.warning("Device authorization browser bridge unavailable: {}", exc)
+        runtime_session.payload["internal_device_code"] = device_code
+        runtime_session.payload["internal_interval"] = str(interval)
+        runtime_session.payload["expires_in"] = str(expires_in)
+        runtime_session.payload["internal_scopes"] = json.dumps(effective_scopes)
 
-        try:
-            token_data = self._poll_for_token(
-                provider=provider,
-                client_id=client_id,
-                client_secret=client_secret,
-                device_code=device_code,
-                interval=interval,
-                expires_in=expires_in,
-            )
-        finally:
-            if bridge is not None:
-                bridge.shutdown()
+    def resume(
+        self,
+        provider: ProviderDefinition,
+        profile: str,
+        connection_name: str,
+        runtime_session: AuthSession,
+        callback_data: dict[str, Any],
+        client_id: str | None = None,
+        client_secret: str | None = None,
+    ) -> FlowResult | None:
+        device_code = runtime_session.payload.get("internal_device_code")
+        if not device_code:
+            raise AuthenticationFailedError("No device_code available", provider=provider.name)
 
-        now = utc_now()
-        token_expires_in = token_data.get("expires_in")
-        print(f"✓ Successfully authorized with {provider.display_name}!\n")
+        interval = int(runtime_session.payload.get("internal_interval", 5))
+        expires_in = int(runtime_session.payload.get("expires_in", 300))
 
-        return FlowResult(
-            connection=ConnectionRecord(
-                schema_version=2,
-                provider=provider.name,
-                profile=profile,
-                connection_name=connection_name,
-                auth_type=AuthType.OAUTH2,
-                status=ConnectionStatus.CONNECTED,
-                scopes=effective_scopes,
-                access_token=token_data.get("access_token", ""),
-                refresh_token=token_data.get("refresh_token"),
-                token_type=token_data.get("token_type", "Bearer"),
-                expires_at=now + timedelta(seconds=int(token_expires_in)) if token_expires_in else None,
-                obtained_at=now,
-                account=AccountInfo(),
-                metadata={},
-            )
+        data = self.poll_for_token(
+            provider=provider,
+            client_id=client_id,
+            client_secret=client_secret,
+            device_code=device_code,
+            interval=interval,
+            expires_in=expires_in,
         )
+
+        if "access_token" in data:
+            now = utc_now()
+            token_expires_in = data.get("expires_in")
+            effective_scopes = json.loads(runtime_session.payload.get("internal_scopes", "[]"))
+            runtime_session.state = "processing"
+
+            return FlowResult(
+                connection=ConnectionRecord(
+                    schema_version=2,
+                    provider=provider.name,
+                    profile=profile,
+                    connection_name=connection_name,
+                    auth_type=AuthType.OAUTH2,
+                    status=ConnectionStatus.CONNECTED,
+                    scopes=effective_scopes,
+                    access_token=data.get("access_token", ""),
+                    refresh_token=data.get("refresh_token"),
+                    token_type=data.get("token_type", "Bearer"),
+                    expires_at=now + timedelta(seconds=int(token_expires_in)) if token_expires_in else None,
+                    obtained_at=now,
+                    account=AccountInfo(),
+                    metadata={},
+                )
+            )
+
+        error = data.get("error", "")
+        if error == "authorization_pending":
+            return None
+        elif error == "slow_down":
+            return None
+        elif error == "access_denied":
+            raise AuthenticationFailedError("User denied the authorization request", provider=provider.name)
+        elif error == "expired_token":
+            raise AuthenticationFailedError("Device code has expired. Please try again.", provider=provider.name)
+        else:
+            raise AuthenticationFailedError(
+                f"Token endpoint error: {data.get('error_description', error or 'Unknown error')}",
+                provider=provider.name,
+            )
 
     def _request_device_code(
         self, provider: ProviderDefinition, client_id: str | None, scopes: list[str]
@@ -142,7 +165,7 @@ class DeviceCodeFlow(AuthFlow):
                 "Device authorization response was not valid JSON", provider=provider.name
             ) from exc
 
-    def _poll_for_token(
+    def poll_for_token(
         self,
         provider: ProviderDefinition,
         client_id: str | None,
@@ -153,7 +176,10 @@ class DeviceCodeFlow(AuthFlow):
     ) -> dict[str, Any]:
         assert provider.oauth is not None
         poll_interval = max(interval, 1)
-        deadline = time.monotonic() + expires_in
+
+        # Hard cap the polling at 300 seconds, regardless of provider's expires_in
+        effective_expires_in = min(expires_in, 300)
+        deadline = time.monotonic() + effective_expires_in
 
         use_json = provider.oauth.device_token_request == "json"
 

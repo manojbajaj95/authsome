@@ -1,0 +1,102 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "authsome",
+  "description": "Local auth for AI agents. Log in once via OAuth2 or API key. Authsome keeps credentials fresh for every agent.",
+  "colors": {
+    "primary": "#047857",
+    "light": "#34D399",
+    "dark": "#047857"
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get started",
+        "pages": [
+          "index",
+          "quickstart"
+        ]
+      },
+      {
+        "group": "Guides",
+        "pages": [
+          "guides/login-with-oauth",
+          "guides/use-api-keys",
+          "guides/run-agents-with-proxy",
+          "guides/custom-providers",
+          "guides/profiles",
+          "guides/headless-device-code"
+        ]
+      },
+      {
+        "group": "Concepts",
+        "pages": [
+          "concepts/architecture",
+          "concepts/credential-storage",
+          "concepts/proxy-injection",
+          "concepts/provider-registry"
+        ]
+      },
+      {
+        "group": "Reference",
+        "pages": [
+          "reference/cli",
+          "reference/provider-schema",
+          "reference/environment-variables",
+          "reference/bundled-providers"
+        ]
+      },
+      {
+        "group": "Troubleshooting",
+        "pages": [
+          "troubleshooting/doctor",
+          "troubleshooting/oauth-callbacks",
+          "troubleshooting/token-refresh",
+          "troubleshooting/proxy-networking"
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "PyPI",
+        "href": "https://pypi.org/project/authsome/"
+      }
+    ],
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/manojbajaj95/authsome"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/manojbajaj95/authsome"
+    },
+    "links": [
+      {
+        "header": "Resources",
+        "items": [
+          {
+            "label": "GitHub",
+            "href": "https://github.com/manojbajaj95/authsome"
+          },
+          {
+            "label": "PyPI",
+            "href": "https://pypi.org/project/authsome/"
+          },
+          {
+            "label": "Spec",
+            "href": "https://github.com/manojbajaj95/authsome/blob/main/docs/specs/authsome-v1.md"
+          }
+        ]
+      }
+    ]
+  },
+  "seo": {
+    "metatags": {
+      "og:site_name": "authsome",
+      "og:type": "website"
+    }
+  }
+}

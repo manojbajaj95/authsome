@@ -3,12 +3,12 @@
     "name": "linear",
     "display_name": "Linear",
     "auth_type": "oauth2",
-    "flow": "dcr_pkce",
-    "host_url": "api.linear.app",
+    "flow": "pkce",
+    "host_url": "regex:.*\\.linear\\.app",
     "oauth": {
-        "authorization_url": "https://mcp.linear.app/authorize",
-        "token_url": "https://mcp.linear.app/token",
-        "revocation_url": "https://mcp.linear.app/token",
+        "authorization_url": "https://linear.app/oauth/authorize",
+        "token_url": "https://api.linear.app/oauth/token",
+        "revocation_url": "https://api.linear.app/oauth/revoke",
         "device_authorization_url": null,
         "scopes": [
             "read",
@@ -16,7 +16,7 @@
         ],
         "pkce": true,
         "supports_device_flow": false,
-        "supports_dcr": true
+        "supports_dcr": false
     },
     "export": {
         "env": {
