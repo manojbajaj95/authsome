@@ -22,7 +22,7 @@ from authsome.server.schemas import (
     ResumeAuthSessionRequest,
     StartAuthSessionRequest,
 )
-from authsome.ui.web_theme import DARK_THEME_CSS
+from authsome.server.ui.web_theme import DARK_THEME_CSS
 from authsome.utils import utc_now
 
 router = APIRouter(prefix="/auth", tags=["auth"])
